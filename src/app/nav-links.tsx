@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV = [
-  { href: "/day", label: "Day" },
+  { href: "/day", label: "Month" },
   { href: "/year", label: "Year" },
   { href: "/today", label: "Today" },
   { href: "/lifts", label: "Lifts" },

@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { categoryColor, categoryName, HOURS_PER_SLOT, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
+import { CATEGORIES, categoryColor, categoryName, HOURS_PER_SLOT, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchAllDayEntries, fetchBucketSettings } from "@/lib/data";
 import { bucketize, hoursByCategory, productiveRatio } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
@@ -122,7 +122,7 @@ export default function YearPage() {
                 return (
                   <tr key={m}>
                     <td className="pr-2 text-xs font-medium text-muted">
-                      <Link href="/day" className="hover:text-accent">{name}</Link>
+                      <Link href={`/day?m=${ym}`} className="hover:text-accent">{name}</Link>
                     </td>
                     {Array.from({ length: 31 }, (_, i) => {
                       if (i >= daysInMonth) return <td key={i} />;
@@ -131,7 +131,7 @@ export default function YearPage() {
                       return (
                         <td key={i}>
                           <Link
-                            href="/day"
+                            href={`/day?m=${ym}`}
                             title={cell?.tip ?? `${date}: not logged`}
                             className="block h-4 w-4 rounded-[4px] transition hover:scale-125"
                             style={{ background: cell ? cell.color : "var(--surface-2)", opacity: cell?.opacity ?? 1 }}
@@ -184,13 +184,21 @@ function DayStrip({ year, byDate }: { year: number; byDate: Map<string, DayEntry
     <div className="mt-6">
       <h2 className="mb-1 font-semibold">Every day, every 15 minutes</h2>
       <p className="mb-2 text-sm text-muted">
-        {days.length} logged days in {year} — {days.length * 96} slots. Scroll through it. Hover any sliver.
+        {days.length} logged days in {year} — {(days.length * 96).toLocaleString()} slots. Click a day to open it in the grid.
       </p>
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {CATEGORIES.map((c) => (
+          <span key={c.code} className="inline-flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />
+            {c.name}
+          </span>
+        ))}
+      </div>
       <div className="card overflow-x-auto p-4">
         <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
           {days.map(({ date, slots, labels }) => (
-            <div key={date} className="flex flex-col items-center">
-              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
+            <Link key={date} href={`/day?m=${date.slice(0, 7)}`} className="flex flex-col items-center">
+              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full transition hover:scale-x-150">
                 {slots.map((cat, s) => (
                   <div
                     key={s}
@@ -206,7 +214,7 @@ function DayStrip({ year, byDate }: { year: number; byDate: Map<string, DayEntry
               >
                 {date.slice(5)}
               </span>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

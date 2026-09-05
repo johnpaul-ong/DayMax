@@ -206,10 +206,13 @@ export async function fetchDailyMetrics(metric: string): Promise<DailyMetric[]> 
 
 // --- lift goals ----------------------------------------------------------------
 
+export type GoalUnit = "kg" | "reps";
+
 export interface LiftGoal {
   id: number;
   exercise: string;
-  targetWeightKg: number;
+  target: number;
+  unit: GoalUnit;
   archived: boolean;
 }
 
@@ -217,23 +220,27 @@ export async function fetchLiftGoals(): Promise<LiftGoal[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("lift_goals")
-    .select("id, exercise, target_weight_kg, archived")
+    .select("id, exercise, target_weight_kg, unit, archived")
     .order("created_at");
   if (error) throw error;
   return (data ?? []).map((r) => ({
     id: r.id,
     exercise: r.exercise,
-    targetWeightKg: r.target_weight_kg,
+    target: r.target_weight_kg,
+    unit: (r.unit ?? "kg") as GoalUnit,
     archived: r.archived,
   }));
 }
 
-export async function upsertLiftGoal(exercise: string, targetWeightKg: number): Promise<void> {
+export async function upsertLiftGoal(exercise: string, target: number, unit: GoalUnit): Promise<void> {
   const supabase = createClient();
   const user_id = await uid();
   const { error } = await supabase
     .from("lift_goals")
-    .upsert({ user_id, exercise, target_weight_kg: targetWeightKg, archived: false }, { onConflict: "user_id,exercise" });
+    .upsert(
+      { user_id, exercise, target_weight_kg: target, unit, archived: false },
+      { onConflict: "user_id,exercise" }
+    );
   if (error) throw error;
 }
 

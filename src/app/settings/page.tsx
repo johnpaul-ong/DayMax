@@ -71,7 +71,6 @@ function AppearanceSection() {
           </button>
         )}
       </div>
-      <BucketColorRows />
     </div>
   );
 }
@@ -92,8 +91,8 @@ function BucketColorRows() {
 
   const isDefault = JSON.stringify(colors) === JSON.stringify(DEFAULT_BUCKET_COLORS);
   return (
-    <div className="mt-3 border-t pt-3">
-      <p className="mb-2 text-sm text-muted">Ranking colors (charts, year view, home)</p>
+    <div className="card mb-3 p-4">
+      <p className="mb-2 text-sm text-muted">Bucket colors — used in charts, the year view and home</p>
       <div className="flex flex-wrap items-center gap-4">
         {(["productive", "brainrot", "other"] as const).map((k) => (
           <label key={k} className="inline-flex items-center gap-2 text-sm capitalize">
@@ -204,9 +203,10 @@ export default function SettingsPage() {
       <AppearanceSection />
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
       <p className="mb-3 text-sm text-muted">
-        Which categories count as productive vs brainrot in the ranking. Compare (Phase 3) will use these
-        buckets and totals only — friends never see your labels unless you share them.
+        Which categories count as productive vs brainrot in the ranking, and what color each bucket gets.
+        Compare (Phase 3) will use these buckets and totals only — friends never see your labels unless you share them.
       </p>
+      <BucketColorRows />
       <div className="card">
         {CATEGORIES.map((c) => (
           <div key={c.code} className="flex items-center gap-2 border-b px-4 py-2.5 last:border-0">

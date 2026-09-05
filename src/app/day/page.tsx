@@ -63,7 +63,15 @@ export default function DayGridPage() {
   }, [zoom, showLabels]);
   const CELL_H = [12, 14, 18, 24, 32][zoom];
   const CELL_W = [40, 52, 76, 110, 150][zoom];
-  const labelsVisible = showLabels && zoom >= 2;
+  const labelsVisible = showLabels;
+
+  // arrive from the Year view: /day?m=YYYY-MM
+  useEffect(() => {
+    try {
+      const m = new URLSearchParams(window.location.search).get("m");
+      if (m && /^\d{4}-\d{2}$/.test(m)) setYm(m);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -187,7 +195,7 @@ export default function DayGridPage() {
   return (
     <div onMouseUp={() => (dragging.current = false)}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 text-xl font-bold">Day grid</h1>
+        <h1 className="mr-2 text-xl font-bold">Month grid</h1>
         <input
           type="month"
           value={ym}
@@ -238,7 +246,7 @@ export default function DayGridPage() {
           </button>
           <button
             onClick={() => setShowLabels((v) => !v)}
-            title={zoom < 2 ? "Zoom in to show text in cells" : "Show/hide text in cells"}
+            title="Show/hide text in cells (zoom in to read more)"
             className={`rounded-lg border px-2.5 py-1 text-sm ${showLabels ? "bg-accent-soft font-semibold text-accent" : ""}`}
           >
             Aa

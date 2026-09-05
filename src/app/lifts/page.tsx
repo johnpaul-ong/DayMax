@@ -7,33 +7,58 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   deleteLift,
   deleteLiftGoal,
+  fetchDailyMetrics,
+  fetchDayMetrics,
   fetchLiftGoals,
   fetchLifts,
   insertLifts,
   setLiftGoalArchived,
   upsertLiftGoal,
+  type GoalUnit,
   type LiftGoal,
 } from "@/lib/data";
+import { DEFAULT_BUCKET_COLORS, loadBucketColors } from "@/lib/theme";
 import type { LiftEntry } from "@/lib/types";
+
+/** Best reps in a messy reps string: "2 + 10" -> 10, "AMRAP" -> 0. */
+function maxReps(reps: string | null): number {
+  if (!reps) return 0;
+  const nums = reps.match(/\d+(\.\d+)?/g);
+  return nums ? Math.max(...nums.map(Number)) : 0;
+}
+
+function bestFor(rows: LiftEntry[], name: string, unit: GoalUnit): number {
+  const matching = rows.filter((r) => r.exercise.toLowerCase() === name.toLowerCase());
+  if (unit === "kg") return Math.max(0, ...matching.filter((r) => r.weightKg != null).map((r) => r.weightKg!));
+  return Math.max(0, ...matching.map((r) => maxReps(r.reps)));
+}
 
 function GoalsCard({ rows }: { rows: LiftEntry[] }) {
   const [goals, setGoals] = useState<LiftGoal[]>([]);
   const [exercise, setExercise] = useState("");
   const [target, setTarget] = useState("");
+  const [unit, setUnit] = useState<GoalUnit>("kg");
   const [showArchived, setShowArchived] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   function reload() {
     fetchLiftGoals()
       .then(setGoals)
-      .catch(() => setErr("Goals need migration 0002 — run supabase/migrations/0002_goals_profile.sql in the Supabase SQL Editor."));
+      .catch(() => setErr("Goals need migrations 0002 + 0003 — run them in the Supabase SQL Editor."));
   }
   useEffect(reload, []);
-
-  const bestFor = (name: string) =>
-    Math.max(0, ...rows.filter((r) => r.exercise.toLowerCase() === name.toLowerCase() && r.weightKg != null).map((r) => r.weightKg!));
 
   const visible = goals.filter((g) => (showArchived ? true : !g.archived));
 
@@ -50,9 +75,9 @@ function GoalsCard({ rows }: { rows: LiftEntry[] }) {
       {err && <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">{err}</p>}
 
       {visible.map((g) => {
-        const best = bestFor(g.exercise);
-        const pct = Math.min(100, (best / g.targetWeightKg) * 100);
-        const hit = best >= g.targetWeightKg;
+        const best = bestFor(rows, g.exercise, g.unit);
+        const pct = Math.min(100, (best / g.target) * 100);
+        const hit = best >= g.target;
         return (
           <div key={g.id} className={`mb-2 ${g.archived ? "opacity-50" : ""}`}>
             <div className="mb-0.5 flex items-baseline justify-between text-sm">
@@ -60,7 +85,7 @@ function GoalsCard({ rows }: { rows: LiftEntry[] }) {
                 {g.exercise} {hit && "🏆"}
               </span>
               <span className="text-xs text-muted">
-                {best}kg / {g.targetWeightKg}kg ({pct.toFixed(0)}%{hit ? " — hit!" : `, ${(g.targetWeightKg - best).toFixed(1)}kg to go`})
+                {best}{g.unit} / {g.target}{g.unit} ({pct.toFixed(0)}%{hit ? " — hit!" : `, ${(g.target - best).toFixed(g.unit === "reps" ? 0 : 1)}${g.unit} to go`})
                 <button onClick={() => void setLiftGoalArchived(g.id, !g.archived).then(reload)} className="ml-2 text-accent hover:underline">
                   {g.archived ? "restore" : "archive"}
                 </button>
@@ -79,12 +104,16 @@ function GoalsCard({ rows }: { rows: LiftEntry[] }) {
 
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <input value={exercise} onChange={(e) => setExercise(e.target.value)} placeholder="Exercise" className="w-36 rounded-lg border bg-surface px-2 py-2 text-sm" />
-        <input value={target} onChange={(e) => setTarget(e.target.value)} type="number" step="0.5" inputMode="decimal" placeholder="Target kg" className="w-28 rounded-lg border bg-surface px-2 py-2 text-sm" />
+        <input value={target} onChange={(e) => setTarget(e.target.value)} type="number" step="0.5" inputMode="decimal" placeholder={unit === "kg" ? "Target kg" : "Target reps"} className="w-28 rounded-lg border bg-surface px-2 py-2 text-sm" />
+        <select value={unit} onChange={(e) => setUnit(e.target.value as GoalUnit)} className="rounded-lg border bg-surface px-2 py-2 text-sm">
+          <option value="kg">kg</option>
+          <option value="reps">reps</option>
+        </select>
         <button
           onClick={() => {
             const t = Number(target);
             if (!exercise.trim() || !Number.isFinite(t) || t <= 0) return;
-            void upsertLiftGoal(exercise.trim(), t).then(() => {
+            void upsertLiftGoal(exercise.trim(), t, unit).then(() => {
               setExercise("");
               setTarget("");
               reload();
@@ -95,6 +124,105 @@ function GoalsCard({ rows }: { rows: LiftEntry[] }) {
           Set goal
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Per-exercise progression charts + bodyweight trend (moved from Overview). */
+function ProgressionSection({ rows }: { rows: LiftEntry[] }) {
+  const [goals, setGoals] = useState<LiftGoal[]>([]);
+  const [bodyweight, setBodyweight] = useState<Array<{ date: string; kg: number }>>([]);
+  const colors = useMemo(() => (typeof window === "undefined" ? DEFAULT_BUCKET_COLORS : loadBucketColors()), []);
+
+  useEffect(() => {
+    fetchLiftGoals().then(setGoals).catch(() => {});
+    Promise.all([fetchDailyMetrics("bodyweight_kg"), fetchDayMetrics("2000-01-01", "2100-01-01")]).then(([bw, dm]) => {
+      const map = new Map<string, number>();
+      for (const m of bw) if (m.value != null) map.set(m.date, m.value);
+      for (const m of dm) if (m.weightKg != null && !map.has(m.date)) map.set(m.date, m.weightKg);
+      setBodyweight([...map.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, kg]) => ({ date, kg })));
+    }).catch(() => {});
+  }, []);
+
+  const series = useMemo(() => {
+    const byExercise = new Map<string, Array<{ date: string; weight: number }>>();
+    for (const l of [...rows].sort((a, b) => (a.date < b.date ? -1 : 1))) {
+      if (l.weightKg == null) continue;
+      byExercise.set(l.exercise, [...(byExercise.get(l.exercise) ?? []), { date: l.date, weight: l.weightKg }]);
+    }
+    return [...byExercise.entries()]
+      .filter(([, pts]) => pts.length >= 2)
+      .map(([name, pts]) => {
+        const first = pts[0].weight;
+        const latest = pts[pts.length - 1].weight;
+        const goal = goals.find((g) => !g.archived && g.unit === "kg" && g.exercise.toLowerCase() === name.toLowerCase());
+        return { name, pts, first, latest, pctTotal: first > 0 ? ((latest - first) / first) * 100 : 0, goal: goal?.target ?? null };
+      })
+      .sort((a, b) => b.pts.length - a.pts.length)
+      .slice(0, 8);
+  }, [rows, goals]);
+
+  const bwChange = bodyweight.length >= 2 ? bodyweight[bodyweight.length - 1].kg - bodyweight[0].kg : null;
+  const tickDate = (d: string) => d.slice(5);
+
+  if (series.length === 0 && bodyweight.length < 2) return null;
+
+  return (
+    <div className="mt-8 space-y-6">
+      {series.length > 0 && (
+        <section>
+          <h2 className="mb-2 font-semibold">Progression</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {series.map((s) => (
+              <div key={s.name} className="card p-3">
+                <div className="mb-1 flex items-baseline justify-between px-1">
+                  <p className="text-sm font-medium">{s.name}</p>
+                  <p className="text-xs text-muted">
+                    <span className="font-semibold" style={{ color: s.pctTotal >= 0 ? colors.productive : colors.brainrot }}>
+                      {s.pctTotal >= 0 ? "+" : ""}{s.pctTotal.toFixed(1)}%
+                    </span>{" "}
+                    ({s.first} → {s.latest}kg)
+                  </p>
+                </div>
+                <div className="h-40">
+                  <ResponsiveContainer>
+                    <LineChart data={s.pts}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                      <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      {s.goal != null && <ReferenceLine y={s.goal} stroke={colors.productive} strokeDasharray="6 3" label={{ value: `goal ${s.goal}`, fontSize: 10, fill: colors.productive }} />}
+                      <Line type="monotone" dataKey="weight" stroke="var(--accent)" dot={{ r: 2 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {bodyweight.length >= 2 && (
+        <section>
+          <h2 className="mb-2 font-semibold">
+            Bodyweight{" "}
+            <span className="text-sm font-normal text-muted">
+              {bwChange! >= 0 ? "+" : ""}{bwChange!.toFixed(1)}kg since {bodyweight[0].date.slice(5)}
+            </span>
+          </h2>
+          <div className="h-56 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={bodyweight}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
+                <Tooltip />
+                <Line type="monotone" dataKey="kg" stroke="var(--accent)" dot={{ r: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -252,6 +380,8 @@ export default function LiftsPage() {
           </tbody>
         </table>
       </div>
+
+      <ProgressionSection rows={rows} />
     </div>
   );
 }
