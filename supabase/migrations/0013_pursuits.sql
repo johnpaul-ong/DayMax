@@ -181,12 +181,12 @@ insert into public.pursuits (id, owner_id, name, description, kind, is_public) v
 
 -- everyone (present and future) is in Life
 insert into public.pursuit_members (pursuit_id, user_id, role)
-select '33333333-3333-4333-8333-333333333301', u.id, 'member' from auth.users u
+select '33333333-3333-4333-8333-333333333301'::uuid, u.id, 'member' from auth.users u
 on conflict do nothing;
 
 -- users with lift data are in Lifts
 insert into public.pursuit_members (pursuit_id, user_id, role)
-select distinct '33333333-3333-4333-8333-333333333302', l.user_id, 'member' from public.lift_entries l
+select distinct '33333333-3333-4333-8333-333333333302'::uuid, l.user_id, 'member' from public.lift_entries l
 on conflict do nothing;
 
 create or replace function public.handle_new_user()
