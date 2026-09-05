@@ -28,8 +28,8 @@ import {
   YAxis,
 } from "recharts";
 import {
-  fetchLeaderboard,
-  fetchLeaderboardLifts,
+  fetchPursuitDayTotals,
+  fetchPursuitLifts,
   listFriends,
   type Friendship,
   type LeaderboardLiftRow,
@@ -247,11 +247,15 @@ export default function PursuitPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
-      {/* Life is everyone, so it has no roster — see pursuit_member_list */}
-      {pursuit.kind !== "life" && <MembersSection members={members} total={pursuit.memberCount} />}
+      {/*
+        The everyone-pursuit has no roster (it would be a directory of every
+        account). Other Life-kind pursuits — like the Avengers one — do, and
+        the server returns an empty list for the one that shouldn't.
+      */}
+      <MembersSection members={members} total={pursuit.memberCount} />
 
-      {pursuit.kind === "life" && <LifeCommunity memberCount={pursuit.memberCount} />}
-      {pursuit.kind === "lifts" && <LiftsCommunity />}
+      {pursuit.kind === "life" && <LifeCommunity pursuitId={id} memberCount={pursuit.memberCount} />}
+      {pursuit.kind === "lifts" && <LiftsCommunity pursuitId={id} />}
 
       {visibleStats.map((s) => (
         <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={reload} />
@@ -368,7 +372,7 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
  * Built from leaderboard_day_totals — the same share-rule-enforcing function
  * the Arena uses, so nobody who set themselves to hidden ever shows up.
  */
-function LifeCommunity({ memberCount }: { memberCount: number }) {
+function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; memberCount: number }) {
   const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
@@ -383,11 +387,11 @@ function LifeCommunity({ memberCount }: { memberCount: number }) {
   }, [todayISO]);
 
   useEffect(() => {
-    fetchLeaderboard(since, todayISO)
+    fetchPursuitDayTotals(pursuitId, since, todayISO)
       .then(setRows)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [since, todayISO]);
+  }, [pursuitId, since, todayISO]);
 
   const people = useMemo(() => {
     const byId = new Map<string, { id: string; name: string; rows: LeaderboardRow[] }>();
@@ -541,7 +545,7 @@ function LifeCommunity({ memberCount }: { memberCount: number }) {
 }
 
 /** The Lifts pursuit's community board: who lifts what, and how it's moving. */
-function LiftsCommunity() {
+function LiftsCommunity({ pursuitId }: { pursuitId: string }) {
   const [rows, setRows] = useState<LeaderboardLiftRow[]>([]);
   const [exercise, setExercise] = useState("");
   const [loading, setLoading] = useState(true);
@@ -555,7 +559,7 @@ function LiftsCommunity() {
   }, []);
 
   useEffect(() => {
-    fetchLeaderboardLifts(since)
+    fetchPursuitLifts(pursuitId, since)
       .then((rs) => {
         setRows(rs);
         if (rs.length) {
@@ -566,7 +570,7 @@ function LiftsCommunity() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [since]);
+  }, [pursuitId, since]);
 
   const exercises = useMemo(() => [...new Set(rows.map((r) => r.exercise))].sort(), [rows]);
 

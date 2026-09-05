@@ -44,8 +44,12 @@ returns boolean language sql security definer stable set search_path = public as
   select public.visible_sections(member) ? s;
 $$;
 
--- profile header, plus everything the page needs to render the right buttons
-create or replace function public.member_profile(member uuid)
+-- profile header, plus everything the page needs to render the right buttons.
+-- Postgres won't let create-or-replace change a function's OUT columns, and
+-- this one gains is_public / is_self / friend_status — so drop it first.
+drop function if exists public.member_profile(uuid);
+
+create function public.member_profile(member uuid)
 returns table (display_name text, username text, sections jsonb,
                is_public boolean, is_self boolean, friend_status text)
 language plpgsql security definer stable set search_path = public as $$

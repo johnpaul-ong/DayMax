@@ -403,6 +403,37 @@ export async function fetchLeaderboard(from?: string, to?: string): Promise<Lead
   }));
 }
 
+/** Day totals for the members of one pursuit — what a Life-style board reads. */
+export async function fetchPursuitDayTotals(pursuitId: string, from?: string, to?: string): Promise<LeaderboardRow[]> {
+  const params: Record<string, unknown> = { p: pursuitId };
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await cachedRpcAll("pursuit_day_totals", params);
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    isDemo: !!r.is_demo,
+    date: String(r.date),
+    productive: Number(r.productive),
+    brainrot: Number(r.brainrot),
+    social: Number(r.social ?? 0),
+    other: Number(r.other ?? 0),
+  }));
+}
+
+export async function fetchPursuitLifts(pursuitId: string, from?: string): Promise<LeaderboardLiftRow[]> {
+  const params: Record<string, unknown> = { p: pursuitId };
+  if (from) params.from_date = from;
+  const data = await cachedRpcAll("pursuit_lift_rows", params);
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    date: String(r.date),
+    exercise: r.exercise,
+    weightKg: Number(r.weight_kg),
+  }));
+}
+
 export interface DayStripRow {
   date: string;
   slot: number;
