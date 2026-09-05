@@ -6,7 +6,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchProfile } from "@/lib/data";
 import { lifeStats, type LifeStats } from "@/lib/life";
@@ -74,41 +74,40 @@ function LifeCard({ life, country }: { life: LifeStats; country: string | null }
       <div className="mb-3 h-3 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
       </div>
-      <div className="overflow-x-auto">
-        <div style={{ display: "inline-grid", rowGap: 2 }}>
-          {Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, year) => (
-            <div
-              key={year}
-              style={{
-                display: "grid",
-                gridTemplateColumns: `24px repeat(52, 7px)`,
-                columnGap: 2,
-                alignItems: "center",
-              }}
-            >
-              <span className="text-right font-mono text-[8px] text-faint">
-                {year % 10 === 0 ? year : ""}
-              </span>
-              {Array.from({ length: 52 }, (_, w) => {
-                const i = year * 52 + w;
-                if (i >= totalWeeks) return <span key={w} />;
-                return (
-                  <span
-                    key={w}
-                    title={`Age ${year}, week ${w + 1}${i < livedWeeks ? " — lived" : ""}`}
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: 1.5,
-                      background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)",
-                      opacity: i < livedWeeks ? 0.85 : 1,
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </div>
+      {/* One grid, 52 fluid columns wide, so it always spans the card end to end. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.25rem repeat(52, minmax(0, 1fr))",
+          gap: 2,
+          alignItems: "center",
+          width: "100%",
+        }}
+      >
+        {Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, year) => (
+          <Fragment key={year}>
+            <span className="pr-1 text-right font-mono text-[8px] leading-none text-faint">
+              {year % 10 === 0 ? year : ""}
+            </span>
+            {Array.from({ length: 52 }, (_, w) => {
+              const i = year * 52 + w;
+              if (i >= totalWeeks) return <span key={w} />;
+              return (
+                <span
+                  key={w}
+                  title={`Age ${year}, week ${w + 1}${i < livedWeeks ? " — lived" : ""}`}
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    borderRadius: 2,
+                    background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)",
+                    opacity: i < livedWeeks ? 0.85 : 1,
+                  }}
+                />
+              );
+            })}
+          </Fragment>
+        ))}
       </div>
       <p className="mt-2 text-xs text-faint">Every square is one week; every row is one year of your life (numbers = your age). The gray ones are all you have — make the slots count.</p>
     </div>
