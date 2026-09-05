@@ -332,7 +332,7 @@ export default function OverviewPage() {
                 <Tooltip labelFormatter={(d) => String(d)} />
                 <Legend formatter={(v) => DAY_METRIC_LINES.find((f) => f.key === v)?.label ?? v} />
                 {DAY_METRIC_LINES.map((f, i) => (
-                  <Line key={f.key} type="monotone" dataKey={f.key} name={f.label} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} connectNulls />
+                  <Line key={f.key} type="monotone" strokeWidth={2.5} dataKey={f.key} name={f.label} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} connectNulls />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -382,7 +382,7 @@ export default function OverviewPage() {
                   {trendKeys.map((k) => (
                     <Line
                       key={k}
-                      type="monotone"
+                      type="monotone" strokeWidth={2.5}
                       dataKey={k}
                       stroke={TREND_COLORS[TREND_FIELDS.findIndex((f) => f.key === k) % TREND_COLORS.length]}
                       dot={false}
@@ -501,7 +501,7 @@ export default function OverviewPage() {
                 />
                 <Legend />
                 {liftChart.names.map((n, i) => (
-                  <Line key={n.name} type="monotone" dataKey={n.name} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={{ r: 2 }} connectNulls strokeDasharray={n.hasGoal ? undefined : "5 3"} />
+                  <Line key={n.name} type="monotone" strokeWidth={2.5} dataKey={n.name} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={{ r: 2 }} connectNulls strokeDasharray={n.hasGoal ? undefined : "5 3"} />
                 ))}
               </LineChart>
             </ResponsiveContainer>

@@ -192,7 +192,7 @@ function ProgressionSection({ rows }: { rows: LiftEntry[] }) {
                       <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} />
                       <Tooltip />
                       {s.goal != null && <ReferenceLine y={s.goal} stroke={colors.productive} strokeDasharray="6 3" label={{ value: `goal ${s.goal}`, fontSize: 10, fill: colors.productive }} />}
-                      <Line type="monotone" dataKey="weight" stroke="var(--accent)" dot={{ r: 2 }} />
+                      <Line type="monotone" strokeWidth={2.5} dataKey="weight" stroke="var(--accent)" dot={{ r: 2 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -217,7 +217,7 @@ function ProgressionSection({ rows }: { rows: LiftEntry[] }) {
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
                 <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
                 <Tooltip />
-                <Line type="monotone" dataKey="kg" stroke="var(--accent)" dot={{ r: 2 }} />
+                <Line type="monotone" strokeWidth={2.5} dataKey="kg" stroke="var(--accent)" dot={{ r: 2 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -333,7 +333,9 @@ export default function LiftsPage() {
 
       <GoalsCard rows={rows} />
 
-      <h2 className="mb-2 font-semibold">History</h2>
+      <ProgressionSection rows={rows} />
+
+      <h2 className="mb-2 mt-8 font-semibold">History</h2>
       <div className="overflow-x-auto card">
         <table className="w-full text-sm">
           <thead>
@@ -380,8 +382,6 @@ export default function LiftsPage() {
           </tbody>
         </table>
       </div>
-
-      <ProgressionSection rows={rows} />
     </div>
   );
 }

@@ -170,6 +170,39 @@ export async function acceptInvite(token: string, guardianAcknowledged: boolean)
   return data as string;
 }
 
+// --- friend profiles -------------------------------------------------------
+
+export type ProfileSection = "ranking" | "hours" | "lifts";
+export const PROFILE_SECTIONS: Array<{ key: ProfileSection; label: string }> = [
+  { key: "ranking", label: "Productivity ranking" },
+  { key: "hours", label: "Hours per day/week/month" },
+  { key: "lifts", label: "Lifts" },
+];
+
+export async function fetchMemberProfile(userId: string): Promise<{ displayName: string; sections: ProfileSection[] }> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("member_profile", { member: userId });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const sections = Array.isArray(row?.sections) ? (row.sections as ProfileSection[]) : ["ranking", "hours", "lifts"];
+  return { displayName: row?.display_name ?? "anonymous", sections };
+}
+
+export async function fetchMyProfileSections(): Promise<ProfileSection[]> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase.from("profiles").select("profile_sections").eq("id", user_id).single();
+  if (error) throw error;
+  return Array.isArray(data?.profile_sections) ? data.profile_sections : ["ranking", "hours", "lifts"];
+}
+
+export async function saveMyProfileSections(sections: ProfileSection[]): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase.from("profiles").update({ profile_sections: sections }).eq("id", user_id);
+  if (error) throw error;
+}
+
 export async function fetchCompareDay(trackId: string): Promise<CompareDayRow[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("compare_day_totals", { t: trackId });

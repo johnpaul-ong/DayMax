@@ -6,6 +6,7 @@
  * raw labels are never shown unless that member chose raw_labels.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -151,7 +152,9 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
         <h3 className="mb-1 text-sm font-semibold">Members</h3>
         {members.map((m) => (
           <div key={m.userId} className="flex items-center gap-2 py-1 text-sm">
-            <span className="font-medium">{m.displayName}</span>
+            <Link href={`/friends/${m.userId}`} className="font-medium hover:text-accent hover:underline">
+              {m.displayName}
+            </Link>
             {m.role === "owner" && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">owner</span>}
             {m.userId === me ? (
               <select
@@ -333,7 +336,7 @@ function DayCompare({ trackId }: { trackId: string }) {
             <Tooltip labelFormatter={(d) => String(d)} />
             <Legend />
             {chart.names.map((n, i) => (
-              <Line key={n} type="monotone" dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} connectNulls />
+              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>
@@ -395,7 +398,7 @@ function LiftsCompare({ trackId }: { trackId: string }) {
             <Tooltip labelFormatter={(d) => String(d)} />
             <Legend />
             {chart.names.map((n, i) => (
-              <Line key={n} type="monotone" dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>

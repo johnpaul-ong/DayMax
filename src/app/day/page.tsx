@@ -21,12 +21,6 @@ function monthDates(ym: string): string[] {
   return Array.from({ length: days }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
 }
 
-function addDays(iso: string, n: number): string {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default function DayGridPage() {
   const todayISO = new Date().toISOString().slice(0, 10);
   const [ym, setYm] = useState(todayISO.slice(0, 7));
@@ -138,30 +132,6 @@ export default function DayGridPage() {
     }
   }
 
-  async function copyYesterday() {
-    if (!focus) return;
-    const date = dates[focus.d];
-    const prev = addDays(date, -1);
-    setSaving(true);
-    try {
-      const prevEntries =
-        prev.slice(0, 7) === ym
-          ? Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
-              const c = cells.get(key(prev, s));
-              return c ? { date, slot: s, category: c.category, label: c.label } : null;
-            }).filter((x): x is DayEntry => x !== null)
-          : (await fetchDayEntries(prev, prev)).map((e) => ({ ...e, date }));
-      const next = new Map(cells);
-      for (const e of prevEntries) next.set(key(date, e.slot), { category: e.category, label: e.label });
-      setCells(next);
-      await upsertDayEntries(prevEntries);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function onKeyDown(e: React.KeyboardEvent) {
     if (!focus) return;
     const move = (dd: number, ds: number, extend: boolean) => {
@@ -228,13 +198,6 @@ export default function DayGridPage() {
           className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40"
         >
           Clear
-        </button>
-        <button
-          onClick={() => void copyYesterday()}
-          disabled={!focus || saving}
-          className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40"
-        >
-          Copy yesterday → selected day
         </button>
         {saving && <span className="text-xs text-faint">saving…</span>}
         <span className="ml-auto inline-flex items-center gap-1">

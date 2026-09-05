@@ -166,6 +166,57 @@ function LabelRenameSection() {
   );
 }
 
+function ProfileVisibilitySection() {
+  const [sections, setSections] = useState<string[] | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    import("@/lib/friends")
+      .then((f) => f.fetchMyProfileSections())
+      .then((s) => setSections(s))
+      .catch(() => setSections(null));
+  }, []);
+
+  if (!sections) return null;
+
+  const OPTIONS = [
+    { key: "ranking", label: "Productivity ranking" },
+    { key: "hours", label: "Hours per day/week/month" },
+    { key: "lifts", label: "Lifts" },
+  ];
+
+  function toggle(key: string) {
+    const next = sections!.includes(key) ? sections!.filter((k) => k !== key) : [...sections!, key];
+    setSections(next);
+    import("@/lib/friends")
+      .then((f) => f.saveMyProfileSections(next as any))
+      .then(() => setMsg("Saved."))
+      .catch((e) => setMsg(String(e.message ?? e)));
+  }
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Your profile (what friends can see)</h2>
+      <p className="mb-3 text-sm text-muted">
+        Friends who share a track with you can open your profile. It only ever shows these sections — and your
+        per-track share rule still applies on top (hidden means hidden).
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {OPTIONS.map((o) => (
+          <button
+            key={o.key}
+            onClick={() => toggle(o.key)}
+            className={`rounded-full border px-3 py-1.5 text-sm ${sections.includes(o.key) ? "bg-accent-soft font-semibold text-accent" : "text-muted"}`}
+          >
+            {sections.includes(o.key) ? "✓ " : ""}{o.label}
+          </button>
+        ))}
+      </div>
+      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+    </div>
+  );
+}
+
 function ProfileSection() {
   const [birthDate, setBirthDate] = useState<string>("");
   const [country, setCountry] = useState<string>("");
@@ -260,6 +311,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-md">
       <h1 className="mb-4 text-xl font-bold">Settings</h1>
       <ProfileSection />
+      <ProfileVisibilitySection />
       <AppearanceSection />
       <LabelRenameSection />
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
