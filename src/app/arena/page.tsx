@@ -12,7 +12,15 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { fetchLeaderboard, type LeaderboardRow } from "@/lib/friends";
 import { weekStart } from "@/lib/ranking";
+import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+
+type Scope = "avengers" | "friends" | "everyone";
+const SCOPES: Array<{ key: Scope; label: string }> = [
+  { key: "avengers", label: "You vs the Avengers" },
+  { key: "friends", label: "You vs friends" },
+  { key: "everyone", label: "Everyone" },
+];
 
 interface Contender {
   id: string;
@@ -72,9 +80,12 @@ export default function ArenaPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
+  const [scope, setScope] = useState<Scope>("avengers");
+  const [me, setMe] = useState<string | null>(null);
 
   useEffect(() => {
     setColors(loadBucketColors());
+    createClient().auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
     fetchLeaderboard()
       .then(setRows)
       .catch((e) =>
@@ -124,8 +135,14 @@ export default function ArenaPage() {
     });
   }, [rows, todayISO, ws]);
 
+  const scoped = useMemo(() => {
+    if (scope === "everyone") return contenders;
+    if (scope === "avengers") return contenders.filter((c) => c.isDemo || c.id === me);
+    return contenders.filter((c) => !c.isDemo); // you + human friends
+  }, [contenders, scope, me]);
+
   const top = (sel: (c: Contender) => number | null, n = 5, asc = false) =>
-    contenders
+    scoped
       .filter((c) => sel(c) != null && sel(c) !== 0)
       .sort((a, b) => (asc ? (sel(a)! - sel(b)!) : (sel(b)! - sel(a)!)))
       .slice(0, n);
@@ -140,6 +157,21 @@ export default function ArenaPage() {
         Get on the boards by logging your day.
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
+
+      <div className="mb-4 flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+        {SCOPES.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => setScope(s.key)}
+            className={`flex-1 rounded-lg px-3 py-1.5 ${scope === s.key ? "bg-surface font-semibold" : "text-muted"}`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {scope === "friends" && scoped.length <= 1 && (
+        <p className="mb-3 text-sm text-faint">No human friends sharing data yet — invite some from the Friends tab. For now it&apos;s you against the legends.</p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Board
