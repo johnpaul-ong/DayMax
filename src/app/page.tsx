@@ -8,18 +8,43 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName } from "@/lib/categories";
-import { fetchBucketSettings, fetchDayEntries, fetchLifts } from "@/lib/data";
+import { fetchBucketSettings, fetchDayEntries, fetchLifts, fetchProfile } from "@/lib/data";
+import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, hoursByCategory, productiveRatio, weekStart } from "@/lib/ranking";
+import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, LiftEntry } from "@/lib/types";
 import SignOutButton from "./signout-button";
 
-function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "ok" | "danger" | "muted" }) {
-  const toneClass = tone === "ok" ? "text-ok" : tone === "danger" ? "text-danger" : "text-ink";
+function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="card flex-1 p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-faint">{label}</p>
-      <p className={`mt-1 text-3xl font-bold tabular-nums ${toneClass}`}>{value}</p>
+      <p className="mt-1 text-3xl font-bold tabular-nums" style={color ? { color } : undefined}>{value}</p>
       {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
+    </div>
+  );
+}
+
+function LifeCard({ life, country }: { life: LifeStats; country: string | null }) {
+  return (
+    <div className="card p-5">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold text-muted">Life lived</h2>
+        <span className="text-xs text-faint">
+          vs {life.expectancy.toFixed(1)}y life expectancy{country ? ` (${country})` : " (world avg)"}
+        </span>
+      </div>
+      <div className="flex items-center gap-4">
+        <p className="text-3xl font-bold tabular-nums">{life.percentLived.toFixed(1)}%</p>
+        <div className="flex-1">
+          <div className="h-3 overflow-hidden rounded-full bg-surface-2">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            ~{life.yearsLeft.toFixed(1)} years (~{Math.round(life.weeksLeft).toLocaleString()} weeks) left on average. Make the slots count.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -31,8 +56,12 @@ export default function HomePage() {
   const [lifts, setLifts] = useState<Array<LiftEntry & { id: number }>>([]);
   const [settings, setSettings] = useState<BucketSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [life, setLife] = useState<LifeStats | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
+  const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
 
   useEffect(() => {
+    setColors(loadBucketColors());
     Promise.all([fetchDayEntries(ws, todayISO), fetchLifts(), fetchBucketSettings()])
       .then(([e, l, s]) => {
         setWeekEntries(e);
@@ -40,6 +69,14 @@ export default function HomePage() {
         setSettings(s);
       })
       .finally(() => setLoading(false));
+    fetchProfile()
+      .then((p) => {
+        if (p.birthDate) {
+          setLife(lifeStats(p.birthDate, p.country));
+          setCountry(p.country);
+        }
+      })
+      .catch(() => {}); // before migration 0002, quietly skip
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todayEntries = useMemo(() => weekEntries.filter((e) => e.date === todayISO), [weekEntries, todayISO]);
@@ -78,8 +115,8 @@ export default function HomePage() {
           <section>
             <h2 className="mb-2 text-sm font-semibold text-muted">Today</h2>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Stat label="Productive" value={`${(todayTotals?.productive ?? 0).toFixed(1)}h`} tone="ok" />
-              <Stat label="Brainrot" value={`${(todayTotals?.brainrot ?? 0).toFixed(1)}h`} tone="danger" />
+              <Stat label="Productive" value={`${(todayTotals?.productive ?? 0).toFixed(1)}h`} color={colors.productive} />
+              <Stat label="Brainrot" value={`${(todayTotals?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
               <Stat
                 label="Ratio"
                 value={todayTotals ? (productiveRatio(todayTotals) === null ? "∞" : String(productiveRatio(todayTotals))) : "—"}
@@ -101,8 +138,8 @@ export default function HomePage() {
           <section>
             <h2 className="mb-2 text-sm font-semibold text-muted">This week (from {ws.slice(5)})</h2>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Stat label="Productive" value={`${(weekTotals?.productive ?? 0).toFixed(1)}h`} tone="ok" />
-              <Stat label="Brainrot" value={`${(weekTotals?.brainrot ?? 0).toFixed(1)}h`} tone="danger" />
+              <Stat label="Productive" value={`${(weekTotals?.productive ?? 0).toFixed(1)}h`} color={colors.productive} />
+              <Stat label="Brainrot" value={`${(weekTotals?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
               <Stat
                 label="Ratio"
                 value={weekTotals ? (productiveRatio(weekTotals) === null ? "∞" : String(productiveRatio(weekTotals))) : "—"}
@@ -132,6 +169,8 @@ export default function HomePage() {
               </div>
             )}
           </section>
+
+          {life && <LifeCard life={life} country={country} />}
 
           <section className="grid gap-3 sm:grid-cols-3">
             {[

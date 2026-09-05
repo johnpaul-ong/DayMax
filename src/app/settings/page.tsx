@@ -8,8 +8,19 @@
 
 import { useEffect, useState } from "react";
 import { CATEGORIES, type Bucket } from "@/lib/categories";
-import { fetchBucketSettings, saveBucketSettings } from "@/lib/data";
-import { applyTheme, loadTheme, saveTheme, THEMES, type ThemeName } from "@/lib/theme";
+import { fetchBucketSettings, fetchProfile, saveBucketSettings, updateProfile } from "@/lib/data";
+import { COUNTRIES } from "@/lib/life";
+import {
+  applyTheme,
+  DEFAULT_BUCKET_COLORS,
+  loadBucketColors,
+  loadTheme,
+  saveBucketColors,
+  saveTheme,
+  THEMES,
+  type BucketColors,
+  type ThemeName,
+} from "@/lib/theme";
 import type { BucketSettings } from "@/lib/types";
 
 const BUCKETS: Bucket[] = ["productive", "brainrot", "other"];
@@ -60,6 +71,106 @@ function AppearanceSection() {
           </button>
         )}
       </div>
+      <BucketColorRows />
+    </div>
+  );
+}
+
+function BucketColorRows() {
+  const [colors, setColors] = useState<BucketColors | null>(null);
+
+  useEffect(() => {
+    setColors(loadBucketColors());
+  }, []);
+  if (!colors) return null;
+
+  function set(key: keyof BucketColors, value: string) {
+    const next = { ...colors!, [key]: value };
+    setColors(next);
+    saveBucketColors(next);
+  }
+
+  const isDefault = JSON.stringify(colors) === JSON.stringify(DEFAULT_BUCKET_COLORS);
+  return (
+    <div className="mt-3 border-t pt-3">
+      <p className="mb-2 text-sm text-muted">Ranking colors (charts, year view, home)</p>
+      <div className="flex flex-wrap items-center gap-4">
+        {(["productive", "brainrot", "other"] as const).map((k) => (
+          <label key={k} className="inline-flex items-center gap-2 text-sm capitalize">
+            <input
+              type="color"
+              value={colors[k]}
+              onChange={(e) => set(k, e.target.value)}
+              className="h-8 w-12 cursor-pointer rounded-lg border bg-surface"
+            />
+            {k}
+          </label>
+        ))}
+        {!isDefault && (
+          <button
+            onClick={() => {
+              setColors({ ...DEFAULT_BUCKET_COLORS });
+              saveBucketColors({ ...DEFAULT_BUCKET_COLORS });
+            }}
+            className="text-sm text-accent hover:underline"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProfileSection() {
+  const [birthDate, setBirthDate] = useState<string>("");
+  const [country, setCountry] = useState<string>("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchProfile()
+      .then((p) => {
+        setBirthDate(p.birthDate ?? "");
+        setCountry(p.country ?? "");
+      })
+      .catch(() => setMsg("Profile needs migration 0002 — run supabase/migrations/0002_goals_profile.sql in the Supabase SQL Editor."));
+  }, []);
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">You</h2>
+      <p className="mb-3 text-sm text-muted">Powers the &ldquo;life lived&rdquo; card on Home. Stays private like everything else.</p>
+      <div className="flex flex-wrap gap-3">
+        <label className="text-xs text-muted">
+          Birthday
+          <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="mt-0.5 block rounded-lg border bg-surface px-2 py-2 text-sm text-ink" />
+        </label>
+        <label className="text-xs text-muted">
+          Country
+          <select value={country} onChange={(e) => setCountry(e.target.value)} className="mt-0.5 block rounded-lg border bg-surface px-2 py-2 text-sm text-ink">
+            <option value="">— pick —</option>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          onClick={() => {
+            setSaving(true);
+            setMsg(null);
+            updateProfile({ birthDate: birthDate || null, country: country || null })
+              .then(() => setMsg("Saved."))
+              .catch((e) => setMsg(String(e.message ?? e)))
+              .finally(() => setSaving(false));
+          }}
+          disabled={saving}
+          className="self-end rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40"
+        >
+          Save
+        </button>
+      </div>
+      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
     </div>
   );
 }
@@ -78,6 +189,7 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-md">
       <h1 className="mb-4 text-xl font-bold">Settings</h1>
+      <ProfileSection />
       <AppearanceSection />
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
       <p className="mb-3 text-sm text-muted">

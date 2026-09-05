@@ -204,6 +204,86 @@ export async function fetchDailyMetrics(metric: string): Promise<DailyMetric[]> 
   }));
 }
 
+// --- lift goals ----------------------------------------------------------------
+
+export interface LiftGoal {
+  id: number;
+  exercise: string;
+  targetWeightKg: number;
+  archived: boolean;
+}
+
+export async function fetchLiftGoals(): Promise<LiftGoal[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("lift_goals")
+    .select("id, exercise, target_weight_kg, archived")
+    .order("created_at");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    exercise: r.exercise,
+    targetWeightKg: r.target_weight_kg,
+    archived: r.archived,
+  }));
+}
+
+export async function upsertLiftGoal(exercise: string, targetWeightKg: number): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase
+    .from("lift_goals")
+    .upsert({ user_id, exercise, target_weight_kg: targetWeightKg, archived: false }, { onConflict: "user_id,exercise" });
+  if (error) throw error;
+}
+
+export async function setLiftGoalArchived(id: number, archived: boolean): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("lift_goals").update({ archived }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteLiftGoal(id: number): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("lift_goals").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// --- profile -------------------------------------------------------------------
+
+export interface Profile {
+  displayName: string | null;
+  birthDate: string | null;
+  country: string | null;
+}
+
+export async function fetchProfile(): Promise<Profile> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("display_name, birth_date, country")
+    .eq("id", user_id)
+    .single();
+  if (error) throw error;
+  return {
+    displayName: data?.display_name ?? null,
+    birthDate: data?.birth_date ? String(data.birth_date) : null,
+    country: data?.country ?? null,
+  };
+}
+
+export async function updateProfile(p: Partial<Profile>): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const row: Record<string, unknown> = {};
+  if ("displayName" in p) row.display_name = p.displayName;
+  if ("birthDate" in p) row.birth_date = p.birthDate;
+  if ("country" in p) row.country = p.country;
+  const { error } = await supabase.from("profiles").update(row).eq("id", user_id);
+  if (error) throw error;
+}
+
 // --- bucket settings ----------------------------------------------------------
 
 export async function fetchBucketSettings(): Promise<BucketSettings> {

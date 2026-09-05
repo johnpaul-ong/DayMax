@@ -9,9 +9,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { categoryColor, categoryName, HOURS_PER_SLOT } from "@/lib/categories";
+import { categoryColor, categoryName, HOURS_PER_SLOT, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchAllDayEntries, fetchBucketSettings } from "@/lib/data";
 import { bucketize, hoursByCategory, productiveRatio } from "@/lib/ranking";
+import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry } from "@/lib/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -24,6 +25,11 @@ export default function YearPage() {
   const [entries, setEntries] = useState<DayEntry[]>([]);
   const [settings, setSettings] = useState<BucketSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bucketColors, setBucketColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
+
+  useEffect(() => {
+    setBucketColors(loadBucketColors());
+  }, []);
 
   useEffect(() => {
     Promise.all([fetchAllDayEntries(), fetchBucketSettings()])
@@ -66,8 +72,7 @@ export default function YearPage() {
     if (scored === 0)
       return { color: "var(--faint)", opacity: 0.35, tip: `${date}: ${(list.length * HOURS_PER_SLOT).toFixed(1)}h logged, nothing productive or brainrot` };
     const p = t.productive / scored; // 0 = all brainrot, 1 = all productive
-    // red -> gray -> green
-    const color = p > 0.5 ? `rgb(${Math.round(120 - (p - 0.5) * 160)}, 160, 90)` : `rgb(200, ${Math.round(90 + p * 140)}, 80)`;
+    const color = blendHex(bucketColors.brainrot, bucketColors.productive, p);
     return {
       color,
       opacity: Math.min(1, list.length / 96 + 0.25),
@@ -141,11 +146,70 @@ export default function YearPage() {
           </table>
           <p className="mt-3 text-xs text-faint">
             {mode === "buckets"
-              ? "Green = productive day, red = brainrot day. Faded = partially logged. Hover for numbers, click to open the grid."
+              ? "Productive vs brainrot colors from your Settings. Faded = partially logged. Hover for numbers, click to open the grid."
               : "Colored by the category you spent the most time on. Hover for details."}
           </p>
         </div>
       )}
+
+      {!loading && <DayStrip year={year} byDate={byDate} />}
+    </div>
+  );
+}
+
+/**
+ * Every logged day of the year, side by side, as full 96-slot vertical bars —
+ * midnight at the top, midnight at the bottom. Scroll through your year.
+ */
+function DayStrip({ year, byDate }: { year: number; byDate: Map<string, DayEntry[]> }) {
+  const days = useMemo(
+    () =>
+      [...byDate.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([date, list]) => {
+          const slots = new Array<number | null>(SLOTS_PER_DAY).fill(null);
+          const labels = new Array<string | null>(SLOTS_PER_DAY).fill(null);
+          for (const e of list) {
+            slots[e.slot] = e.category;
+            labels[e.slot] = e.label;
+          }
+          return { date, slots, labels };
+        }),
+    [byDate]
+  );
+
+  if (days.length === 0) return null;
+
+  return (
+    <div className="mt-6">
+      <h2 className="mb-1 font-semibold">Every day, every 15 minutes</h2>
+      <p className="mb-2 text-sm text-muted">
+        {days.length} logged days in {year} — {days.length * 96} slots. Scroll through it. Hover any sliver.
+      </p>
+      <div className="card overflow-x-auto p-4">
+        <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
+          {days.map(({ date, slots, labels }) => (
+            <div key={date} className="flex flex-col items-center">
+              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
+                {slots.map((cat, s) => (
+                  <div
+                    key={s}
+                    title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${labels[s] ? ` (${labels[s]})` : ""}` : ""}`}
+                    className="w-full flex-1"
+                    style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)" }}
+                  />
+                ))}
+              </div>
+              <span
+                className="mt-1 text-[8px] text-faint"
+                style={{ writingMode: "vertical-rl" }}
+              >
+                {date.slice(5)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

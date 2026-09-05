@@ -1,24 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
+import NavLinks from "./nav-links";
 import ThemeSwitcher from "./theme-switcher";
 
 export const metadata: Metadata = {
   title: "DayMax",
   description: "Track your day in 15-minute slots and your lifts. Private, invite-only.",
 };
-
-const NAV = [
-  { href: "/", label: "Home" },
-  { href: "/day", label: "Day" },
-  { href: "/year", label: "Year" },
-  { href: "/today", label: "Today" },
-  { href: "/lifts", label: "Lifts" },
-  { href: "/overview", label: "Overview" },
-  { href: "/import", label: "Import" },
-  { href: "/export", label: "Export" },
-  { href: "/settings", label: "Settings" },
-];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,15 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
               Day<span className="text-accent">Max</span>
             </Link>
-            {NAV.slice(1).map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                className="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink"
-              >
-                {n.label}
-              </Link>
-            ))}
+            <NavLinks />
             <ThemeSwitcher />
           </div>
         </nav>

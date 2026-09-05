@@ -6,8 +6,98 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { deleteLift, fetchLifts, insertLifts } from "@/lib/data";
+import {
+  deleteLift,
+  deleteLiftGoal,
+  fetchLiftGoals,
+  fetchLifts,
+  insertLifts,
+  setLiftGoalArchived,
+  upsertLiftGoal,
+  type LiftGoal,
+} from "@/lib/data";
 import type { LiftEntry } from "@/lib/types";
+
+function GoalsCard({ rows }: { rows: LiftEntry[] }) {
+  const [goals, setGoals] = useState<LiftGoal[]>([]);
+  const [exercise, setExercise] = useState("");
+  const [target, setTarget] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function reload() {
+    fetchLiftGoals()
+      .then(setGoals)
+      .catch(() => setErr("Goals need migration 0002 — run supabase/migrations/0002_goals_profile.sql in the Supabase SQL Editor."));
+  }
+  useEffect(reload, []);
+
+  const bestFor = (name: string) =>
+    Math.max(0, ...rows.filter((r) => r.exercise.toLowerCase() === name.toLowerCase() && r.weightKg != null).map((r) => r.weightKg!));
+
+  const visible = goals.filter((g) => (showArchived ? true : !g.archived));
+
+  return (
+    <div className="mb-6 card p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-semibold">Goals</h2>
+        {goals.some((g) => g.archived) && (
+          <button onClick={() => setShowArchived((v) => !v)} className="text-xs text-accent hover:underline">
+            {showArchived ? "Hide archived" : "Show archived"}
+          </button>
+        )}
+      </div>
+      {err && <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">{err}</p>}
+
+      {visible.map((g) => {
+        const best = bestFor(g.exercise);
+        const pct = Math.min(100, (best / g.targetWeightKg) * 100);
+        const hit = best >= g.targetWeightKg;
+        return (
+          <div key={g.id} className={`mb-2 ${g.archived ? "opacity-50" : ""}`}>
+            <div className="mb-0.5 flex items-baseline justify-between text-sm">
+              <span className="font-medium">
+                {g.exercise} {hit && "🏆"}
+              </span>
+              <span className="text-xs text-muted">
+                {best}kg / {g.targetWeightKg}kg ({pct.toFixed(0)}%{hit ? " — hit!" : `, ${(g.targetWeightKg - best).toFixed(1)}kg to go`})
+                <button onClick={() => void setLiftGoalArchived(g.id, !g.archived).then(reload)} className="ml-2 text-accent hover:underline">
+                  {g.archived ? "restore" : "archive"}
+                </button>
+                <button onClick={() => void deleteLiftGoal(g.id).then(reload)} className="ml-2 text-danger hover:opacity-70">
+                  remove
+                </button>
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      })}
+      {visible.length === 0 && !err && <p className="mb-2 text-sm text-faint">No goals yet. Give yourself a target.</p>}
+
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <input value={exercise} onChange={(e) => setExercise(e.target.value)} placeholder="Exercise" className="w-36 rounded-lg border bg-surface px-2 py-2 text-sm" />
+        <input value={target} onChange={(e) => setTarget(e.target.value)} type="number" step="0.5" inputMode="decimal" placeholder="Target kg" className="w-28 rounded-lg border bg-surface px-2 py-2 text-sm" />
+        <button
+          onClick={() => {
+            const t = Number(target);
+            if (!exercise.trim() || !Number.isFinite(t) || t <= 0) return;
+            void upsertLiftGoal(exercise.trim(), t).then(() => {
+              setExercise("");
+              setTarget("");
+              reload();
+            });
+          }}
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast"
+        >
+          Set goal
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function LiftsPage() {
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -112,6 +202,8 @@ export default function LiftsPage() {
           )}
         </div>
       </div>
+
+      <GoalsCard rows={rows} />
 
       <h2 className="mb-2 font-semibold">History</h2>
       <div className="overflow-x-auto card">
