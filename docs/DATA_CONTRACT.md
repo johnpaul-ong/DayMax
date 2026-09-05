@@ -49,6 +49,24 @@ Upload a JSON file containing **one object or an array of objects**. Three kinds
 
 - Known metrics: `bodyweight_kg`, `run_time_min`, `tuna_rice`. New metric names are allowed.
 
+## 4. Day metrics (the month-sheet footer numbers)
+
+```json
+{
+  "trackKind": "day_metrics",
+  "date": "2026-08-01",
+  "emotionalScore": 7.5,
+  "tired": 6,
+  "startFriction": 6,
+  "endBrainFatigue": null,
+  "deepTime": null,
+  "weightKg": null,
+  "notes": "free text"
+}
+```
+
+All fields except `date` optional.
+
 ## Validation rules (enforced by the importer)
 
 - Unknown `trackKind` → rejected.

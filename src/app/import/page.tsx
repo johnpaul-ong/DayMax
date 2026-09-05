@@ -84,6 +84,7 @@ export default function ImportPage() {
       const entries: DayEntry[] = [];
       const lifts: LiftEntry[] = [];
       const daily: DailyMetric[] = [];
+      const dayMetrics: DayMetrics[] = [];
       const warnings: string[] = [];
       for (const it of items) {
         if (it.trackKind === "time_grid") {
@@ -101,11 +102,22 @@ export default function ImportPage() {
           }
         } else if (it.trackKind === "measurements") {
           daily.push({ date: it.date, metric: it.metric, value: it.value ?? null, textValue: it.textValue ?? null });
+        } else if (it.trackKind === "day_metrics") {
+          dayMetrics.push({
+            date: it.date,
+            emotionalScore: it.emotionalScore ?? null,
+            tired: it.tired ?? null,
+            startFriction: it.startFriction ?? null,
+            endBrainFatigue: it.endBrainFatigue ?? null,
+            deepTime: it.deepTime ?? null,
+            weightKg: it.weightKg ?? null,
+            notes: it.notes ?? null,
+          });
         } else {
           warnings.push(`Unknown trackKind: ${JSON.stringify(it.trackKind)}`);
         }
       }
-      await buildPending(entries, [], lifts, daily, warnings, []);
+      await buildPending(entries, dayMetrics, lifts, daily, warnings, []);
     } catch (e: any) {
       setError(`Invalid JSON: ${String(e.message ?? e)}`);
     } finally {
