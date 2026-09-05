@@ -72,6 +72,7 @@ function LifeCard({ life, country }: { life: LifeStats; country: string | null }
         <div><p className="text-3xl font-bold tabular-nums">{life.percentLived.toFixed(1)}%</p><p className="text-xs text-muted">lived</p></div>
         <div><p className="text-3xl font-bold tabular-nums">{life.ageYears.toFixed(1)}</p><p className="text-xs text-muted">years old</p></div>
         <div><p className="text-3xl font-bold tabular-nums">{life.yearsLeft.toFixed(1)}</p><p className="text-xs text-muted">years left</p></div>
+        <div><p className="text-3xl font-bold tabular-nums">{Math.round(life.ageYears * 52.18).toLocaleString()}</p><p className="text-xs text-muted">weeks already gone</p></div>
         <div><p className="text-3xl font-bold tabular-nums">{Math.round(life.weeksLeft).toLocaleString()}</p><p className="text-xs text-muted">weeks left</p></div>
       </div>
       <div className="mb-3 h-3 overflow-hidden rounded-full bg-surface-2">
