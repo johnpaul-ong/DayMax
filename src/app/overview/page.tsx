@@ -23,7 +23,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchAllDayEntries, fetchBucketSettings, fetchDayMetrics, fetchLifts } from "@/lib/data";
+import {
+  fetchAllDayEntries,
+  fetchBucketSettings,
+  fetchDailyMetrics,
+  fetchDayMetrics,
+  fetchLiftGoals,
+  fetchLifts,
+  fetchProfile,
+  type LiftGoal,
+} from "@/lib/data";
 import { computeRanking, weekStart } from "@/lib/ranking";
 import { allPairCorrelations, bucketsByPeriod, buildDayPoints, CORRELATION_FIELDS, describeR, pearson, type DayPoint, type Period } from "@/lib/stats";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
@@ -34,6 +43,7 @@ import type { BucketSettings, DayEntry, DayMetrics, LiftEntry } from "@/lib/type
 const SECTIONS = [
   { key: "ranking", label: "Productivity ranking" },
   { key: "hours", label: "Hours per day/week/month" },
+  { key: "daymetrics", label: "Day metrics" },
   { key: "trends", label: "Trends (pick your metrics)" },
   { key: "correlations", label: "Correlations" },
   { key: "lifts", label: "Lifts graph" },
@@ -42,10 +52,18 @@ type SectionKey = (typeof SECTIONS)[number]["key"];
 const DEFAULT_SECTIONS: Record<SectionKey, boolean> = {
   ranking: true,
   hours: true,
+  daymetrics: true,
   trends: false,
   correlations: false,
   lifts: true,
 };
+
+const DAY_METRIC_LINES: Array<{ key: string; label: string }> = [
+  { key: "emotionalScore", label: "Emotion" },
+  { key: "tired", label: "Tired" },
+  { key: "startFriction", label: "Start friction" },
+  { key: "endBrainFatigue", label: "Brain fatigue" },
+];
 
 function loadSections(): Record<SectionKey, boolean> {
   try {
@@ -81,6 +99,9 @@ export default function OverviewPage() {
   const [customizing, setCustomizing] = useState(false);
   const [trendKeys, setTrendKeys] = useState<string[]>(["score", "emotionalScore"]);
   const [trendRelative, setTrendRelative] = useState(true);
+  const [goals, setGoals] = useState<LiftGoal[]>([]);
+  const [targetWeight, setTargetWeight] = useState<number | null>(null);
+  const [bodyweight, setBodyweight] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     setColors(loadBucketColors());
@@ -95,8 +116,18 @@ export default function OverviewPage() {
         setLifts(l);
         setSettings(s);
         setDayMetrics(dm);
+        const map = new Map<string, number>();
+        for (const m of dm) if (m.weightKg != null) map.set(m.date, m.weightKg);
+        fetchDailyMetrics("bodyweight_kg")
+          .then((bw) => {
+            for (const m of bw) if (m.value != null) map.set(m.date, m.value);
+            setBodyweight(new Map(map));
+          })
+          .catch(() => setBodyweight(new Map(map)));
       })
       .finally(() => setLoading(false));
+    fetchLiftGoals().then(setGoals).catch(() => {});
+    fetchProfile().then((p) => setTargetWeight(p.targetWeightKg)).catch(() => {});
   }, []);
 
   function toggleSection(key: SectionKey) {
@@ -167,7 +198,8 @@ export default function OverviewPage() {
   const rankedPairs = useMemo(() => allPairCorrelations(dayPoints), [dayPoints]);
   const fieldLabel = (k: string) => TREND_FIELDS.find((f) => f.key === k)?.label ?? k;
 
-  // one combined lifts chart: top exercises overlaid
+  // one combined lifts chart, standardized: each line = % of its target
+  // (goal weight if set, else personal best), bodyweight = % of target weight
   const liftChart = useMemo(() => {
     const byExercise = new Map<string, Map<string, number>>();
     for (const l of lifts) {
@@ -177,14 +209,39 @@ export default function OverviewPage() {
       m.set(l.date, Math.max(m.get(l.date) ?? 0, l.weightKg));
     }
     const top = [...byExercise.entries()].sort(([, a], [, b]) => b.size - a.size).slice(0, 5);
-    const dates = [...new Set(top.flatMap(([, m]) => [...m.keys()]))].sort();
+    const series = top.map(([name, m]) => {
+      const goal = goals.find((g) => !g.archived && g.unit === "kg" && g.exercise.toLowerCase() === name.toLowerCase());
+      const denom = goal?.target ?? Math.max(...m.values());
+      return { name, m, denom, hasGoal: !!goal };
+    });
+    const includeBw = targetWeight != null && bodyweight.size > 0;
+    const dates = [...new Set([...top.flatMap(([, m]) => [...m.keys()]), ...(includeBw ? [...bodyweight.keys()] : [])])].sort();
     const data = dates.map((date) => {
       const row: Record<string, string | number | null> = { date };
-      for (const [name, m] of top) row[name] = m.get(date) ?? null;
+      for (const s of series) {
+        const v = s.m.get(date) ?? null;
+        row[s.name] = v != null && s.denom > 0 ? Math.round((v / s.denom) * 1000) / 10 : null;
+        row[`${s.name}__raw`] = v;
+      }
+      if (includeBw) {
+        const bw = bodyweight.get(date) ?? null;
+        row["Bodyweight"] = bw != null ? Math.round((bw / targetWeight!) * 1000) / 10 : null;
+        row["Bodyweight__raw"] = bw;
+      }
       return row;
     });
-    return { data, names: top.map(([name]) => name) };
-  }, [lifts]);
+    const names = [...series.map((s) => ({ name: s.name, hasGoal: s.hasGoal })), ...(includeBw ? [{ name: "Bodyweight", hasGoal: true }] : [])];
+    return { data, names };
+  }, [lifts, goals, targetWeight, bodyweight]);
+
+  // day metrics over time (all on the same /10-ish scale)
+  const dayMetricData = useMemo(
+    () =>
+      dayPoints
+        .filter((p) => DAY_METRIC_LINES.some((f) => p[f.key] != null))
+        .map((p) => ({ date: p.date, ...Object.fromEntries(DAY_METRIC_LINES.map((f) => [f.key, p[f.key]])) })),
+    [dayPoints]
+  );
 
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
 
@@ -260,6 +317,27 @@ export default function OverviewPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </section>
+      )}
+
+      {sections.daymetrics && dayMetricData.length > 0 && (
+        <section>
+          <h2 className="mb-2 font-semibold">Day metrics</h2>
+          <div className="h-64 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={dayMetricData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+                <Tooltip labelFormatter={(d) => String(d)} />
+                <Legend formatter={(v) => DAY_METRIC_LINES.find((f) => f.key === v)?.label ?? v} />
+                {DAY_METRIC_LINES.map((f, i) => (
+                  <Line key={f.key} type="monotone" dataKey={f.key} name={f.label} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-1 text-xs text-faint">Emotion, tiredness, start friction and brain fatigue, all out of 10. Edit values on the Metrics tab.</p>
         </section>
       )}
 
@@ -413,15 +491,25 @@ export default function OverviewPage() {
               <LineChart data={liftChart.data}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
-                <Tooltip />
+                <YAxis domain={[0, 110]} tick={{ fontSize: 10 }} unit="%" />
+                <Tooltip
+                  formatter={(v: number, name: string, item: any) => {
+                    const raw = item?.payload?.[`${name}__raw`];
+                    return [`${Number(v).toFixed(1)}% (${raw != null ? `${raw}kg` : "—"})`, name];
+                  }}
+                  labelFormatter={(d) => String(d)}
+                />
                 <Legend />
-                {liftChart.names.map((name, i) => (
-                  <Line key={name} type="monotone" dataKey={name} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={{ r: 2 }} connectNulls />
+                {liftChart.names.map((n, i) => (
+                  <Line key={n.name} type="monotone" dataKey={n.name} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={{ r: 2 }} connectNulls strokeDasharray={n.hasGoal ? undefined : "5 3"} />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
+          <p className="mt-1 text-xs text-faint">
+            Standardized: each line is % of its target — the lift&apos;s goal weight where one is set (solid), otherwise % of personal best (dashed).
+            {targetWeight != null ? " Bodyweight is % of your target weight." : " Set a target weight in Settings to add bodyweight here."}
+          </p>
         </section>
       )}
     </div>

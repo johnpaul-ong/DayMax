@@ -124,6 +124,7 @@ function BucketColorRows() {
 function ProfileSection() {
   const [birthDate, setBirthDate] = useState<string>("");
   const [country, setCountry] = useState<string>("");
+  const [targetWeight, setTargetWeight] = useState<string>("");
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -132,8 +133,9 @@ function ProfileSection() {
       .then((p) => {
         setBirthDate(p.birthDate ?? "");
         setCountry(p.country ?? "");
+        setTargetWeight(p.targetWeightKg != null ? String(p.targetWeightKg) : "");
       })
-      .catch(() => setMsg("Profile needs migration 0002 — run supabase/migrations/0002_goals_profile.sql in the Supabase SQL Editor."));
+      .catch(() => setMsg("Profile needs migrations 0002–0004 — run them in the Supabase SQL Editor."));
   }, []);
 
   return (
@@ -154,11 +156,24 @@ function ProfileSection() {
             ))}
           </select>
         </label>
+        <label className="text-xs text-muted">
+          Target weight (kg)
+          <input
+            type="number"
+            step="0.5"
+            inputMode="decimal"
+            value={targetWeight}
+            onChange={(e) => setTargetWeight(e.target.value)}
+            placeholder="e.g. 75"
+            className="mt-0.5 block w-28 rounded-lg border bg-surface px-2 py-2 text-sm text-ink"
+          />
+        </label>
         <button
           onClick={() => {
             setSaving(true);
             setMsg(null);
-            updateProfile({ birthDate: birthDate || null, country: country || null })
+            const tw = targetWeight.trim() === "" ? null : Number(targetWeight);
+            updateProfile({ birthDate: birthDate || null, country: country || null, targetWeightKg: Number.isFinite(tw as number) ? tw : null })
               .then(() => setMsg("Saved."))
               .catch((e) => setMsg(String(e.message ?? e)))
               .finally(() => setSaving(false));

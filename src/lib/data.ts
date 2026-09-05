@@ -262,6 +262,7 @@ export interface Profile {
   displayName: string | null;
   birthDate: string | null;
   country: string | null;
+  targetWeightKg: number | null;
 }
 
 export async function fetchProfile(): Promise<Profile> {
@@ -269,7 +270,7 @@ export async function fetchProfile(): Promise<Profile> {
   const user_id = await uid();
   const { data, error } = await supabase
     .from("profiles")
-    .select("display_name, birth_date, country")
+    .select("display_name, birth_date, country, target_weight_kg")
     .eq("id", user_id)
     .single();
   if (error) throw error;
@@ -277,6 +278,7 @@ export async function fetchProfile(): Promise<Profile> {
     displayName: data?.display_name ?? null,
     birthDate: data?.birth_date ? String(data.birth_date) : null,
     country: data?.country ?? null,
+    targetWeightKg: data?.target_weight_kg ?? null,
   };
 }
 
@@ -287,6 +289,7 @@ export async function updateProfile(p: Partial<Profile>): Promise<void> {
   if ("displayName" in p) row.display_name = p.displayName;
   if ("birthDate" in p) row.birth_date = p.birthDate;
   if ("country" in p) row.country = p.country;
+  if ("targetWeightKg" in p) row.target_weight_kg = p.targetWeightKg;
   const { error } = await supabase.from("profiles").update(row).eq("id", user_id);
   if (error) throw error;
 }

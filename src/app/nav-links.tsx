@@ -8,6 +8,7 @@ const NAV = [
   { href: "/year", label: "Year" },
   { href: "/today", label: "Today" },
   { href: "/lifts", label: "Lifts" },
+  { href: "/metrics", label: "Metrics" },
   { href: "/overview", label: "Overview" },
   { href: "/import", label: "Import" },
   { href: "/export", label: "Export" },
