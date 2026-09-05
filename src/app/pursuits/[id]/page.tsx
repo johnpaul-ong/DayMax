@@ -301,12 +301,20 @@ function LifeCommunity() {
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Only the last ~12 weeks — the charts show six, the boards need a bit of
+  // headroom, and pulling everyone's whole history here used to time out.
+  const since = useMemo(() => {
+    const d = new Date(todayISO + "T00:00:00");
+    d.setDate(d.getDate() - 84);
+    return localToday(d);
+  }, [todayISO]);
+
   useEffect(() => {
-    fetchLeaderboard()
+    fetchLeaderboard(since, todayISO)
       .then(setRows)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [since, todayISO]);
 
   const people = useMemo(() => {
     const byId = new Map<string, { id: string; name: string; rows: LeaderboardRow[] }>();
@@ -373,7 +381,7 @@ function LifeCommunity() {
           <p className="mt-1 text-3xl font-bold tabular-nums">{people.length}</p>
         </div>
         <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-faint">Days logged</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Days logged (12wk)</p>
           <p className="mt-1 text-3xl font-bold tabular-nums">{totals.days.toLocaleString()}</p>
         </div>
         <div className="card p-4">
@@ -393,8 +401,8 @@ function LifeCommunity() {
           rows={topWeek.map((p) => ({ id: p.id, name: p.name, value: `${p.weekScore}`, sub: `${p.weekP.toFixed(1)}h productive` }))}
         />
         <LeaderCard
-          title="All-time greats"
-          subtitle="Total productive hours"
+          title="Last 12 weeks"
+          subtitle="Productive hours over the recent stretch"
           rows={topAllTime.map((p) => ({ id: p.id, name: p.name, value: `${p.allP.toFixed(0)}h`, sub: `score ${p.allScore ?? "—"}` }))}
         />
       </section>
@@ -446,8 +454,16 @@ function LiftsCommunity() {
   const [exercise, setExercise] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // last year of sessions — enough to show progression without hauling
+  // everyone's entire lifting history across the wire
+  const since = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return localToday(d);
+  }, []);
+
   useEffect(() => {
-    fetchLeaderboardLifts()
+    fetchLeaderboardLifts(since)
       .then((rs) => {
         setRows(rs);
         if (rs.length) {
@@ -458,7 +474,7 @@ function LiftsCommunity() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [since]);
 
   const exercises = useMemo(() => [...new Set(rows.map((r) => r.exercise))].sort(), [rows]);
 

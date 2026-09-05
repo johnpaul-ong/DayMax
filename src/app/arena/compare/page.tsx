@@ -62,28 +62,61 @@ export default function ArenaComparePage() {
   // actually being looked at instead of everyone's entire history up front.
   const loadedMonths = useRef<Set<string>>(new Set());
 
+  // period boundaries for the current view
+  const [from, to, periodLabel] = useMemo((): [string, string, string] => {
+    if (scope === "day") return [date, date, date];
+    if (scope === "week") {
+      const ws = weekStart(date);
+      return [ws, addDays(ws, 6), `week of ${ws}`];
+    }
+    const m = date.slice(0, 7);
+    const [y, mo] = m.split("-").map(Number);
+    return [`${m}-01`, `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`, m];
+  }, [scope, date]);
+
+  // Padding means normal back/forward navigation usually stays inside what's
+  // already loaded and cached, so it doesn't refetch on every click.
+  const [windowFrom, windowTo] = useMemo(() => [addDays(from, -45), addDays(to, 45)], [from, to]);
+
   useEffect(() => {
     setColors(loadBucketColors());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const { data } = await createClient().auth.getUser();
         const me = data.user?.id ?? null;
-        const rows = await fetchLeaderboard();
+        // this page never shows more than one month at a time, so ask for a
+        // padded window rather than everyone's entire history
+        const rows = await fetchLeaderboard(windowFrom, windowTo);
+        if (cancelled) return;
         setBoard(rows);
-        fetchLeaderboardLifts().then(setLifts).catch(() => {});
+        fetchLeaderboardLifts(windowFrom, windowTo)
+          .then((l) => !cancelled && setLifts(l))
+          .catch(() => {});
         const ids = new Map<string, { name: string; isDemo: boolean }>();
         for (const r of rows) ids.set(r.memberId, { name: r.displayName, isDemo: r.isDemo });
         if (me && !ids.has(me)) ids.set(me, { name: "You", isDemo: false });
-        const ros = [...ids.entries()].map(([id, info]) => ({ id, name: id === me ? `${info.name} (you)` : info.name, isDemo: info.isDemo }));
-        ros.sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)));
-        setRoster(ros.slice(0, 10));
-        setSelected(new Set(ros.slice(0, 10).map((r) => r.id)));
-        setPeople(ros.slice(0, 10).map((r) => ({ id: r.id, name: r.name, isDemo: r.isDemo, byDate: new Map() })));
+        const ros = [...ids.entries()]
+          .map(([id, info]) => ({ id, name: id === me ? `${info.name} (you)` : info.name, isDemo: info.isDemo }))
+          .sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)))
+          .slice(0, 10);
+        setRoster(ros);
+        // keep whatever the user toggled; default to everyone on first load
+        setSelected((prev) => (prev.size === 0 ? new Set(ros.map((r) => r.id)) : prev));
+        setPeople((prev) =>
+          ros.map((r) => prev.find((p) => p.id === r.id) ?? { id: r.id, name: r.name, isDemo: r.isDemo, byDate: new Map() })
+        );
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [windowFrom, windowTo]);
 
   // Fetch just the month containing the selected date, per person, the first
   // time it's needed — not the whole year for everyone on every page load.
@@ -120,18 +153,6 @@ export default function ArenaComparePage() {
       if (noAccess.length) setSkipped((prev) => [...new Set([...prev, ...noAccess])]);
     });
   }, [scope, date, roster]);
-
-  // period boundaries for week/month scopes
-  const [from, to, periodLabel] = useMemo((): [string, string, string] => {
-    if (scope === "day") return [date, date, date];
-    if (scope === "week") {
-      const ws = weekStart(date);
-      return [ws, addDays(ws, 6), `week of ${ws}`];
-    }
-    const m = date.slice(0, 7);
-    const [y, mo] = m.split("-").map(Number);
-    return [`${m}-01`, `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`, m];
-  }, [scope, date]);
 
   function shift(dir: 1 | -1) {
     if (scope === "day") setDate(addDays(date, dir));

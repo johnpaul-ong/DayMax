@@ -251,8 +251,40 @@ export interface LeaderboardRow {
   other: number;
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
-  const data = await rpcAll("leaderboard_day_totals");
+/**
+ * Short-lived cache for the two big community reads. Arena, Side by side and
+ * the Life/Lifts pursuit pages all want the same rows, and without this,
+ * hopping between them re-ran a ~200k-row aggregate every single time.
+ */
+const rpcCache = new Map<string, { at: number; rows: Promise<any[]> }>();
+const CACHE_MS = 60_000;
+
+function cachedRpcAll(fn: string, params: Record<string, unknown>): Promise<any[]> {
+  const key = `${fn}:${JSON.stringify(params)}`;
+  const hit = rpcCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.rows;
+  const rows = rpcAll(fn, params).catch((e) => {
+    rpcCache.delete(key); // don't cache failures
+    throw e;
+  });
+  rpcCache.set(key, { at: Date.now(), rows });
+  return rows;
+}
+
+/** Clear the community caches — call after logging something that should show up. */
+export function invalidateCommunityCache(): void {
+  rpcCache.clear();
+}
+
+/**
+ * Everyone's daily bucket totals. Pass a window when you only need one —
+ * the Arena's all-time boards need everything, but a week view does not.
+ */
+export async function fetchLeaderboard(from?: string, to?: string): Promise<LeaderboardRow[]> {
+  const params: Record<string, unknown> = {};
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await cachedRpcAll("leaderboard_day_totals", params);
   return data.map((r: any) => ({
     memberId: r.member_id,
     displayName: r.display_name,
@@ -282,7 +314,7 @@ export async function fetchMemberDayStrip(userId: string, from?: string, to?: st
   const params: Record<string, unknown> = { member: userId };
   if (from) params.from_date = from;
   if (to) params.to_date = to;
-  const data = await rpcAll("member_day_strip", params);
+  const data = await cachedRpcAll("member_day_strip", params);
   return data.map((r: any) => ({
     date: String(r.date),
     slot: r.slot,
@@ -334,8 +366,11 @@ export interface LeaderboardLiftRow {
   weightKg: number;
 }
 
-export async function fetchLeaderboardLifts(): Promise<LeaderboardLiftRow[]> {
-  const data = await rpcAll("leaderboard_lifts");
+export async function fetchLeaderboardLifts(from?: string, to?: string): Promise<LeaderboardLiftRow[]> {
+  const params: Record<string, unknown> = {};
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await cachedRpcAll("leaderboard_lifts", params);
   return data.map((r: any) => ({
     memberId: r.member_id,
     displayName: r.display_name,
