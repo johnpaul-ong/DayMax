@@ -41,6 +41,7 @@ function AppearanceSection() {
     setAccent(nextAccent);
     applyTheme(nextTheme, nextAccent);
     saveTheme(nextTheme, nextAccent);
+    import("@/lib/theme").then((t) => void t.saveThemeToAccount(nextTheme, nextAccent)); // follows your account
   }
 
   return (

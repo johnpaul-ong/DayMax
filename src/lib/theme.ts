@@ -39,6 +39,38 @@ export function saveTheme(theme: ThemeName, accent: string | null) {
   } catch {}
 }
 
+// --- account-level theme sync (device localStorage is the fast cache) ---------
+
+/** Pull theme from the profile; apply + cache locally if it differs. */
+export async function syncThemeFromAccount(): Promise<void> {
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const { data } = await supabase.from("profiles").select("theme, accent").eq("id", auth.user.id).single();
+    if (!data?.theme) return;
+    const theme = data.theme as ThemeName;
+    const accent = data.accent ?? null;
+    const local = loadTheme();
+    if (local.theme !== theme || local.accent !== accent) {
+      applyTheme(theme, accent);
+      saveTheme(theme, accent);
+    }
+  } catch {}
+}
+
+/** Persist theme to the profile so it follows the account across devices. */
+export async function saveThemeToAccount(theme: ThemeName, accent: string | null): Promise<void> {
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    await supabase.from("profiles").update({ theme, accent }).eq("id", auth.user.id);
+  } catch {}
+}
+
 // --- ranking bucket colours (per device, used by charts and the year view) ----
 
 export interface BucketColors {
