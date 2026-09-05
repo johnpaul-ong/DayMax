@@ -352,10 +352,12 @@ def reps_for(r):
 lift_rng = random.Random(909)
 
 state = {
-    "bruce": {"Bench": Lift(88, 0.12, 1.8)},
+    # Only Tony and Natasha lift. Bruce's 88kg bench, Thor's 810kg deadlift and
+    # Steve's super-soldier numbers made every human leaderboard meaningless —
+    # a real beginner would never appear next to an 810kg pull. Tony's
+    # Suit-Assisted Deadlift is kept as flavour but his Bench is the realistic
+    # one; Natasha's squat is an ordinary strong-human progression.
     "tony": {"Suit-Assisted Deadlift": Lift(480, 1.6, 14), "Bench": Lift(76, 0.08, 1.5)},
-    "thor": {"Deadlift": Lift(810, 0.0, 9, lo=700)},
-    "steve": {"Bench": Lift(198, 0.28, 1.2), "Squat": Lift(238, 0.32, 1.6)},
     "natasha": {"Squat": Lift(84, 0.18, 2.0)},
 }
 nat_pullups = 15.0
@@ -367,15 +369,11 @@ for key, (uid_, email, name) in USERS.items():
         r = random.Random(f"lift{key}{d}")
         week = i // 7
         skip = r.random() < 0.12  # everyone misses sessions sometimes
-        if key == "bruce":
-            if d in hulk_days:
-                lifts.append((uid_, d.isoformat(), "Deadlift", 50000 + r.randint(0, 9000), "1", "HULK STRONGEST THERE IS"))
-            elif d.weekday() in (1, 4) and not skip:
-                w, note = state["bruce"]["Bench"].session(lift_rng, week)
-                if (d - datetime.timedelta(days=1)) in hulk_days or (d - datetime.timedelta(days=2)) in hulk_days:
-                    w = round(w * 1.12 / 2.5) * 2.5
-                    note = "residual gamma. not asking questions"
-                lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "keeping the HR down"))
+        # Bruce, Thor and Steve deliberately log no lifts: a 50-tonne Hulk
+        # deadlift or an 810kg Asgardian pull makes the human leaderboard
+        # unreadable. They still log their days — they just don't lift here.
+        if key in ("bruce", "thor", "steve"):
+            pass
         elif key == "tony":
             if d.weekday() == 2 and not skip:
                 w, note = state["tony"]["Suit-Assisted Deadlift"].session(lift_rng, week)
@@ -383,21 +381,6 @@ for key, (uid_, email, name) in USERS.items():
             if d.weekday() == 5 and r.random() > 0.25:
                 w, note = state["tony"]["Bench"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note))
-        elif key == "thor":
-            if d.weekday() in (0, 2, 4) and not skip:
-                curls = 1000 if r.random() > 0.06 else 1200
-                lifts.append((uid_, d.isoformat(), "Mjolnir Curls", curls, str(r.choice([8, 10, 12, 15, 20])),
-                              "FELT EXTRA WORTHY" if curls == 1200 else r.choice(["still worthy", "the hammer approves", "light as a feather"])))
-                if r.random() < 0.5:
-                    w, note = state["thor"]["Deadlift"].session(lift_rng, week)
-                    lifts.append((uid_, d.isoformat(), "Deadlift", w, reps_for(r), note or "warm-up"))
-        elif key == "steve":
-            if d.weekday() in (0, 3) and not (r.random() < 0.03):  # he almost never misses
-                w, note = state["steve"]["Bench"].session(lift_rng, week)
-                lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "I can do this all day"))
-            if d.weekday() == 5 and not (r.random() < 0.03):
-                w, note = state["steve"]["Squat"].session(lift_rng, week)
-                lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
         elif key == "john":
             if d.weekday() == 1 and not (r.random() < 0.35) and d != FIGHT:
                 w = 60 + r.choice([-2.5, 0, 0, 0, 2.5])
@@ -413,11 +396,9 @@ for key, (uid_, email, name) in USERS.items():
         d += datetime.timedelta(days=1)
 
 goals = [
-    (USERS["bruce"][0], "Bench", 115, "kg"),
     (USERS["tony"][0], "Suit-Assisted Deadlift", 1000, "kg"),
-    (USERS["thor"][0], "Deadlift", 1000, "kg"),
-    (USERS["steve"][0], "Bench", 280, "kg"),
-    (USERS["natasha"][0], "Pull Ups", 60, "reps"),
+    (USERS["tony"][0], "Bench", 100, "kg"),
+    (USERS["natasha"][0], "Squat", 110, "kg"),
     (USERS["john"][0], "Bench", 100, "kg"),
 ]
 

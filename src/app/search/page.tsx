@@ -118,7 +118,7 @@ export default function SearchPage() {
                 <div key={p.id} className="flex items-center gap-2 px-4 py-2 text-sm">
                   <Link href={pursuitHref(p)} className="font-medium hover:text-accent hover:underline">{p.name}</Link>
                   <span className="text-xs text-faint">by {p.ownerName} · {p.memberCount} member{p.memberCount === 1 ? "" : "s"}</span>
-                  {!p.isMember && p.kind !== "life" && (
+                  {!p.isMember && (
                     <button
                       onClick={() => void joinPursuit(p.id).then(() => setMsg(`Joined ${p.name}.`)).catch((e) => setMsg(String(e.message ?? e)))}
                       className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast"

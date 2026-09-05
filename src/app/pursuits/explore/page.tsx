@@ -50,9 +50,7 @@ export default function ExplorePage() {
                   <td className="whitespace-nowrap px-3 py-2 text-muted">{p.ownerName}{p.isOwner && " (you)"}</td>
                   <td className="px-3 py-2 tabular-nums">{p.memberCount}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
-                    {p.kind === "life" ? (
-                      <span className="text-xs text-faint">everyone&apos;s in</span>
-                    ) : p.isMember ? (
+                    {p.isMember ? (
                       p.isOwner ? (
                         <span className="text-xs text-faint">owner</span>
                       ) : (

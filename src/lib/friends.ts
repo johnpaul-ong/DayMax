@@ -17,6 +17,7 @@ export interface Track {
   kind: TrackKind;
   name: string;
   isDemo: boolean;
+  boardEnabled: boolean;
 }
 
 export interface TrackMember {
@@ -81,9 +82,19 @@ async function rpcAll(fn: string, params: Record<string, unknown> = {}): Promise
 
 export async function fetchTracks(): Promise<Track[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from("tracks").select("id, owner_id, kind, name, is_demo").order("created_at");
+  const { data, error } = await supabase
+    .from("tracks")
+    .select("id, owner_id, kind, name, is_demo, board_enabled")
+    .order("created_at");
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, ownerId: r.owner_id, kind: r.kind, name: r.name, isDemo: !!r.is_demo }));
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    ownerId: r.owner_id,
+    kind: r.kind,
+    name: r.name,
+    isDemo: !!r.is_demo,
+    boardEnabled: r.board_enabled ?? true,
+  }));
 }
 
 export async function createTrack(name: string, kind: TrackKind): Promise<void> {
