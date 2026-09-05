@@ -11,6 +11,7 @@ const NAV = [
   { href: "/metrics", label: "Metrics" },
   { href: "/overview", label: "Overview" },
   { href: "/friends", label: "Friends" },
+  { href: "/arena", label: "Arena" },
   { href: "/import", label: "Import" },
   { href: "/export", label: "Export" },
   { href: "/settings", label: "Settings" },

@@ -116,6 +116,7 @@ export default function FriendsPage() {
               <button onClick={() => setOpen(open === t.id ? null : t.id)} className="flex w-full items-center justify-between">
                 <span className="font-semibold">
                   {t.name} <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-normal text-muted">{t.kind}</span>
+                  {t.isDemo && <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">demo</span>}
                 </span>
                 <span className="text-sm text-faint">{open === t.id ? "▲" : "▼"}</span>
               </button>

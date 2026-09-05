@@ -16,6 +16,7 @@ export interface Track {
   ownerId: string;
   kind: TrackKind;
   name: string;
+  isDemo: boolean;
 }
 
 export interface TrackMember {
@@ -62,9 +63,9 @@ async function uid(): Promise<string> {
 
 export async function fetchTracks(): Promise<Track[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from("tracks").select("id, owner_id, kind, name").order("created_at");
+  const { data, error } = await supabase.from("tracks").select("id, owner_id, kind, name, is_demo").order("created_at");
   if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, ownerId: r.owner_id, kind: r.kind, name: r.name }));
+  return (data ?? []).map((r) => ({ id: r.id, ownerId: r.owner_id, kind: r.kind, name: r.name, isDemo: !!r.is_demo }));
 }
 
 export async function createTrack(name: string, kind: TrackKind): Promise<void> {
@@ -214,6 +215,31 @@ export async function fetchCompareDay(trackId: string): Promise<CompareDayRow[]>
     productive: Number(r.productive),
     brainrot: Number(r.brainrot),
     other: Number(r.other),
+  }));
+}
+
+// --- Arena --------------------------------------------------------------------
+
+export interface LeaderboardRow {
+  memberId: string;
+  displayName: string;
+  isDemo: boolean;
+  date: string;
+  productive: number;
+  brainrot: number;
+}
+
+export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("leaderboard_day_totals");
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    isDemo: !!r.is_demo,
+    date: String(r.date),
+    productive: Number(r.productive),
+    brainrot: Number(r.brainrot),
   }));
 }
 
