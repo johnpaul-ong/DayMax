@@ -29,6 +29,7 @@ interface Contender {
   todayP: number;
   weekP: number;
   weekB: number;
+  weekS: number;
   allP: number;
   allB: number;
   weekScore: number | null;
@@ -36,7 +37,6 @@ interface Contender {
   improvement: number | null;
 }
 
-const MEDALS = ["🥇", "🥈", "🥉"];
 
 function Board({
   title,
@@ -59,7 +59,7 @@ function Board({
         <ol className="space-y-1">
           {rows.map((c, i) => (
             <li key={c.id} className="flex items-center gap-2 text-sm">
-              <span className="w-6 text-center">{MEDALS[i] ?? `${i + 1}.`}</span>
+              <span className="w-6 text-center font-semibold text-faint">{i + 1}</span>
               <Link href={`/friends/${c.id}`} className="font-medium hover:text-accent hover:underline">
                 {c.name}
               </Link>
@@ -126,6 +126,7 @@ export default function ArenaPage() {
         todayP: m.rows.filter((r) => r.date === todayISO).reduce((s, r) => s + r.productive, 0),
         weekP: week.reduce((s, r) => s + r.productive, 0),
         weekB: week.reduce((s, r) => s + r.brainrot, 0),
+        weekS: week.reduce((s, r) => s + r.social, 0),
         allP: m.rows.reduce((s, r) => s + r.productive, 0),
         allB: m.rows.reduce((s, r) => s + r.brainrot, 0),
         weekScore,
@@ -175,37 +176,43 @@ export default function ArenaPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Board
-          title="⚡ Most productive today"
+          title="Most productive today"
           subtitle="Productive hours logged today"
           rows={top((c) => c.todayP)}
           value={(c) => `${c.todayP.toFixed(1)}h`}
         />
         <Board
-          title="🔥 Most productive this week"
+          title="Most productive this week"
           subtitle="Productive hours since Monday"
           rows={top((c) => c.weekP)}
           value={(c) => `${c.weekP.toFixed(1)}h`}
         />
         <Board
-          title="🏛️ All-time greats"
+          title="All-time greats"
           subtitle="Total productive hours, ever"
           rows={top((c) => c.allP)}
           value={(c) => `${c.allP.toFixed(0)}h`}
         />
         <Board
-          title="🚀 Upcoming DayMaxers"
+          title="Upcoming DayMaxers"
           subtitle="Biggest focus-score jump vs last week"
           rows={top((c) => c.improvement).filter((c) => (c.improvement ?? 0) > 0)}
           value={(c) => `+${c.improvement} pts`}
         />
         <Board
-          title="🧟 Biggest losers (this week)"
+          title="Biggest losers (this week)"
           subtitle="Most brainrot hours since Monday — wear it with shame"
           rows={top((c) => c.weekB)}
           value={(c) => `${c.weekB.toFixed(1)}h`}
         />
         <Board
-          title="📉 All-time brainrot hall of fame"
+          title="Social club"
+          subtitle="Most social hours this week — not part of the score, still glory"
+          rows={top((c) => c.weekS)}
+          value={(c) => `${c.weekS.toFixed(1)}h`}
+        />
+        <Board
+          title="All-time brainrot hall of fame"
           subtitle="Total brainrot hours, ever"
           rows={top((c) => c.allB)}
           value={(c) => `${c.allB.toFixed(0)}h`}

@@ -227,6 +227,7 @@ export interface LeaderboardRow {
   date: string;
   productive: number;
   brainrot: number;
+  social: number;
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
@@ -240,6 +241,27 @@ export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     date: String(r.date),
     productive: Number(r.productive),
     brainrot: Number(r.brainrot),
+    social: Number(r.social ?? 0),
+  }));
+}
+
+export interface DayStripRow {
+  date: string;
+  slot: number;
+  category: number;
+  label: string | null;
+}
+
+/** Full 15-min history for a profile (demo users, yourself, or raw_labels friends). */
+export async function fetchMemberDayStrip(userId: string): Promise<DayStripRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("member_day_strip", { member: userId });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    date: String(r.date),
+    slot: r.slot,
+    category: r.category,
+    label: r.label,
   }));
 }
 

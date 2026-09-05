@@ -12,13 +12,16 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import {
   fetchCompareDay,
   fetchCompareLifts,
+  fetchMemberDayStrip,
   fetchMemberProfile,
   fetchMembers,
   fetchTracks,
   type CompareDayRow,
   type CompareLiftRow,
+  type DayStripRow,
   type ProfileSection,
 } from "@/lib/friends";
+import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 
@@ -35,6 +38,7 @@ export default function FriendProfilePage() {
   const [sections, setSections] = useState<ProfileSection[]>([]);
   const [dayRows, setDayRows] = useState<CompareDayRow[]>([]);
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
+  const [strip, setStrip] = useState<DayStripRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [period, setPeriod] = useState<"day" | "week" | "month">("day");
@@ -48,6 +52,8 @@ export default function FriendProfilePage() {
         const profile = await fetchMemberProfile(userId);
         setName(profile.displayName);
         setSections(profile.sections);
+        // full day detail: only returned when they share raw labels (or are a legend)
+        fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
         // find a shared track to pull data through
         const tracks = await fetchTracks();
         let shared: string | null = null;
@@ -205,9 +211,63 @@ export default function FriendProfilePage() {
         </section>
       )}
 
+      {strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
+
       {!hasDayData && liftRows.length === 0 && (
         <p className="card p-4 text-sm text-faint">Nothing shared yet — either {name} is hidden on your shared tracks or hasn&apos;t logged anything.</p>
       )}
     </div>
+  );
+}
+
+/** Every logged day as a vertical 96-slot bar — hover any sliver for the activity. */
+function ProfileDayStrip({ name, strip }: { name: string; strip: DayStripRow[] }) {
+  const days = useMemo(() => {
+    const byDate = new Map<string, { slots: (number | null)[]; labels: (string | null)[] }>();
+    for (const r of strip) {
+      if (!byDate.has(r.date)) byDate.set(r.date, { slots: new Array(SLOTS_PER_DAY).fill(null), labels: new Array(SLOTS_PER_DAY).fill(null) });
+      const d = byDate.get(r.date)!;
+      d.slots[r.slot] = r.category;
+      d.labels[r.slot] = r.label;
+    }
+    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  }, [strip]);
+
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">Every day, every 15 minutes</h2>
+      <p className="mb-2 text-sm text-muted">
+        {name} shares full day detail — {days.length.toLocaleString()} days. Hover a bar to see what they were doing.
+      </p>
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {CATEGORIES.map((c) => (
+          <span key={c.code} className="inline-flex items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />
+            {c.name}
+          </span>
+        ))}
+      </div>
+      <div className="card overflow-x-auto p-4">
+        <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
+          {days.map(([date, d]) => (
+            <div key={date} className="flex flex-col items-center">
+              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
+                {d.slots.map((cat, s) => (
+                  <div
+                    key={s}
+                    title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${d.labels[s] ? ` (${d.labels[s]})` : ""}` : ""}`}
+                    className="w-full flex-1"
+                    style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)" }}
+                  />
+                ))}
+              </div>
+              <span className="mt-1 text-[8px] text-faint" style={{ writingMode: "vertical-rl" }}>
+                {date.slice(5)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

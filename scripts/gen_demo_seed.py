@@ -28,68 +28,130 @@ def fill(p, h1, m1, h2, m2, cat):
     for s in range(a, min(b, 96)):
         p[s] = str(cat)
 
-def bruce_day(hulk, posthulk):
+def q(p, t1, t2, cat):
+    """fill from hour-float t1 to t2 (quarter-hour resolution)"""
+    a, b = int(round(t1 * 4)), int(round(t2 * 4))
+    for s in range(max(0, a), min(b, 96)):
+        p[s] = str(cat)
+
+def bruce_day(r, hulk, posthulk):
     p = ["0"] * 96
     if hulk:
-        fill(p, 0, 0, 6, 0, 0); fill(p, 6, 0, 9, 0, 1)
-        fill(p, 9, 0, 23, 45, 6); fill(p, 23, 0, 23, 45, 4)
+        calm_until = 6 + r.uniform(0, 4)
+        q(p, 0, 6, 0); q(p, 6, calm_until, 1)
+        q(p, calm_until, 23.5 - r.uniform(0, 2), 6); q(p, 23.5, 24, 4)
         return p
     if posthulk:
-        fill(p, 0, 0, 11, 0, 0); fill(p, 11, 0, 12, 0, 7); fill(p, 12, 0, 18, 0, 9)
-        fill(p, 18, 0, 20, 0, 5); fill(p, 20, 0, 23, 45, 0)
+        wake = 10 + r.uniform(0, 2)
+        q(p, 0, wake, 0); q(p, wake, wake + 1, 7); q(p, wake + 1, 18 + r.uniform(-1, 1), 9)
+        q(p, 18, 20, 5); q(p, 20, 24, 0)
         return p
-    fill(p, 0, 0, 7, 0, 0); fill(p, 7, 0, 7, 30, 5); fill(p, 7, 30, 8, 0, 7)
-    fill(p, 8, 0, 12, 30, 1); fill(p, 12, 30, 13, 0, 7); fill(p, 13, 0, 18, 30, 1)
-    fill(p, 18, 30, 19, 30, 2); fill(p, 19, 30, 20, 0, 7)
-    fill(p, 20, 0, 21, 30, 9); fill(p, 21, 30, 22, 0, 5); fill(p, 22, 0, 23, 45, 0)
+    wake = 6.5 + r.uniform(0, 1.5)
+    lunch = 12.5 + r.uniform(0, 1)
+    workend = 17 + r.uniform(0, 2.5)
+    q(p, 0, wake, 0); q(p, wake, wake + 0.5, 5); q(p, wake + 0.5, wake + 1, 7)
+    q(p, wake + 1, lunch, 1); q(p, lunch, lunch + 0.5, 7); q(p, lunch + 0.5, workend, 1)
+    t = workend
+    if r.random() < 0.7:
+        q(p, t, t + 1 + r.uniform(0, 0.75), 2); t += 1 + r.uniform(0, 0.75)
+    q(p, t, t + 0.5, 7); t += 0.5
+    q(p, t, t + 1 + r.uniform(0, 1.5), 9)
+    bed = 21.5 + r.uniform(0, 1.5)
+    q(p, bed, 24, 0)
     return p
 
 def tony_day(r):
     p = ["0"] * 96
-    late = r.random() < 0.5
-    fill(p, 0, 0, 4, 0, 0) if late else fill(p, 0, 0, 6, 0, 0)
-    if late:
-        fill(p, 4, 0, 6, 0, 1)
-    fill(p, 6, 0, 6, 30, 7); fill(p, 6, 30, 12, 30, 1)
-    fill(p, 12, 30, 13, 0, 7); fill(p, 13, 0, 19, 0, 1)
-    if r.random() < 0.35:
-        fill(p, 19, 0, 23, 45, 3)
-    elif r.random() < 0.5:
-        fill(p, 19, 0, 22, 0, 9); fill(p, 22, 0, 23, 45, 6)
+    if r.random() < 0.08:  # all-nighter
+        q(p, 0, 3, 1); q(p, 3, 8, 0); q(p, 8, 8.5, 7)
+        q(p, 8.5, 13, 1); q(p, 13, 13.5, 7); q(p, 13.5, 19 + r.uniform(0, 2), 1)
+        q(p, 21, 24, 3)
+        return p
+    sleep_until = 5 + r.uniform(0, 2.5)
+    q(p, 0, sleep_until, 0)
+    q(p, sleep_until, sleep_until + 0.5, 7)
+    lunch = 12 + r.uniform(0, 1.5)
+    q(p, sleep_until + 0.5, lunch, 1)
+    q(p, lunch, lunch + 0.5, 7)
+    workend = 17.5 + r.uniform(0, 2.5)
+    q(p, lunch + 0.5, workend, 1)
+    roll = r.random()
+    if roll < 0.30:
+        q(p, workend, min(24, workend + 4 + r.uniform(0, 2)), 3)      # gala / party
+    elif roll < 0.37:
+        q(p, workend, workend + 1.5, 6)                                # rare: one youtube video, honest
+        q(p, workend + 1.5, 24, 0)
+    elif roll < 0.65:
+        q(p, workend, workend + 2, 3); q(p, workend + 2, 24, 0)        # dinner with Pepper
     else:
-        fill(p, 19, 0, 20, 0, 2); fill(p, 20, 0, 23, 45, 1)
+        q(p, workend, min(23.5, workend + 3 + r.uniform(0, 2)), 1)     # back to the lab
     return p
 
 def thor_day(r, lokiweek):
     p = ["0"] * 96
-    fill(p, 0, 0, 8, 0, 0); fill(p, 8, 0, 10, 0, 7)
+    wake = 7.5 + r.uniform(0, 1.5)
+    q(p, 0, wake, 0)
     if lokiweek:
-        fill(p, 10, 0, 16, 0, 6); fill(p, 16, 0, 20, 0, 3); fill(p, 20, 0, 23, 45, 6)
+        q(p, wake, wake + 2, 7)
+        q(p, wake + 2, 16 + r.uniform(-1, 1), 6); q(p, 16, 20, 3); q(p, 20, 23 + r.uniform(0, 1), 6)
         return p
-    fill(p, 10, 0, 14, 0, 2); fill(p, 14, 0, 15, 30, 7); fill(p, 15, 30, 18, 0, 2)
-    fill(p, 18, 0, 22, 0, 3); fill(p, 22, 0, 23, 45, 7)
+    roll = r.random()
+    if roll < 0.40:   # glorious training day
+        q(p, wake, wake + 1.5, 7)
+        t = wake + 1.5
+        train = 3 + r.uniform(0, 2.5)
+        q(p, t, t + train, 2); t += train
+        q(p, t, t + 1.5, 7); t += 1.5
+        q(p, t, min(22, t + 1.5), 2)
+        q(p, 22, 24, 3)
+    elif roll < 0.72: # feast & tavern day
+        q(p, wake, wake + 2.5, 7)
+        q(p, wake + 2.5, wake + 3.5, 2)
+        q(p, wake + 3.5, 18, 3); q(p, 18, 20, 7); q(p, 20, 24, 3)
+    elif roll < 0.87: # quest (mostly travel + a little smiting)
+        q(p, wake, wake + 1, 7); q(p, wake + 1, 15 + r.uniform(0, 2), 4)
+        q(p, 17, 19 + r.uniform(0, 1), 2); q(p, 20, 22, 7); q(p, 22, 24, 3)
+    else:            # napping like Odin
+        q(p, wake, wake + 1.5, 7); q(p, wake + 1.5, 17 + r.uniform(0, 2), 0)
+        q(p, 19, 21, 7); q(p, 21, 24, 9)
     return p
 
 def steve_day(r):
     p = ["0"] * 96
-    fill(p, 0, 0, 5, 0, 0); fill(p, 5, 0, 7, 0, 2)
-    fill(p, 7, 0, 7, 30, 7); fill(p, 7, 30, 12, 0, 1)
-    fill(p, 12, 0, 12, 30, 7); fill(p, 12, 30, 17, 0, 1)
-    fill(p, 17, 0, 18, 30, 2); fill(p, 18, 30, 19, 0, 7)
-    fill(p, 19, 0, 20, 30, 3 if r.random() < 0.4 else 8)
-    fill(p, 20, 30, 21, 30, 9); fill(p, 21, 30, 23, 45, 0)
+    wake = 4.75 + r.uniform(0, 0.5)
+    run = 1.5 + r.uniform(0, 1)
+    q(p, 0, wake, 0); q(p, wake, wake + run, 2)
+    q(p, wake + run, wake + run + 0.5, 7)
+    lunch = 12 + r.uniform(0, 0.5)
+    q(p, wake + run + 0.5, lunch, 1); q(p, lunch, lunch + 0.5, 7)
+    workend = 16.5 + r.uniform(0, 1.5)
+    q(p, lunch + 0.5, workend, 1)
+    q(p, workend, workend + 1 + r.uniform(0, 0.75), 2)
+    t = workend + 2
+    q(p, t, t + 0.5, 7)
+    q(p, t + 0.5, t + 2, 3 if r.random() < 0.4 else 8)
+    q(p, t + 2, t + 2.75, 9)
+    q(p, 21 + r.uniform(0, 1), 24, 0)
     return p
 
 def nat_day(r):
     p = ["0"] * 96
-    fill(p, 0, 0, 6, 0, 0); fill(p, 6, 0, 8, 0, 2)
-    fill(p, 8, 0, 8, 30, 7); fill(p, 8, 30, 13, 0, 1)
-    fill(p, 13, 0, 13, 30, 7); fill(p, 13, 30, 18, 0, 1)
-    if r.random() < 0.15:
-        fill(p, 18, 0, 23, 45, 4)
-    else:
-        fill(p, 18, 0, 19, 30, 2); fill(p, 19, 30, 20, 0, 7)
-        fill(p, 20, 0, 21, 0, 9); fill(p, 21, 0, 23, 45, 0)
+    wake = 5.5 + r.uniform(0, 1.5)
+    q(p, 0, wake, 0)
+    if r.random() < 0.18:  # mission day
+        q(p, wake, wake + 0.5, 7); q(p, wake + 0.5, wake + 3 + r.uniform(0, 2), 4)
+        q(p, wake + 4, 20 + r.uniform(0, 2), 1); q(p, 22, 24, 0)
+        return p
+    spar = 1.5 + r.uniform(0, 1)
+    q(p, wake, wake + spar, 2); q(p, wake + spar, wake + spar + 0.5, 7)
+    lunch = 13 + r.uniform(0, 0.5)
+    q(p, wake + spar + 0.5, lunch, 1); q(p, lunch, lunch + 0.5, 7)
+    workend = 17 + r.uniform(0, 2)
+    q(p, lunch + 0.5, workend, 1)
+    if r.random() < 0.3:
+        q(p, workend, workend + 1.5, 3)
+    q(p, workend + 1.5, workend + 2.5, 9)
+    q(p, 21.5 + r.uniform(0, 1), 24, 0)
     return p
 
 hulk_days = set()
@@ -123,7 +185,7 @@ for key, (uid_, email, name) in USERS.items():
         iso = d.isocalendar()
         if key == "bruce":
             hulk, post = d in hulk_days, d in posthulk_days
-            p = bruce_day(hulk, post)
+            p = bruce_day(r, hulk, post)
             emo = 0 if hulk else (4 if post else round(r.uniform(6, 8) * 2) / 2)
             tired = 9 if post else round(r.uniform(3, 6))
             note = r.choice(NOTES["bruce_hulk"]) if hulk else (r.choice(NOTES["bruce_post"]) if post else (r.choice(NOTES["bruce_norm"]) if r.random() < 0.3 else None))
@@ -155,34 +217,95 @@ for key, (uid_, email, name) in USERS.items():
         d += datetime.timedelta(days=1)
 
 lifts = []
+
+class Lift:
+    """Wave loading + deloads + bad days + PR attempts + plateaus + noise."""
+    def __init__(self, base, drift, sigma, lo=None):
+        self.base, self.drift, self.sigma = base, drift, sigma
+        self.lo = lo or base * 0.8
+        self.plateau = 0
+    def session(self, r, week):
+        if self.plateau > 0:
+            self.plateau -= 1
+        else:
+            self.base += self.drift + r.gauss(0, self.sigma)
+            if r.random() < 0.06:
+                self.plateau = r.randint(6, 14)  # stuck for weeks, like a real human
+        self.base = max(self.lo, self.base)
+        note = None
+        if week % 5 == 4:
+            w = self.base * 0.87
+            note = "deload week"
+        else:
+            w = self.base * (0.92 + 0.03 * (week % 4))  # wave loading
+            if r.random() < 0.10:
+                w *= 0.94
+                note = r.choice(["not feeling it today", "slept badly", "long day, low energy"])
+            elif r.random() < 0.07:
+                w = self.base * 1.05
+                if r.random() < 0.55:
+                    note = "PR attempt - GOT IT"
+                    self.base *= 1.015
+                else:
+                    note = "PR attempt - failed, next time"
+                    w *= 0.94
+        return round(w / 2.5) * 2.5, note
+
+def reps_for(r):
+    return str(r.choice([3, 4, 5, 5, 5, 6, 8]))
+
+state = {
+    "bruce": {"Bench": Lift(88, 0.10, 0.9)},
+    "tony": {"Suit-Assisted Deadlift": Lift(480, 1.6, 14), "Bench": Lift(76, 0.06, 0.8)},
+    "thor": {"Deadlift": Lift(810, 0.0, 9, lo=700)},
+    "steve": {"Bench": Lift(198, 0.28, 1.2), "Squat": Lift(238, 0.32, 1.6)},
+    "natasha": {"Squat": Lift(84, 0.12, 1.1)},
+}
+nat_pullups = 15.0
+
 for key, (uid_, email, name) in USERS.items():
     d, i = START, 0
     while d <= END:
         r = random.Random(f"lift{key}{d}")
+        week = i // 7
+        skip = r.random() < 0.12  # everyone misses sessions sometimes
         if key == "bruce":
             if d in hulk_days:
                 lifts.append((uid_, d.isoformat(), "Deadlift", 50000 + r.randint(0, 9000), "1", "HULK STRONGEST THERE IS"))
-            elif d.weekday() in (1, 4):
-                lifts.append((uid_, d.isoformat(), "Bench", round(92 + min(18, i * 0.25), 1), "5", "keeping it calm"))
+            elif d.weekday() in (1, 4) and not skip:
+                w, note = state["bruce"]["Bench"].session(r, week)
+                if (d - datetime.timedelta(days=1)) in hulk_days or (d - datetime.timedelta(days=2)) in hulk_days:
+                    w = round(w * 1.12 / 2.5) * 2.5
+                    note = "residual gamma. not asking questions"
+                lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "keeping the HR down"))
         elif key == "tony":
-            if d.weekday() == 2:
-                lifts.append((uid_, d.isoformat(), "Suit-Assisted Deadlift", 500 + i, "3", "the suit did most of it"))
-            if d.weekday() == 5:
-                lifts.append((uid_, d.isoformat(), "Bench", round(78 + min(12, i * 0.15), 1), "8", None))
+            if d.weekday() == 2 and not skip:
+                w, note = state["tony"]["Suit-Assisted Deadlift"].session(r, week)
+                lifts.append((uid_, d.isoformat(), "Suit-Assisted Deadlift", w, "3", note or "the suit did most of it"))
+            if d.weekday() == 5 and r.random() > 0.25:
+                w, note = state["tony"]["Bench"].session(r, week)
+                lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note))
         elif key == "thor":
-            if d.weekday() in (0, 2, 4):
-                lifts.append((uid_, d.isoformat(), "Mjolnir Curls", 1000, "12", "still worthy"))
+            if d.weekday() in (0, 2, 4) and not skip:
+                curls = 1000 if r.random() > 0.06 else 1200
+                lifts.append((uid_, d.isoformat(), "Mjolnir Curls", curls, str(r.choice([8, 10, 12, 15, 20])),
+                              "FELT EXTRA WORTHY" if curls == 1200 else r.choice(["still worthy", "the hammer approves", "light as a feather"])))
                 if r.random() < 0.5:
-                    lifts.append((uid_, d.isoformat(), "Deadlift", 800 + r.randint(-20, 20), "5", "warm-up"))
+                    w, note = state["thor"]["Deadlift"].session(r, week)
+                    lifts.append((uid_, d.isoformat(), "Deadlift", w, reps_for(r), note or "warm-up"))
         elif key == "steve":
-            if d.weekday() in (0, 3):
-                lifts.append((uid_, d.isoformat(), "Bench", round(200 + i * 0.45, 1), "5", "I can do this all day"))
-            if d.weekday() == 5:
-                lifts.append((uid_, d.isoformat(), "Squat", round(240 + i * 0.5, 1), "5", None))
+            if d.weekday() in (0, 3) and not (r.random() < 0.03):  # he almost never misses
+                w, note = state["steve"]["Bench"].session(r, week)
+                lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "I can do this all day"))
+            if d.weekday() == 5 and not (r.random() < 0.03):
+                w, note = state["steve"]["Squat"].session(r, week)
+                lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
         else:
-            if d.weekday() in (1, 4):
-                lifts.append((uid_, d.isoformat(), "Pull Ups", 20, str(15 + int(i * 0.15)), None))
-                lifts.append((uid_, d.isoformat(), "Squat", round(85 + i * 0.2, 1), "5", None))
+            if d.weekday() in (1, 4) and not skip:
+                nat_pullups = max(10, nat_pullups + r.gauss(0.12, 0.7))
+                lifts.append((uid_, d.isoformat(), "Pull Ups", 20, str(int(nat_pullups)), None))
+                w, note = state["natasha"]["Squat"].session(r, week)
+                lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
         i += 1
         d += datetime.timedelta(days=1)
 
