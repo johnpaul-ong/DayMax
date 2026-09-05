@@ -70,7 +70,7 @@ export default function ArenaComparePage() {
         const out: PersonDays[] = [];
         const noAccess: string[] = [];
         await Promise.all(
-          [...ids.entries()].slice(0, 10).map(async ([id, info]) => {
+          Array.from(ids.entries()).slice(0, 10).map(async ([id, info]) => {
             try {
               const strip: DayStripRow[] = await fetchMemberDayStrip(id);
               const byDate = new Map<string, Map<number, { category: number; label: string | null }>>();
@@ -127,7 +127,7 @@ export default function ArenaComparePage() {
       cur.social += r.social;
       byId.set(r.memberId, cur);
     }
-    return [...byId.values()].sort((a, b) => b.productive - a.productive);
+    return Array.from(byId.values()).sort((a, b) => b.productive - a.productive);
   }, [board, from, to]);
 
   // relative lift gains inside the period: avg % change across exercises with 2+ sessions
