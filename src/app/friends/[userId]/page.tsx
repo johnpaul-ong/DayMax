@@ -6,6 +6,7 @@
  * All numbers come through the same share-rule-enforcing SQL functions.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -24,6 +25,7 @@ import {
   type ProfileSection,
 } from "@/lib/friends";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
+import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
 import { weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 
@@ -43,6 +45,7 @@ export default function FriendProfilePage() {
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
   const [strip, setStrip] = useState<DayStripRow[]>([]);
   const [memberMetrics, setMemberMetrics] = useState<MemberDayMetricsRow[]>([]);
+  const [pursuits, setPursuits] = useState<MemberPursuit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [period, setPeriod] = useState<"day" | "week" | "month">("day");
@@ -60,6 +63,7 @@ export default function FriendProfilePage() {
         // full day detail: only returned when they share raw labels (or are a legend)
         fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
         fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
+        fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
         // find a shared track to pull data through
         const tracks = await fetchTracks();
         let shared: string | null = null;
@@ -147,6 +151,23 @@ export default function FriendProfilePage() {
         </h1>
         <p className="text-sm text-muted">Showing only what {name} chose to share.</p>
       </div>
+
+      {pursuits.length > 0 && (
+        <section>
+          <h2 className="mb-2 font-semibold">Pursuits</h2>
+          <div className="flex flex-wrap gap-2">
+            {pursuits.map((p) => (
+              <Link
+                key={p.id}
+                href={p.kind === "life" ? "/day" : p.kind === "lifts" ? "/lifts" : `/pursuits/${p.id}`}
+                className="rounded-full border bg-surface px-3 py-1.5 text-sm font-medium hover:text-accent"
+              >
+                {p.name} <span className="text-xs text-faint">· {p.memberCount}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {show("ranking") && hasDayData && (
         <section>

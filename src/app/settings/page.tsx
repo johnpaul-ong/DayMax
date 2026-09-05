@@ -379,7 +379,19 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-md">
-      <h1 className="mb-4 text-xl font-bold">Settings</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Settings</h1>
+        <button
+          onClick={() => {
+            import("@/lib/supabase/client").then(({ createClient }) =>
+              createClient().auth.signOut().then(() => (location.href = "/signin"))
+            );
+          }}
+          className="rounded-lg border px-3 py-1.5 text-sm text-muted hover:bg-surface-2"
+        >
+          Sign out
+        </button>
+      </div>
       <ProfileSection />
       <ProfileVisibilitySection />
       <AppearanceSection />

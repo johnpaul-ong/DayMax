@@ -4,20 +4,51 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
-export const NAV_TABS = [
-  { href: "/day", label: "Month" },
-  { href: "/year", label: "Year" },
-  { href: "/today", label: "Today" },
-  { href: "/lifts", label: "Lifts" },
-  { href: "/habits", label: "Habits" },
-  { href: "/metrics", label: "Metrics" },
-  { href: "/overview", label: "Overview" },
-  { href: "/friends", label: "Friends" },
-  { href: "/arena", label: "Arena" },
-  { href: "/import", label: "Import" },
-  { href: "/export", label: "Export" },
-  { href: "/settings", label: "Settings" },
+export interface NavGroup {
+  label: string;
+  subs: Array<{ href: string; label: string }>;
+}
+
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "Life",
+    subs: [
+      { href: "/today", label: "Today" },
+      { href: "/day", label: "Month" },
+      { href: "/year", label: "Year" },
+    ],
+  },
+  {
+    label: "Pursuits",
+    subs: [
+      { href: "/pursuits", label: "My pursuits" },
+      { href: "/pursuits/explore", label: "Explore" },
+    ],
+  },
+  {
+    label: "Community",
+    subs: [
+      { href: "/friends", label: "Friends" },
+      { href: "/arena", label: "Arena" },
+      { href: "/arena/compare", label: "Side by side" },
+    ],
+  },
+  { label: "Search", subs: [{ href: "/search", label: "Search" }] },
+  {
+    label: "Profile",
+    subs: [
+      { href: "/profile", label: "Profile" },
+      { href: "/overview", label: "Analytics" },
+      { href: "/metrics", label: "Metrics" },
+      { href: "/import", label: "Import" },
+      { href: "/export", label: "Export" },
+      { href: "/settings", label: "Settings" },
+    ],
+  },
 ];
+
+// flat list for the "hide tabs" setting (Settings itself can't be hidden)
+export const NAV_TABS = NAV_GROUPS.flatMap((g) => g.subs).map((s) => ({ href: s.href, label: s.label }));
 
 export function loadHiddenTabs(): string[] {
   try {
@@ -35,6 +66,16 @@ export function saveHiddenTabs(hidden: string[]) {
   } catch {}
 }
 
+function groupFor(pathname: string): NavGroup | null {
+  if (pathname === "/lifts") return NAV_GROUPS[1]; // Lifts pursuit lives under Pursuits
+  if (pathname.startsWith("/pursuits")) return NAV_GROUPS[1];
+  if (pathname.startsWith("/friends") || pathname.startsWith("/arena") || pathname.startsWith("/join")) return NAV_GROUPS[2];
+  for (const g of NAV_GROUPS) {
+    if (g.subs.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))) return g;
+  }
+  return null;
+}
+
 export default function NavLinks() {
   const pathname = usePathname();
   const [hidden, setHidden] = useState<string[]>([]);
@@ -50,23 +91,46 @@ export default function NavLinks() {
     };
   }, []);
 
+  const active = groupFor(pathname);
+  const visibleSubs = (g: NavGroup) => g.subs.filter((s) => s.href === "/settings" || !hidden.includes(s.href));
+
   return (
-    <>
-      {NAV_TABS.filter((n) => n.href === "/settings" || !hidden.includes(n.href)).map((n) => {
-        const active = pathname === n.href || (n.href !== "/" && pathname.startsWith(n.href + "/"));
-        return (
-          <Link
-            key={n.href}
-            href={n.href}
-            aria-current={active ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              active ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:bg-surface-2 hover:text-ink"
-            }`}
-          >
-            {n.label}
-          </Link>
-        );
-      })}
-    </>
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex items-center gap-0.5 overflow-x-auto">
+        {NAV_GROUPS.filter((g) => visibleSubs(g).length > 0).map((g) => {
+          const isActive = active?.label === g.label;
+          const first = visibleSubs(g)[0];
+          return (
+            <Link
+              key={g.label}
+              href={first.href}
+              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                isActive ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-ink"
+              }`}
+            >
+              {g.label}
+            </Link>
+          );
+        })}
+      </div>
+      {active && visibleSubs(active).length > 1 && (
+        <div className="flex items-center gap-0.5 overflow-x-auto">
+          {visibleSubs(active).map((s) => {
+            const on = pathname === s.href || pathname.startsWith(s.href + "/");
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  on ? "bg-surface-2 font-semibold text-ink" : "text-faint hover:text-ink"
+                }`}
+              >
+                {s.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

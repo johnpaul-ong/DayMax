@@ -24,12 +24,9 @@ import {
   listFriends,
   removeFriendship,
   removeMember,
-  searchProfiles,
-  sendFriendRequest,
   setMyShareRule,
   type CompareDayRow,
   type CompareLiftRow,
-  type FoundProfile,
   type Friendship,
   type Invite,
   type ShareRule,
@@ -52,80 +49,26 @@ const RULE_INFO: Record<ShareRule, string> = {
 
 /** People: search for friends, handle requests, manage your friend list. */
 function PeopleSection() {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<FoundProfile[]>([]);
   const [friends, setFriends] = useState<Friendship[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
 
   function reload() {
     listFriends().then(setFriends).catch(() => {});
   }
   useEffect(reload, []);
 
-  const friendIds = useMemo(() => new Set(friends.map((f) => f.memberId)), [friends]);
   const incoming = friends.filter((f) => f.status === "pending" && f.direction === "incoming");
   const outgoing = friends.filter((f) => f.status === "pending" && f.direction === "outgoing");
   const accepted = friends.filter((f) => f.status === "accepted");
-
-  async function search() {
-    if (!q.trim()) return;
-    setSearching(true);
-    setMsg(null);
-    try {
-      const r = await searchProfiles(q.trim());
-      setResults(r);
-      if (r.length === 0) setMsg("Nobody found — they may not have discovery turned on (Settings), or use an invite link instead.");
-    } catch (e: any) {
-      setMsg(String(e.message ?? e).includes("does not exist") ? "Friend search needs migration 0012 — run it in the Supabase SQL Editor." : String(e.message ?? e));
-    } finally {
-      setSearching(false);
-    }
-  }
 
   return (
     <div className="mb-6 card p-4">
       <h2 className="mb-1 font-semibold">People</h2>
       <p className="mb-3 text-sm text-muted">
-        Search by name or username. Only people who turned on discovery show up — under-18s never do; they add you instead.
+        Friend requests and your friend list. Under-18s are never searchable — they add you instead.
       </p>
-      <div className="mb-3 flex gap-2">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void search()}
-          placeholder="Search people…"
-          className="flex-1 rounded-lg border bg-surface px-3 py-2 text-sm"
-        />
-        <button onClick={() => void search()} disabled={searching || !q.trim()} className="btn-primary">
-          {searching ? "…" : "Search"}
-        </button>
-      </div>
-      {msg && <p className="mb-2 text-sm text-muted">{msg}</p>}
-      {results.map((r) => (
-        <div key={r.memberId} className="flex items-center gap-2 py-1 text-sm">
-          <span className="font-medium">{r.displayName}</span>
-          <span className="text-xs text-faint">@{r.username}</span>
-          {friendIds.has(r.memberId) ? (
-            <span className="ml-auto text-xs text-faint">already connected</span>
-          ) : (
-            <button
-              onClick={() =>
-                void sendFriendRequest(r.memberId)
-                  .then(() => {
-                    setResults((rs) => rs.filter((x) => x.memberId !== r.memberId));
-                    reload();
-                  })
-                  .catch((e) => setMsg(String(e.message ?? e)))
-              }
-              className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast"
-            >
-              Add friend
-            </button>
-          )}
-        </div>
-      ))}
-
+      <p className="mb-3 text-sm">
+        <Link href="/search" className="font-medium text-accent hover:underline">Search for people and pursuits →</Link>
+      </p>
       {incoming.length > 0 && (
         <div className="mt-3 border-t pt-2">
           <h3 className="mb-1 text-sm font-semibold">Requests for you</h3>
