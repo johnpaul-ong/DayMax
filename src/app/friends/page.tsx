@@ -10,10 +10,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
+  acceptFriendRequest,
   addTrackMember,
   createInvite,
   deleteInvite,
   deleteTrack,
+  removeFriendship,
+  renameTrack,
   fetchCompareDay,
   fetchCompareLifts,
   fetchInvites,
@@ -48,7 +51,7 @@ const RULE_INFO: Record<ShareRule, string> = {
 
 export default function FriendsPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [friends, setFriends] = useState<Friendship[]>([]);
+  const [allFriendships, setAllFriendships] = useState<Friendship[]>([]);
   const [me, setMe] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,13 +71,17 @@ export default function FriendsPage() {
         )
       )
       .finally(() => setLoading(false));
-    listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
+    listFriends().then(setAllFriendships).catch(() => {});
   }
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
     reload();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const incoming = allFriendships.filter((f) => f.status === "pending" && f.direction === "incoming");
+  const outgoing = allFriendships.filter((f) => f.status === "pending" && f.direction === "outgoing");
+  const friends = allFriendships.filter((f) => f.status === "accepted");
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -85,9 +92,42 @@ export default function FriendsPage() {
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
-      {friends.length > 0 && (
-        <div className="mb-6">
-          <h2 className="mb-1.5 text-sm font-semibold text-muted">Your friends</h2>
+      {incoming.length > 0 && (
+        <div className="mb-6 card border-2 border-accent-soft p-4">
+          <h2 className="mb-2 font-semibold">
+            Friend requests <span className="ml-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-contrast">{incoming.length}</span>
+          </h2>
+          {incoming.map((f) => (
+            <div key={f.friendshipId} className="flex flex-wrap items-center gap-2 border-t py-2 text-sm first:border-t-0">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+                {f.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="font-medium">{f.displayName}</span>
+              <span className="text-xs text-faint">@{f.username}</span>
+              <button
+                onClick={() => void acceptFriendRequest(f.friendshipId).then(reload).catch((e) => setError(String(e.message ?? e)))}
+                className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast"
+              >
+                Accept
+              </button>
+              <button onClick={() => void removeFriendship(f.friendshipId).then(reload)} className="rounded-lg border px-3 py-1 text-xs">
+                Decline
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-6">
+        <div className="mb-1.5 flex items-baseline gap-2">
+          <h2 className="text-sm font-semibold text-muted">Your friends</h2>
+          <Link href="/search" className="text-xs font-medium text-accent hover:underline">+ add someone</Link>
+        </div>
+        {friends.length === 0 ? (
+          <p className="card p-3 text-sm text-faint">
+            No friends yet — <Link href="/search" className="font-medium text-accent hover:underline">search for people</Link> by name or @handle.
+          </p>
+        ) : (
           <div className="flex gap-3 overflow-x-auto pb-1">
             {friends.map((f) => (
               <Link
@@ -99,11 +139,17 @@ export default function FriendsPage() {
                   {f.displayName.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="max-w-[6rem] truncate text-xs font-medium">{f.displayName}</span>
+                <span className="max-w-[6rem] truncate text-[10px] text-faint">@{f.username}</span>
               </Link>
             ))}
           </div>
-        </div>
-      )}
+        )}
+        {outgoing.length > 0 && (
+          <p className="mt-2 text-xs text-faint">
+            Waiting on {outgoing.map((f) => `@${f.username}`).join(", ")} to accept.
+          </p>
+        )}
+      </div>
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
@@ -115,13 +161,13 @@ export default function FriendsPage() {
           <div className="space-y-4">
             {tracks.map((t) => (
               <div key={t.id} className="card p-4">
-                <button onClick={() => setOpen(open === t.id ? null : t.id)} className="flex w-full items-center justify-between">
-                  <span className="font-semibold">
-                    {t.name} <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-normal text-muted">{t.kind}</span>
-                    {t.isDemo && <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">demo</span>}
-                  </span>
-                  <span className="text-sm text-faint">{open === t.id ? "▲" : "▼"}</span>
-                </button>
+                <TrackHeader
+                  track={t}
+                  isOwner={t.ownerId === me}
+                  open={open === t.id}
+                  onToggle={() => setOpen(open === t.id ? null : t.id)}
+                  onRenamed={reload}
+                />
                 {open === t.id && me && <TrackDetail track={t} me={me} onDeleted={reload} />}
               </div>
             ))}
@@ -132,11 +178,82 @@ export default function FriendsPage() {
   );
 }
 
+/** Track title row: expand/collapse, plus inline rename for the owner. */
+function TrackHeader({
+  track,
+  isOwner,
+  open,
+  onToggle,
+  onRenamed,
+}: {
+  track: Track;
+  isOwner: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onRenamed: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(track.name);
+  const [err, setErr] = useState<string | null>(null);
+
+  function save() {
+    if (!name.trim() || name.trim() === track.name) return setEditing(false);
+    renameTrack(track.id, name.trim())
+      .then(() => {
+        setEditing(false);
+        onRenamed();
+      })
+      .catch((e) => setErr(String(e.message ?? e)));
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") {
+              setName(track.name);
+              setEditing(false);
+            }
+          }}
+          autoFocus
+          className="w-56 rounded-lg border bg-surface px-2 py-1.5 text-sm font-semibold"
+        />
+        <button onClick={save} className="btn-primary py-1">Save</button>
+        <button onClick={() => { setName(track.name); setEditing(false); }} className="btn-ghost py-1">Cancel</button>
+        {err && <span className="text-xs text-danger">{err}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={onToggle} className="flex min-w-0 flex-1 items-center justify-between text-left">
+        <span className="min-w-0 font-semibold">
+          <span className="truncate">{track.name}</span>
+          <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-normal text-muted">{track.kind}</span>
+          {track.isDemo && <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">demo</span>}
+        </span>
+        <span className="ml-2 text-sm text-faint">{open ? "▲" : "▼"}</span>
+      </button>
+      {isOwner && !track.isDemo && (
+        <button onClick={() => setEditing(true)} className="shrink-0 text-xs font-medium text-accent hover:underline">
+          rename
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDeleted: () => void }) {
   const [members, setMembers] = useState<TrackMember[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [showInvites, setShowInvites] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const isOwner = track.ownerId === me;
@@ -208,53 +325,64 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
         )}
       </div>
 
+      {track.kind === "day" ? <DayCompare trackId={track.id} /> : <LiftsCompare trackId={track.id} />}
+
+      {/*
+        Invite links only exist for people who aren't on DayMax yet — anyone
+        with an account gets added from the friend chips above. Tucked away at
+        the bottom behind a toggle rather than sitting in the way.
+      */}
       {isOwner && (
-        <div className="mb-4">
-          <h3 className="mb-1 text-sm font-semibold">Invites</h3>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Restrict to email (optional)" className="w-56 rounded-lg border bg-surface px-2 py-1.5 text-sm" />
-            <button
-              onClick={() =>
-                createInvite(track.id, inviteEmail.trim() || null)
-                  .then(() => {
-                    setInviteEmail("");
-                    reload();
-                  })
-                  .catch((e) => setErr(String(e.message ?? e)))
-              }
-              className="btn-ghost py-1.5"
-            >
-              New invite link
-            </button>
-          </div>
-          {invites.filter((i) => !i.acceptedAt).map((i) => {
-            const link = `${location.origin}/join/${i.token}`;
-            return (
-              <div key={i.id} className="flex items-center gap-2 py-0.5 text-xs">
-                <code className="max-w-[16rem] truncate text-faint">{link}</code>
-                {i.email && <span className="text-faint">({i.email})</span>}
+        <div className="mt-4 border-t pt-3">
+          <button onClick={() => setShowInvites((v) => !v)} className="text-xs font-medium text-muted hover:text-accent">
+            {showInvites ? "▾" : "▸"} Invite someone who&apos;s not on DayMax yet
+          </button>
+          {showInvites && (
+            <div className="mt-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="Restrict to email (optional)" className="w-56 rounded-lg border bg-surface px-2 py-1.5 text-sm" />
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(link).then(() => {
-                      setCopied(i.id);
-                      setTimeout(() => setCopied(null), 2000);
-                    });
-                  }}
-                  className="font-medium text-accent hover:underline"
+                  onClick={() =>
+                    createInvite(track.id, inviteEmail.trim() || null)
+                      .then(() => {
+                        setInviteEmail("");
+                        reload();
+                      })
+                      .catch((e) => setErr(String(e.message ?? e)))
+                  }
+                  className="btn-ghost py-1.5"
                 >
-                  {copied === i.id ? "Copied ✓" : "Copy"}
-                </button>
-                <button onClick={() => void deleteInvite(i.id).then(reload)} className="text-danger hover:opacity-70">
-                  revoke
+                  New invite link
                 </button>
               </div>
-            );
-          })}
-          <p className="mt-1 text-xs text-faint">Send the link however you like — WhatsApp, text. Links expire after 14 days.</p>
+              {invites.filter((i) => !i.acceptedAt).map((i) => {
+                const link = `${location.origin}/join/${i.token}`;
+                return (
+                  <div key={i.id} className="flex items-center gap-2 py-0.5 text-xs">
+                    <code className="max-w-[16rem] truncate text-faint">{link}</code>
+                    {i.email && <span className="text-faint">({i.email})</span>}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(link).then(() => {
+                          setCopied(i.id);
+                          setTimeout(() => setCopied(null), 2000);
+                        });
+                      }}
+                      className="font-medium text-accent hover:underline"
+                    >
+                      {copied === i.id ? "Copied ✓" : "Copy"}
+                    </button>
+                    <button onClick={() => void deleteInvite(i.id).then(reload)} className="text-danger hover:opacity-70">
+                      revoke
+                    </button>
+                  </div>
+                );
+              })}
+              <p className="mt-1 text-xs text-faint">Send the link however you like — WhatsApp, text. Links expire after 14 days.</p>
+            </div>
+          )}
         </div>
       )}
-
-      {track.kind === "day" ? <DayCompare trackId={track.id} /> : <LiftsCompare trackId={track.id} />}
 
       {isOwner && (
         <button
@@ -262,7 +390,7 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
             if (confirm(`Delete track "${track.name}" for everyone? (Nobody's diary data is deleted — only the group.)`))
               void deleteTrack(track.id).then(onDeleted);
           }}
-          className="mt-4 text-xs text-danger hover:opacity-70"
+          className="mt-3 text-xs text-danger hover:opacity-70"
         >
           Delete track
         </button>

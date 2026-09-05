@@ -93,6 +93,12 @@ export async function createTrack(name: string, kind: TrackKind): Promise<void> 
   if (error) throw error;
 }
 
+export async function renameTrack(id: string, name: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("tracks").update({ name }).eq("id", id);
+  if (error) throw error;
+}
+
 export async function deleteTrack(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("tracks").delete().eq("id", id);

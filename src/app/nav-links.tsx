@@ -79,6 +79,7 @@ function groupFor(pathname: string): NavGroup | null {
 export default function NavLinks() {
   const pathname = usePathname();
   const [hidden, setHidden] = useState<string[]>([]);
+  const [requests, setRequests] = useState(0);
 
   useEffect(() => {
     setHidden(loadHiddenTabs());
@@ -90,6 +91,15 @@ export default function NavLinks() {
       window.removeEventListener("storage", onChange);
     };
   }, []);
+
+  // pending friend requests, so they're findable from any page rather than
+  // only by stumbling onto the Friends tab
+  useEffect(() => {
+    import("@/lib/friends")
+      .then((f) => f.listFriends())
+      .then((fs) => setRequests(fs.filter((x) => x.status === "pending" && x.direction === "incoming").length))
+      .catch(() => {});
+  }, [pathname]);
 
   const active = groupFor(pathname);
   const visibleSubs = (g: NavGroup) => g.subs.filter((s) => s.href === "/settings" || !hidden.includes(s.href));
@@ -109,6 +119,9 @@ export default function NavLinks() {
               }`}
             >
               {g.label}
+              {g.label === "Community" && requests > 0 && (
+                <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-contrast">{requests}</span>
+              )}
             </Link>
           );
         })}
@@ -126,6 +139,9 @@ export default function NavLinks() {
                 }`}
               >
                 {s.label}
+                {s.href === "/friends" && requests > 0 && (
+                  <span className="ml-1 rounded-full bg-accent px-1.5 text-[10px] font-bold text-accent-contrast">{requests}</span>
+                )}
               </Link>
             );
           })}
