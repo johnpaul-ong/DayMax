@@ -233,9 +233,19 @@ export async function fetchMemberPursuits(memberId: string): Promise<MemberPursu
   return data.map((r: any) => ({ id: r.id, name: r.name, kind: r.kind, memberCount: Number(r.member_count) }));
 }
 
-/** Where a pursuit lives: built-ins route to their dedicated pages. */
+/**
+ * Every pursuit — built-in or custom — opens on its shared community page.
+ * (It used to shortcut Life to /day and Lifts to /lifts, which meant clicking
+ * a pursuit dumped you on your own private page and the community hub was
+ * effectively unreachable.) The hub links onward to your own logging page.
+ */
 export function pursuitHref(p: Pick<Pursuit, "id" | "kind">): string {
+  return `/pursuits/${p.id}`;
+}
+
+/** Where YOU log this pursuit: built-ins have dedicated personal pages. */
+export function pursuitLogHref(p: Pick<Pursuit, "id" | "kind">): string | null {
   if (p.kind === "life") return "/day";
   if (p.kind === "lifts") return "/lifts";
-  return `/pursuits/${p.id}`;
+  return null;
 }

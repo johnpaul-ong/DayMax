@@ -1,11 +1,14 @@
 "use client";
 
 /**
- * A pursuit's home: what it is (owner-editable), who's leading, what stats
- * are recorded, and a chart per stat — the owner picks each chart's style
- * (line / bar / pie) and can hide graphs. Notes stay private to their author.
+ * A pursuit's COMMUNITY home — shared, not personal. What it is
+ * (owner-editable), who's leading, what's tracked, and a graph per stat.
+ * Built-in pursuits (Life, Lifts) get community boards built from everyone's
+ * totals, with a button through to your own logging page. Notes stay private
+ * to their author.
  */
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -24,7 +27,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { listFriends, type Friendship } from "@/lib/friends";
+import {
+  fetchLeaderboard,
+  fetchLeaderboardLifts,
+  listFriends,
+  type Friendship,
+  type LeaderboardLiftRow,
+  type LeaderboardRow,
+} from "@/lib/friends";
 import {
   addPursuitMember,
   createStat,
@@ -36,6 +46,7 @@ import {
   fetchStats,
   leavePursuit,
   logEntry,
+  pursuitLogHref,
   setPursuitPublic,
   setShowOnProfile,
   updatePursuitDescription,
@@ -120,6 +131,7 @@ export default function PursuitPage() {
   if (!pursuit) return <p className="text-sm text-muted">Loading pursuit…</p>;
 
   const visibleStats = stats.filter((s) => !s.hidden || pursuit.isOwner);
+  const logHref = pursuitLogHref(pursuit);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -188,6 +200,11 @@ export default function PursuitPage() {
         )}
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
+          {logHref && (
+            <Link href={logHref} className="btn-primary py-1">
+              Open your {pursuit.kind === "life" ? "day" : "lifts"} →
+            </Link>
+          )}
           {pursuit.isMember && !pursuit.isOwner && (
             <button onClick={() => void leavePursuit(id).then(() => (location.href = "/pursuits"))} className="btn-ghost py-1">Leave</button>
           )}
@@ -226,10 +243,13 @@ export default function PursuitPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
+      {pursuit.kind === "life" && <LifeCommunity />}
+      {pursuit.kind === "lifts" && <LiftsCommunity />}
+
       {visibleStats.map((s) => (
         <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={reload} />
       ))}
-      {visibleStats.length === 0 && (
+      {visibleStats.length === 0 && pursuit.kind === "custom" && (
         <p className="card p-4 text-sm text-faint">
           No stats yet. {pursuit.isOwner ? "Add the first one below — e.g. “Games played” (daily) or “Blitz rating” (whenever)." : "The owner hasn't added any yet."}
         </p>
@@ -265,6 +285,302 @@ export default function PursuitPage() {
             </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The Life pursuit's community board: everyone's focus score and hours.
+ * Built from leaderboard_day_totals — the same share-rule-enforcing function
+ * the Arena uses, so nobody who set themselves to hidden ever shows up.
+ */
+function LifeCommunity() {
+  const todayISO = localToday();
+  const ws = weekStart(todayISO);
+  const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLeaderboard()
+      .then(setRows)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const people = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; rows: LeaderboardRow[] }>();
+    for (const r of rows) {
+      if (!byId.has(r.memberId)) byId.set(r.memberId, { id: r.memberId, name: r.displayName, rows: [] });
+      byId.get(r.memberId)!.rows.push(r);
+    }
+    const score = (list: LeaderboardRow[]) => {
+      const p = list.reduce((s, r) => s + r.productive, 0);
+      const b = list.reduce((s, r) => s + r.brainrot, 0);
+      return p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null;
+    };
+    return [...byId.values()].map((m) => {
+      const week = m.rows.filter((r) => r.date >= ws && r.date <= todayISO);
+      return {
+        id: m.id,
+        name: m.name,
+        weekScore: score(week),
+        weekP: week.reduce((s, r) => s + r.productive, 0),
+        weekB: week.reduce((s, r) => s + r.brainrot, 0),
+        allP: m.rows.reduce((s, r) => s + r.productive, 0),
+        allScore: score(m.rows),
+        days: new Set(m.rows.map((r) => r.date)).size,
+      };
+    });
+  }, [rows, ws, todayISO]);
+
+  const topWeek = useMemo(
+    () => [...people].filter((p) => p.weekScore != null).sort((a, b) => (b.weekScore ?? 0) - (a.weekScore ?? 0)).slice(0, 5),
+    [people]
+  );
+  const topAllTime = useMemo(() => [...people].sort((a, b) => b.allP - a.allP).slice(0, 5), [people]);
+
+  // daily focus score for the top few, last six weeks
+  const chart = useMemo(() => {
+    const names = topWeek.map((p) => p.name);
+    const keep = new Set(topWeek.map((p) => p.id));
+    const byDate = new Map<string, Record<string, string | number | null>>();
+    for (const r of rows) {
+      if (!keep.has(r.memberId)) continue;
+      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date });
+      const scored = r.productive + r.brainrot;
+      byDate.get(r.date)![r.displayName] = scored > 0 ? Math.round((r.productive / scored) * 1000) / 10 : null;
+    }
+    return { data: [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1)).slice(-42), names };
+  }, [rows, topWeek]);
+
+  const totals = useMemo(() => {
+    const p = rows.reduce((s, r) => s + r.productive, 0);
+    const b = rows.reduce((s, r) => s + r.brainrot, 0);
+    const so = rows.reduce((s, r) => s + r.social, 0);
+    const o = rows.reduce((s, r) => s + r.other, 0);
+    return { p, b, so, o, days: new Set(rows.map((r) => r.date)).size };
+  }, [rows]);
+
+  if (loading) return <p className="text-sm text-muted">Loading the community…</p>;
+  if (people.length === 0) return <p className="card p-4 text-sm text-faint">Nobody is sharing their day yet.</p>;
+
+  return (
+    <>
+      <section className="grid gap-3 sm:grid-cols-4">
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">People</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{people.length}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Days logged</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{totals.days.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Productive hours</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{Math.round(totals.p).toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Brainrot hours</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{Math.round(totals.b).toLocaleString()}</p>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2">
+        <LeaderCard
+          title="Top this week"
+          subtitle="Focus score since Monday"
+          rows={topWeek.map((p) => ({ id: p.id, name: p.name, value: `${p.weekScore}`, sub: `${p.weekP.toFixed(1)}h productive` }))}
+        />
+        <LeaderCard
+          title="All-time greats"
+          subtitle="Total productive hours"
+          rows={topAllTime.map((p) => ({ id: p.id, name: p.name, value: `${p.allP.toFixed(0)}h`, sub: `score ${p.allScore ?? "—"}` }))}
+        />
+      </section>
+
+      {chart.data.length > 1 && (
+        <section>
+          <h2 className="mb-1 font-semibold">Daily focus score</h2>
+          <p className="mb-2 text-sm text-muted">This week&apos;s leaders, last six weeks. Focus score = productive ÷ (productive + brainrot) × 100.</p>
+          <div className="h-64 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={chart.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Tooltip labelFormatter={(d) => String(d)} />
+                <Legend />
+                {chart.names.map((n, i) => (
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-1 font-semibold">Hours this week</h2>
+        <div className="h-64 card p-2">
+          <ResponsiveContainer>
+            <BarChart data={[...people].sort((a, b) => b.weekP - a.weekP).slice(0, 8).map((p) => ({ name: p.name, productive: Math.round(p.weekP * 10) / 10, brainrot: Math.round(p.weekB * 10) / 10 }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} unit="h" />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="productive" fill="var(--accent)" />
+              <Bar dataKey="brainrot" fill="#dc2626" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** The Lifts pursuit's community board: who lifts what, and how it's moving. */
+function LiftsCommunity() {
+  const [rows, setRows] = useState<LeaderboardLiftRow[]>([]);
+  const [exercise, setExercise] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLeaderboardLifts()
+      .then((rs) => {
+        setRows(rs);
+        if (rs.length) {
+          const counts = new Map<string, number>();
+          for (const r of rs) counts.set(r.exercise, (counts.get(r.exercise) ?? 0) + 1);
+          setExercise([...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const exercises = useMemo(() => [...new Set(rows.map((r) => r.exercise))].sort(), [rows]);
+
+  const board = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; best: number; latest: number; sessions: number; first: number }>();
+    const sorted = [...rows].filter((r) => r.exercise === exercise).sort((a, b) => (a.date < b.date ? -1 : 1));
+    for (const r of sorted) {
+      const cur = byId.get(r.memberId) ?? { id: r.memberId, name: r.displayName, best: 0, latest: r.weightKg, sessions: 0, first: r.weightKg };
+      cur.best = Math.max(cur.best, r.weightKg);
+      cur.latest = r.weightKg;
+      cur.sessions += 1;
+      byId.set(r.memberId, cur);
+    }
+    return [...byId.values()].sort((a, b) => b.best - a.best).slice(0, 5);
+  }, [rows, exercise]);
+
+  const chart = useMemo(() => {
+    const byDate = new Map<string, Record<string, string | number | null>>();
+    const names = new Set<string>();
+    for (const r of rows) {
+      if (r.exercise !== exercise) continue;
+      names.add(r.displayName);
+      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date });
+      const row = byDate.get(r.date)!;
+      row[r.displayName] = Math.max(Number(row[r.displayName] ?? 0), r.weightKg);
+    }
+    return { data: [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1)), names: [...names] };
+  }, [rows, exercise]);
+
+  if (loading) return <p className="text-sm text-muted">Loading the community…</p>;
+  if (rows.length === 0) return <p className="card p-4 text-sm text-faint">Nobody is sharing lifts yet.</p>;
+
+  return (
+    <>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Lifters</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{new Set(rows.map((r) => r.memberId)).size}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Exercises tracked</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{exercises.length}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Sessions logged</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{rows.length.toLocaleString()}</p>
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="font-semibold">Leaderboard</h2>
+          <select value={exercise} onChange={(e) => setExercise(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
+            {exercises.map((x) => (
+              <option key={x} value={x}>{x}</option>
+            ))}
+          </select>
+        </div>
+        <LeaderCard
+          title={exercise}
+          subtitle="Heaviest lifted, and where they are now"
+          rows={board.map((b) => ({
+            id: b.id,
+            name: b.name,
+            value: `${b.best}kg`,
+            sub: `${b.sessions} session${b.sessions === 1 ? "" : "s"} · now ${b.latest}kg`,
+          }))}
+        />
+      </section>
+
+      {chart.data.length > 1 && (
+        <section>
+          <h2 className="mb-2 font-semibold">{exercise} over time</h2>
+          <div className="h-64 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={chart.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
+                <Tooltip labelFormatter={(d) => String(d)} />
+                <Legend />
+                {chart.names.map((n, i) => (
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+/** Small ranked list with names that link through to profiles. */
+function LeaderCard({
+  title,
+  subtitle,
+  rows,
+}: {
+  title: string;
+  subtitle: string;
+  rows: Array<{ id: string; name: string; value: string; sub: string }>;
+}) {
+  return (
+    <div className="card p-4">
+      <h3 className="font-semibold">{title}</h3>
+      <p className="mb-2 text-xs text-muted">{subtitle}</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-faint">Nobody qualifies yet.</p>
+      ) : (
+        <ol className="space-y-1.5">
+          {rows.map((r, i) => (
+            <li key={r.id} className="flex items-center gap-2 text-sm">
+              <span className="w-5 text-center font-semibold text-faint">{i + 1}</span>
+              <Link href={`/friends/${r.id}`} className="font-medium hover:text-accent hover:underline">{r.name}</Link>
+              <span className="ml-auto text-right">
+                <span className="block font-semibold tabular-nums">{r.value}</span>
+                <span className="block text-[10px] text-faint">{r.sub}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );

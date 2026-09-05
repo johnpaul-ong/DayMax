@@ -2,8 +2,14 @@
 -- callers that only need a window (Side by side's day view) don't have to
 -- page through an entire year of 15-minute rows per person. Profile view
 -- keeps calling it with no range (needs the full year for the heatmap).
+--
+-- Both signatures are dropped first so this is safe to run more than once:
+-- Postgres refuses to create f(uuid, date default, date default) while f(uuid)
+-- exists (the one-argument call would be ambiguous), and equally refuses to
+-- re-create the three-argument form over itself.
 
 drop function if exists public.member_day_strip(uuid);
+drop function if exists public.member_day_strip(uuid, date, date);
 
 create function public.member_day_strip(member uuid, from_date date default null, to_date date default null)
 returns table (date date, slot smallint, category smallint, label text)

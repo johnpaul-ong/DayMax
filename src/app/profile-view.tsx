@@ -155,7 +155,7 @@ export default function ProfileView({ userId }: { userId: string }) {
             {pursuits.map((p) => (
               <Link
                 key={p.id}
-                href={p.kind === "life" ? "/day" : p.kind === "lifts" ? "/lifts" : `/pursuits/${p.id}`}
+                href={`/pursuits/${p.id}`}
                 className="rounded-full border bg-surface px-3 py-1.5 text-sm font-medium hover:text-accent"
               >
                 {p.name} <span className="text-xs text-faint">· {p.memberCount}</span>
