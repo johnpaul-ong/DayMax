@@ -40,6 +40,52 @@ order by migration;
 
 
 -- ===========================================================================
+-- 1b. GROUND TRUTH ON ACCOUNTS
+--     The dashboard Users list paginates and can look complete when it isn't.
+--     This is the real count, and the real Life roster.
+-- ===========================================================================
+select count(*) as total_auth_users from auth.users;
+
+-- every account, no filtering, no pagination
+select u.id, u.email, u.created_at, u.email_confirmed_at, u.last_sign_in_at
+from auth.users u
+order by u.created_at;
+
+-- the actual rows behind "N in this pursuit" for Life. If this returns 7 rows
+-- but the UI drew 9 chips, the bug is client-side and I need to know.
+select m.user_id, p.display_name, p.username, u.email, m.role, m.joined_at
+from public.pursuit_members m
+join auth.users u on u.id = m.user_id
+left join public.profiles p on p.id = m.user_id
+where m.pursuit_id = '33333333-3333-4333-8333-333333333301'
+order by m.joined_at;
+
+-- orphaned profile rows: a profile whose auth user is gone. Shouldn't be
+-- possible (FK cascade), but worth ruling out.
+select p.id, p.display_name, p.username
+from public.profiles p
+left join auth.users u on u.id = p.id
+where u.id is null;
+
+
+-- ===========================================================================
+-- 1c. DID YOUR FRIEND'S SIGNUP ACTUALLY LAND?
+--     Put her address in below. An account that exists but was never
+--     confirmed still appears here — with email_confirmed_at null.
+-- ===========================================================================
+select u.id, u.email, u.created_at, u.email_confirmed_at, u.last_sign_in_at,
+       u.raw_app_meta_data ->> 'provider' as provider
+from auth.users u
+where u.email ilike '%her-address-here%';
+
+-- ...and anything half-created: an identity row with no usable user
+select i.provider, i.identity_data ->> 'email' as email, i.created_at, i.user_id
+from auth.identities i
+order by i.created_at desc
+limit 20;
+
+
+-- ===========================================================================
 -- 2. WHO THESE ACCOUNTS ARE — the emails you asked about
 -- ===========================================================================
 select u.id,
