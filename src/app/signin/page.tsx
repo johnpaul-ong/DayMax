@@ -36,18 +36,18 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-sm rounded-xl border bg-white p-6 shadow-sm">
+    <div className="mx-auto mt-16 max-w-sm card p-6">
       <h1 className="mb-1 text-2xl font-bold">
-        Day<span className="text-blue-600">Max</span>
+        Day<span className="text-accent">Max</span>
       </h1>
-      <p className="mb-4 text-sm text-slate-500">Private. Invite-only. Your data stays yours.</p>
+      <p className="mb-4 text-sm text-muted">Private. Invite-only. Your data stays yours.</p>
 
-      <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+      <div className="mb-4 flex gap-1 rounded-lg bg-surface-2 p-1 text-sm">
         {(["password", "magic", "signup"] as const).map((m) => (
           <button
             key={m}
             onClick={() => setMode(m)}
-            className={`flex-1 rounded-md px-2 py-1 ${mode === m ? "bg-white font-semibold shadow-sm" : "text-slate-500"}`}
+            className={`flex-1 rounded-lg px-2 py-1 ${mode === m ? "bg-surface font-semibold" : "text-muted"}`}
           >
             {m === "password" ? "Password" : m === "magic" ? "Magic link" : "Sign up"}
           </button>
@@ -61,7 +61,7 @@ export default function SignInPage() {
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm"
+          className="w-full rounded-lg border px-3 py-2 text-sm"
         />
         {mode !== "magic" && (
           <input
@@ -71,17 +71,17 @@ export default function SignInPage() {
             placeholder="Password (min 8 chars)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border px-3 py-2 text-sm"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
           />
         )}
         <button
           disabled={busy}
-          className="w-full rounded-md bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          className="w-full rounded-lg bg-accent py-2 text-sm font-semibold text-accent-contrast hover:bg-accent-hover disabled:opacity-50"
         >
           {busy ? "…" : mode === "magic" ? "Send magic link" : mode === "signup" ? "Create account" : "Sign in"}
         </button>
       </form>
-      {msg && <p className="mt-3 text-sm text-slate-600">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-muted">{msg}</p>}
     </div>
   );
 }

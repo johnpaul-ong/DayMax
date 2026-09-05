@@ -150,49 +150,49 @@ export default function ImportPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">Import</h1>
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-muted">
         Upload your workbook, paste a month grid straight from Excel, or upload DayMax JSON produced by
         ChatGPT/Claude (see docs/DATA_CONTRACT.md). You always get a preview before anything is saved.
       </p>
-      {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {done && <p className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{done}</p>}
+      {error && <p className="mb-3 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+      {done && <p className="mb-3 rounded-lg bg-ok-soft px-3 py-2 text-sm text-ok">{done}</p>}
 
       {!pending && (
         <div className="space-y-4">
-          <div className="rounded-xl border bg-white p-4">
+          <div className="card p-4">
             <h2 className="font-semibold">Excel workbook (.xlsx)</h2>
-            <p className="mb-2 text-sm text-slate-500">Month grids, lift log and daily numbers are detected automatically. The tape sheet is skipped (not in v1).</p>
+            <p className="mb-2 text-sm text-muted">Month grids, lift log and daily numbers are detected automatically. The tape sheet is skipped (not in v1).</p>
             <input type="file" accept=".xlsx,.xls" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} className="text-sm" />
           </div>
-          <div className="rounded-xl border bg-white p-4">
+          <div className="card p-4">
             <h2 className="font-semibold">Paste a grid</h2>
-            <p className="mb-2 text-sm text-slate-500">Copy the month grid in Excel (including the date row and time column) and paste here.</p>
-            <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={"\t\t\t2026-09-01\t2026-09-02\n\t\t0:00\t0 Sleep\t0 Sleep"} className="mb-2 w-full rounded-md border px-2 py-1.5 font-mono text-xs" />
-            <button onClick={() => void onPaste()} disabled={busy || paste.trim() === ""} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            <p className="mb-2 text-sm text-muted">Copy the month grid in Excel (including the date row and time column) and paste here.</p>
+            <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={"\t\t\t2026-09-01\t2026-09-02\n\t\t0:00\t0 Sleep\t0 Sleep"} className="mb-2 w-full rounded-lg border px-2 py-1.5 font-mono text-xs" />
+            <button onClick={() => void onPaste()} disabled={busy || paste.trim() === ""} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
               Preview paste
             </button>
           </div>
-          <div className="rounded-xl border bg-white p-4">
+          <div className="card p-4">
             <h2 className="font-semibold">DayMax JSON</h2>
-            <p className="mb-2 text-sm text-slate-500">The format other AIs produce. Invalid items are rejected and listed, never guessed.</p>
+            <p className="mb-2 text-sm text-muted">The format other AIs produce. Invalid items are rejected and listed, never guessed.</p>
             <input type="file" accept=".json" onChange={(e) => void onJson(e.target.files?.[0] ?? null)} className="text-sm" />
           </div>
         </div>
       )}
 
       {pending && (
-        <div className="rounded-xl border bg-white p-4">
+        <div className="card p-4">
           <h2 className="mb-2 text-lg font-semibold">Preview — nothing saved yet</h2>
           <ul className="mb-3 space-y-1 text-sm">
-            <li>📅 <b>{pending.entries.length}</b> day slots across <b>{dates.length}</b> days {dates.length > 0 && <span className="text-slate-500">({dates[0]} → {dates[dates.length - 1]})</span>}</li>
+            <li>📅 <b>{pending.entries.length}</b> day slots across <b>{dates.length}</b> days {dates.length > 0 && <span className="text-muted">({dates[0]} → {dates[dates.length - 1]})</span>}</li>
             <li>📝 <b>{pending.metrics.length}</b> day metric rows (emotional score, notes, …)</li>
             <li>🏋️ <b>{pending.lifts.length}</b> lift entries</li>
             <li>📈 <b>{pending.daily.length}</b> daily numbers (bodyweight, run time, …)</li>
-            {pending.skipped.length > 0 && <li className="text-slate-500">Skipped sheets: {pending.skipped.join(", ")}</li>}
+            {pending.skipped.length > 0 && <li className="text-muted">Skipped sheets: {pending.skipped.join(", ")}</li>}
           </ul>
 
           {pending.conflictDates.length > 0 && (
-            <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <div className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
               <b>{pending.conflictDates.length} days already have data in the app</b> and will be overwritten
               (last write wins): {pending.conflictDates.slice(0, 10).join(", ")}
               {pending.conflictDates.length > 10 && ` … +${pending.conflictDates.length - 10} more`}
@@ -200,7 +200,7 @@ export default function ImportPage() {
           )}
 
           {pending.warnings.length > 0 && (
-            <div className="mb-3 max-h-48 overflow-auto rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+            <div className="mb-3 max-h-48 overflow-auto rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger">
               <b>{pending.warnings.length} cells could not be parsed and will be skipped</b> — fix them in the
               source and re-import, or add them manually:
               <ul className="mt-1 list-inside list-disc">
@@ -213,10 +213,10 @@ export default function ImportPage() {
           )}
 
           <div className="flex gap-2">
-            <button onClick={() => void confirm()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+            <button onClick={() => void confirm()} disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
               {busy ? "Importing…" : "Confirm import"}
             </button>
-            <button onClick={() => setPending(null)} disabled={busy} className="rounded-md border px-4 py-2 text-sm">
+            <button onClick={() => setPending(null)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">
               Cancel
             </button>
           </div>

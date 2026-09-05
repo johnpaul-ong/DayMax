@@ -21,16 +21,25 @@ async function uid(): Promise<string> {
 // --- day entries -------------------------------------------------------------
 
 export async function fetchDayEntries(fromDate: string, toDate: string): Promise<DayEntry[]> {
+  // Supabase caps queries at 1000 rows — a month of slots is ~3000, so page through.
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("day_entries")
-    .select("date, slot, category, label")
-    .gte("date", fromDate)
-    .lte("date", toDate)
-    .order("date")
-    .order("slot");
-  if (error) throw error;
-  return (data ?? []).map((r) => ({ ...r, date: String(r.date) }));
+  const all: DayEntry[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("day_entries")
+      .select("date, slot, category, label")
+      .gte("date", fromDate)
+      .lte("date", toDate)
+      .order("date")
+      .order("slot")
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data.map((r) => ({ ...r, date: String(r.date) })));
+    if (data.length < page) break;
+  }
+  return all;
 }
 
 export async function fetchAllDayEntries(): Promise<DayEntry[]> {

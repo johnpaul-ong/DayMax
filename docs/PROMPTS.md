@@ -7,6 +7,7 @@
 > - Time slots: `{"trackKind":"time_grid","intervalMinutes":15,"date":"YYYY-MM-DD","slot":"HH:MM","category":"work","label":"optional text"}` — categories are exactly: sleep, work, sports, social, travel, misc, other, eat, family, leisure. One object per 15-minute slot.
 > - Lifts: `{"trackKind":"lifting","date":"YYYY-MM-DD","exercises":[{"name":"deadlift","weightKg":210,"reps":2}],"notes":null}`
 > - Daily numbers: `{"trackKind":"measurements","date":"YYYY-MM-DD","metric":"bodyweight_kg","value":70.8}`
+> - Per-day footer metrics: `{"trackKind":"day_metrics","date":"YYYY-MM-DD","emotionalScore":8,"tired":5,"startFriction":null,"endBrainFatigue":null,"deepTime":null,"weightKg":null,"notes":"free text"}`
 >
 > Rules: never invent data for slots that are empty in the source; if a cell is ambiguous, skip it and list it at the end for me to check; map "Gym/Judo" to "sports" and "Fucking around" to "other". Output a single JSON file I can download.
 

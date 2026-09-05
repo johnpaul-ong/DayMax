@@ -44,6 +44,27 @@ export default function DayGridPage() {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // zoom: 0..4 -> cell size; labels toggle shows text inside cells
+  const [zoom, setZoom] = useState(1);
+  const [showLabels, setShowLabels] = useState(false);
+  useEffect(() => {
+    try {
+      const z = localStorage.getItem("daymax-grid-zoom");
+      const l = localStorage.getItem("daymax-grid-labels");
+      if (z != null) setZoom(Math.max(0, Math.min(4, Number(z))));
+      if (l != null) setShowLabels(l === "1");
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("daymax-grid-zoom", String(zoom));
+      localStorage.setItem("daymax-grid-labels", showLabels ? "1" : "0");
+    } catch {}
+  }, [zoom, showLabels]);
+  const CELL_H = [12, 14, 18, 24, 32][zoom];
+  const CELL_W = [40, 52, 76, 110, 150][zoom];
+  const labelsVisible = showLabels && zoom >= 2;
+
   useEffect(() => {
     setLoading(true);
     fetchDayEntries(dates[0], dates[dates.length - 1])
@@ -78,7 +99,7 @@ export default function DayGridPage() {
     const trimmed = raw.trim();
     const parsed = trimmed === "" ? null : parseGridCell(trimmed);
     if (trimmed !== "" && (!parsed || parsed.category > 9)) {
-      setError(`Cannot parse "${trimmed}". Use "<category number> <optional label>", e.g. "1 thesis".`);
+      setError(`Cannot parse "${trimmed}". Use "<category number> <optional label>", e.g. "1 project".`);
       return;
     }
     setError(null);
@@ -171,7 +192,7 @@ export default function DayGridPage() {
           type="month"
           value={ym}
           onChange={(e) => setYm(e.target.value)}
-          className="rounded-md border px-2 py-1 text-sm"
+          className="rounded-lg border px-2 py-1 text-sm"
         />
         <input
           ref={inputRef}
@@ -183,31 +204,46 @@ export default function DayGridPage() {
               void applyToSelection(input);
             }
           }}
-          placeholder='e.g. "1 thesis" — Enter applies to selection'
-          className="w-72 rounded-md border px-2 py-1 text-sm"
+          placeholder='e.g. "1 project" — Enter applies to selection'
+          className="w-72 rounded-lg border px-2 py-1 text-sm"
         />
         <button
           onClick={() => void applyToSelection(input)}
           disabled={!selection || saving}
-          className="rounded-md bg-blue-600 px-3 py-1 text-sm font-semibold text-white disabled:opacity-40"
+          className="rounded-lg bg-accent px-3 py-1 text-sm font-semibold text-accent-contrast disabled:opacity-40"
         >
           Apply
         </button>
         <button
           onClick={() => void applyToSelection("")}
           disabled={!selection || saving}
-          className="rounded-md border px-3 py-1 text-sm disabled:opacity-40"
+          className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40"
         >
           Clear
         </button>
         <button
           onClick={() => void copyYesterday()}
           disabled={!focus || saving}
-          className="rounded-md border px-3 py-1 text-sm disabled:opacity-40"
+          className="rounded-lg border px-3 py-1 text-sm disabled:opacity-40"
         >
           Copy yesterday → selected day
         </button>
-        {saving && <span className="text-xs text-slate-400">saving…</span>}
+        {saving && <span className="text-xs text-faint">saving…</span>}
+        <span className="ml-auto inline-flex items-center gap-1">
+          <button onClick={() => setZoom((z) => Math.max(0, z - 1))} disabled={zoom === 0} title="Zoom out" className="rounded-lg border px-2.5 py-1 text-sm disabled:opacity-40">
+            −
+          </button>
+          <button onClick={() => setZoom((z) => Math.min(4, z + 1))} disabled={zoom === 4} title="Zoom in" className="rounded-lg border px-2.5 py-1 text-sm disabled:opacity-40">
+            +
+          </button>
+          <button
+            onClick={() => setShowLabels((v) => !v)}
+            title={zoom < 2 ? "Zoom in to show text in cells" : "Show/hide text in cells"}
+            className={`rounded-lg border px-2.5 py-1 text-sm ${showLabels ? "bg-accent-soft font-semibold text-accent" : ""}`}
+          >
+            Aa
+          </button>
+        </span>
       </div>
 
       <div className="mb-2 flex flex-wrap gap-2 text-xs">
@@ -219,17 +255,17 @@ export default function DayGridPage() {
         ))}
       </div>
 
-      {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
       {loading ? (
-        <p className="text-sm text-slate-500">Loading month…</p>
+        <p className="text-sm text-muted">Loading month…</p>
       ) : (
-        <div className="max-h-[70vh] overflow-auto rounded-lg border bg-white" tabIndex={0} onKeyDown={onKeyDown}>
+        <div className="max-h-[70vh] overflow-auto rounded-lg border bg-surface" tabIndex={0} onKeyDown={onKeyDown}>
           <table className="daygrid border-collapse">
-            <thead className="sticky top-0 z-10 bg-white">
+            <thead className="sticky top-0 z-10 bg-surface">
               <tr>
-                <th className="sticky left-0 z-20 bg-white px-1 py-1">time</th>
-                {dates.map((d, i) => (
-                  <th key={d} className={`min-w-[52px] px-1 py-1 ${d === todayISO ? "bg-blue-50" : ""}`}>
+                <th className="sticky left-0 z-20 bg-surface px-1 py-1">time</th>
+                {dates.map((d) => (
+                  <th key={d} style={{ minWidth: CELL_W }} className={`px-1 py-1 ${d === todayISO ? "bg-accent-soft" : ""}`}>
                     {Number(d.slice(8))}
                   </th>
                 ))}
@@ -238,7 +274,7 @@ export default function DayGridPage() {
             <tbody>
               {Array.from({ length: SLOTS_PER_DAY }, (_, s) => (
                 <tr key={s}>
-                  <td className="sticky left-0 z-10 bg-white px-1 text-right font-mono text-[10px] text-slate-400">
+                  <td className="sticky left-0 z-10 bg-surface px-1 text-right font-mono text-[10px] text-faint">
                     {s % 4 === 0 ? slotToTime(s) : ""}
                   </td>
                   {dates.map((date, d) => {
@@ -258,9 +294,19 @@ export default function DayGridPage() {
                           if (dragging.current) setFocus({ d, s });
                         }}
                         title={c ? `${date} ${slotToTime(s)} — ${c.category}${c.label ? " " + c.label : ""}` : `${date} ${slotToTime(s)}`}
-                        className={`h-[14px] cursor-cell ${sel ? "ring-2 ring-inset ring-blue-500" : ""} ${isFocus ? "outline outline-2 outline-blue-700" : ""}`}
-                        style={{ background: c ? categoryColor(c.category) + (sel ? "" : "cc") : sel ? "#dbeafe" : undefined }}
-                      />
+                        className={`cursor-cell overflow-hidden whitespace-nowrap align-middle ${sel ? "ring-2 ring-inset ring-accent" : ""} ${isFocus ? "outline outline-2 outline-accent" : ""}`}
+                        style={{
+                          height: CELL_H,
+                          maxWidth: CELL_W,
+                          background: c ? categoryColor(c.category) + (sel ? "" : "cc") : sel ? "var(--accent-soft)" : undefined,
+                        }}
+                      >
+                        {labelsVisible && c ? (
+                          <span className="block truncate px-1 text-[10px] font-medium text-white/95" style={{ lineHeight: `${CELL_H}px` }}>
+                            {c.label ?? ""}
+                          </span>
+                        ) : null}
+                      </td>
                     );
                   })}
                 </tr>
@@ -269,7 +315,7 @@ export default function DayGridPage() {
           </table>
         </div>
       )}
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-muted">
         Drag to select a range (works across days). Type a value like <code>0 Sleep</code> or just <code>1</code>, hit
         Enter. Arrows move, Shift+arrows extend, Delete clears.{" "}
         {focusedCell ? `Selected cell: ${focusedCell.category} ${focusedCell.label ?? ""}` : ""}

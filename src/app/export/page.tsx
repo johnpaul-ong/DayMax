@@ -44,15 +44,15 @@ export default function ExportPage() {
   return (
     <div className="mx-auto max-w-md">
       <h1 className="mb-3 text-xl font-bold">Export</h1>
-      <div className="rounded-xl border bg-white p-4">
-        <label className="text-sm text-slate-500">
+      <div className="card p-4">
+        <label className="text-sm text-muted">
           Month
-          <input type="month" value={ym} onChange={(e) => setYm(e.target.value)} className="mt-1 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+          <input type="month" value={ym} onChange={(e) => setYm(e.target.value)} className="mt-1 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
         </label>
-        <button onClick={() => void download()} disabled={busy} className="mt-3 w-full rounded-md bg-blue-600 py-2 text-sm font-semibold text-white disabled:opacity-40">
+        <button onClick={() => void download()} disabled={busy} className="mt-3 w-full rounded-lg bg-accent py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
           {busy ? "Building…" : "Download .xlsx"}
         </button>
-        {msg && <p className="mt-2 text-sm text-slate-600">{msg}</p>}
+        {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
     </div>
   );

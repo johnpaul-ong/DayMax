@@ -2,8 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- themes ----------
+   Semantic tokens; Tailwind maps them to classes (bg-surface, text-ink, …).
+   Users can override --accent from Settings → Appearance. */
+
+:root,
+[data-theme="light"] {
+  --page: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f1f2f4;
+  --border: #e6e7ea;
+  --ink: #1a1d21;
+  --muted: #5f6672;
+  --faint: #9aa1ac;
+  --accent: #4f6ef7;
+  --accent-hover: #3d5bee;
+  --accent-soft: #eef1fe;
+  --accent-contrast: #ffffff;
+  --ok: #1a7f4b;
+  --ok-soft: #e7f6ee;
+  --danger: #c0392b;
+  --danger-soft: #fdeeec;
+  --warn: #8a5a00;
+  --warn-soft: #fdf3dd;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 16px rgb(16 24 40 / 0.04);
+}
+
+[data-theme="dark"] {
+  --page: #101216;
+  --surface: #191c22;
+  --surface-2: #22262e;
+  --border: #2c313b;
+  --ink: #e8eaee;
+  --muted: #9aa3b2;
+  --faint: #626b7a;
+  --accent: #7c93ff;
+  --accent-hover: #93a6ff;
+  --accent-soft: #232a45;
+  --accent-contrast: #0e1118;
+  --ok: #4ade80;
+  --ok-soft: #12291c;
+  --danger: #f87171;
+  --danger-soft: #331b1b;
+  --warn: #fbbf24;
+  --warn-soft: #33290f;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+/* Soft paper, moss and sky — hand-painted feel. */
+[data-theme="ghibli"] {
+  --page: #f4efe3;
+  --surface: #fbf7ec;
+  --surface-2: #efe8d8;
+  --border: #ddd2ba;
+  --ink: #3a3628;
+  --muted: #77705a;
+  --faint: #a89f85;
+  --accent: #5c8a4e;
+  --accent-hover: #4a7440;
+  --accent-soft: #e4eddc;
+  --accent-contrast: #fdfcf7;
+  --ok: #4a7440;
+  --ok-soft: #e4eddc;
+  --danger: #b3543f;
+  --danger-soft: #f4e2dc;
+  --warn: #96700f;
+  --warn-soft: #f2ead0;
+  --shadow: 0 2px 3px rgb(90 80 50 / 0.08), 0 8px 20px rgb(90 80 50 / 0.08);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--accent-soft);
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-surface;
+    box-shadow: var(--shadow);
+  }
+  .btn-primary {
+    @apply rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-40;
+  }
+  .btn-ghost {
+    @apply rounded-xl border bg-surface px-4 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-40;
+  }
+  .field {
+    @apply rounded-xl border bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent/40;
+  }
+}
+
 /* Day grid: keep cells tight and Excel-ish */
 .daygrid td,
 .daygrid th {
-  @apply select-none border border-slate-200 p-0 text-[11px] leading-none;
+  @apply select-none border p-0 text-[11px] leading-none;
 }

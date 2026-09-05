@@ -81,7 +81,7 @@ export default function OverviewPage() {
     [entries, rawDate]
   );
 
-  if (loading) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (loading) return <p className="text-sm text-muted">Loading…</p>;
 
   return (
     <div className="space-y-8">
@@ -89,28 +89,28 @@ export default function OverviewPage() {
         <h1 className="mb-3 text-xl font-bold">Productivity ranking</h1>
         <div className="grid gap-3 sm:grid-cols-3">
           {ranking.map((r) => (
-            <div key={r.period} className="rounded-xl border bg-white p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <div key={r.period} className="card p-4">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-faint">
                 {r.period === "day" ? "Today" : r.period === "week" ? `This week (from ${weekStart(todayISO).slice(5)})` : "All time"}
               </h2>
               <div className="mt-2 space-y-1 text-sm">
-                <p><span className="font-bold text-green-600">{r.totals.productive.toFixed(1)}h</span> productive</p>
-                <p><span className="font-bold text-red-600">{r.totals.brainrot.toFixed(1)}h</span> brainrot</p>
-                <p><span className="font-bold text-slate-500">{r.totals.other.toFixed(1)}h</span> other</p>
-                <p className="pt-1 text-xs text-slate-500">
+                <p><span className="font-bold text-ok">{r.totals.productive.toFixed(1)}h</span> productive</p>
+                <p><span className="font-bold text-danger">{r.totals.brainrot.toFixed(1)}h</span> brainrot</p>
+                <p><span className="font-bold text-muted">{r.totals.other.toFixed(1)}h</span> other</p>
+                <p className="pt-1 text-xs text-muted">
                   ratio {r.ratio === null ? "∞" : r.ratio} productive:brainrot
                 </p>
               </div>
             </div>
           ))}
         </div>
-        <p className="mt-1 text-xs text-slate-400">Both stats shown so neither can be gamed. Change bucket assignments in Settings.</p>
+        <p className="mt-1 text-xs text-faint">Both stats shown so neither can be gamed. Change bucket assignments in Settings.</p>
       </section>
 
       {dailyBuckets.length > 0 && (
         <section>
           <h2 className="mb-2 font-semibold">Hours per day (last {dailyBuckets.length} logged days)</h2>
-          <div className="h-64 rounded-xl border bg-white p-2">
+          <div className="h-64 card p-2">
             <ResponsiveContainer>
               <BarChart data={dailyBuckets}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -132,7 +132,7 @@ export default function OverviewPage() {
           <h2 className="mb-2 font-semibold">Lift progression</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {liftSeries.map(([name, pts]) => (
-              <div key={name} className="h-48 rounded-xl border bg-white p-2">
+              <div key={name} className="h-48 card p-2">
                 <p className="px-2 pt-1 text-sm font-medium">{name}</p>
                 <ResponsiveContainer height="85%">
                   <LineChart data={pts}>
@@ -151,18 +151,18 @@ export default function OverviewPage() {
 
       <section>
         <h2 className="mb-2 font-semibold">Raw day</h2>
-        <input type="date" value={rawDate} onChange={(e) => setRawDate(e.target.value)} className="mb-2 rounded-md border px-2 py-1 text-sm" />
+        <input type="date" value={rawDate} onChange={(e) => setRawDate(e.target.value)} className="mb-2 rounded-lg border px-2 py-1 text-sm" />
         {rawDay.length === 0 ? (
-          <p className="text-sm text-slate-400">No entries for {rawDate}.</p>
+          <p className="text-sm text-faint">No entries for {rawDate}.</p>
         ) : (
-          <div className="max-h-80 overflow-auto rounded-xl border bg-white">
+          <div className="max-h-80 overflow-auto card">
             <table className="w-full text-sm">
               <tbody>
                 {rawDay.map((e) => (
                   <tr key={e.slot} className="border-b last:border-0">
-                    <td className="w-16 px-3 py-1 font-mono text-xs text-slate-400">{slotToTime(e.slot)}</td>
+                    <td className="w-16 px-3 py-1 font-mono text-xs text-faint">{slotToTime(e.slot)}</td>
                     <td className="px-3 py-1">{categoryName(e.category)}</td>
-                    <td className="px-3 py-1 text-slate-500">{e.label ?? ""}</td>
+                    <td className="px-3 py-1 text-muted">{e.label ?? ""}</td>
                   </tr>
                 ))}
               </tbody>

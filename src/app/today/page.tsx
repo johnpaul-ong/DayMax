@@ -118,18 +118,18 @@ export default function TodayPage() {
     <div className="mx-auto max-w-lg">
       <div className="mb-3 flex items-center gap-2">
         <h1 className="text-xl font-bold">Today</h1>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-md border px-2 py-1 text-sm" />
-        <span className="text-sm text-slate-500">{filled}/96 filled</span>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border px-2 py-1 text-sm" />
+        <span className="text-sm text-muted">{filled}/96 filled</span>
       </div>
 
-      {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
       <div className="mb-3 grid grid-cols-2 gap-1.5">
         {CATEGORIES.map((c) => (
           <button
             key={c.code}
             onClick={() => setCat(c.code)}
-            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-medium ${cat === c.code ? "ring-2 ring-blue-600" : ""}`}
+            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-medium ${cat === c.code ? "ring-2 ring-accent" : ""}`}
             style={{ background: c.color + "22", borderColor: c.color }}
           >
             {c.code} {c.name}
@@ -139,18 +139,18 @@ export default function TodayPage() {
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        placeholder="Optional label (e.g. thesis, Mary, 5km run)"
-        className="mb-3 w-full rounded-md border px-3 py-2 text-sm"
+        placeholder="Optional label (e.g. project, dinner, 5km run)"
+        className="mb-3 w-full rounded-lg border px-3 py-2 text-sm"
       />
 
       <div className="mb-3 flex items-center gap-2 text-sm">
-        <span className="w-10 text-slate-500">{from != null ? slotToTime(from) : "from"}</span>
+        <span className="w-10 text-muted">{from != null ? slotToTime(from) : "from"}</span>
         <span>→</span>
-        <span className="w-10 text-slate-500">{until != null ? slotToTime(until) : "until"}</span>
-        <button onClick={() => void fill()} disabled={from == null || until == null || saving} className="ml-auto rounded-md bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-40">
+        <span className="w-10 text-muted">{until != null ? slotToTime(until) : "until"}</span>
+        <button onClick={() => void fill()} disabled={from == null || until == null || saving} className="ml-auto rounded-lg bg-accent px-4 py-2 font-semibold text-accent-contrast disabled:opacity-40">
           Fill
         </button>
-        <button onClick={() => void clearRange()} disabled={from == null || until == null || saving} className="rounded-md border px-3 py-2 disabled:opacity-40">
+        <button onClick={() => void clearRange()} disabled={from == null || until == null || saving} className="rounded-lg border px-3 py-2 disabled:opacity-40">
           Clear
         </button>
       </div>
@@ -170,8 +170,11 @@ export default function TodayPage() {
                 } else setUntil(s);
               }}
               title={`${slotToTime(s)}${c ? ` — ${c.category} ${c.label ?? ""}` : ""}`}
-              className={`h-8 rounded text-[9px] leading-none text-white ${isEdge ? "ring-2 ring-blue-700" : inRange ? "ring-2 ring-blue-300" : ""}`}
-              style={{ background: c ? categoryColor(c.category) : "#e2e8f0" }}
+              className={`h-8 rounded-md text-[9px] leading-none ${isEdge ? "ring-2 ring-accent" : inRange ? "ring-2 ring-accent/40" : ""}`}
+              style={{
+                background: c ? categoryColor(c.category) : "var(--surface-2)",
+                color: c ? "rgba(255,255,255,.95)" : "var(--faint)",
+              }}
             >
               {s % 4 === 0 ? slotToTime(s) : ""}
             </button>
@@ -180,32 +183,32 @@ export default function TodayPage() {
       </div>
 
       {metrics && (
-        <div className="rounded-xl border bg-white p-4">
+        <div className="card p-4">
           <h2 className="mb-2 font-semibold">Day metrics</h2>
           <div className="grid grid-cols-2 gap-2">
             {metricFields.map((f) => (
-              <label key={f.key} className="text-xs text-slate-500">
+              <label key={f.key} className="text-xs text-muted">
                 {f.label}
                 <input
                   type="number"
                   step="0.5"
                   value={metrics[f.key] ?? ""}
                   onChange={(e) => setMetrics({ ...metrics, [f.key]: e.target.value === "" ? null : Number(e.target.value) })}
-                  className="mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm text-slate-900"
+                  className="mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-ink"
                 />
               </label>
             ))}
           </div>
-          <label className="mt-2 block text-xs text-slate-500">
+          <label className="mt-2 block text-xs text-muted">
             Notes
             <textarea
               value={metrics.notes ?? ""}
               onChange={(e) => setMetrics({ ...metrics, notes: e.target.value || null })}
               rows={3}
-              className="mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm text-slate-900"
+              className="mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-ink"
             />
           </label>
-          <button onClick={() => void saveMetrics()} disabled={saving} className="mt-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+          <button onClick={() => void saveMetrics()} disabled={saving} className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
             Save metrics
           </button>
         </div>

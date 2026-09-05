@@ -57,22 +57,22 @@ export default function LiftsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-3 text-xl font-bold">Lifts</h1>
-      {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
-      <div className="mb-6 rounded-xl border bg-white p-4">
+      <div className="mb-6 card p-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <label className="col-span-2 text-xs text-slate-500 sm:col-span-1">
+          <label className="col-span-2 text-xs text-muted sm:col-span-1">
             Date
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
           </label>
-          <label className="col-span-2 text-xs text-slate-500 sm:col-span-1">
+          <label className="col-span-2 text-xs text-muted sm:col-span-1">
             Exercise
             <input
               list="exercises"
               value={form.exercise}
               onChange={(e) => setForm({ ...form, exercise: e.target.value })}
               placeholder="Deadlift"
-              className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900"
+              className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink"
             />
             <datalist id="exercises">
               {knownExercises.map((x) => (
@@ -80,32 +80,32 @@ export default function LiftsPage() {
               ))}
             </datalist>
           </label>
-          <label className="text-xs text-slate-500">
+          <label className="text-xs text-muted">
             Weight (kg)
-            <input type="number" step="0.5" inputMode="decimal" value={form.weightKg ?? ""} onChange={(e) => setForm({ ...form, weightKg: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+            <input type="number" step="0.5" inputMode="decimal" value={form.weightKg ?? ""} onChange={(e) => setForm({ ...form, weightKg: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
           </label>
-          <label className="text-xs text-slate-500">
+          <label className="text-xs text-muted">
             Reps
-            <input value={form.reps ?? ""} onChange={(e) => setForm({ ...form, reps: e.target.value || null })} placeholder="5 or AMRAP" className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+            <input value={form.reps ?? ""} onChange={(e) => setForm({ ...form, reps: e.target.value || null })} placeholder="5 or AMRAP" className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
           </label>
-          <label className="text-xs text-slate-500">
+          <label className="text-xs text-muted">
             Sets
-            <input type="number" inputMode="numeric" value={form.sets ?? ""} onChange={(e) => setForm({ ...form, sets: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+            <input type="number" inputMode="numeric" value={form.sets ?? ""} onChange={(e) => setForm({ ...form, sets: e.target.value === "" ? null : Number(e.target.value) })} className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
           </label>
-          <label className="col-span-2 text-xs text-slate-500 sm:col-span-3">
+          <label className="col-span-2 text-xs text-muted sm:col-span-3">
             Notes
-            <input value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} placeholder="RPE 8" className="mt-0.5 w-full rounded-md border px-2 py-2 text-sm text-slate-900" />
+            <input value={form.notes ?? ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} placeholder="RPE 8" className="mt-0.5 w-full rounded-lg border px-2 py-2 text-sm text-ink" />
           </label>
         </div>
         <div className="mt-3 flex gap-2">
-          <button onClick={() => void save(form)} disabled={saving} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+          <button onClick={() => void save(form)} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
             Log lift
           </button>
           {lastForExercise && (
             <button
               onClick={() => void save({ ...lastForExercise, date: form.date })}
               disabled={saving}
-              className="rounded-md border px-4 py-2 text-sm disabled:opacity-40"
+              className="rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
             >
               Same as last time ({lastForExercise.weightKg ?? "?"}kg × {lastForExercise.reps ?? "?"})
             </button>
@@ -114,10 +114,10 @@ export default function LiftsPage() {
       </div>
 
       <h2 className="mb-2 font-semibold">History</h2>
-      <div className="overflow-x-auto rounded-xl border bg-white">
+      <div className="overflow-x-auto card">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-slate-50 text-left text-xs text-slate-500">
+            <tr className="border-b bg-surface-2 text-left text-xs text-muted">
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Exercise</th>
               <th className="px-3 py-2">Weight</th>
@@ -135,7 +135,7 @@ export default function LiftsPage() {
                 <td className="px-3 py-1.5">{r.weightKg ?? ""}</td>
                 <td className="px-3 py-1.5">{r.reps ?? ""}</td>
                 <td className="px-3 py-1.5">{r.sets ?? ""}</td>
-                <td className="max-w-[24ch] truncate px-3 py-1.5 text-slate-500" title={r.notes ?? ""}>
+                <td className="max-w-[24ch] truncate px-3 py-1.5 text-muted" title={r.notes ?? ""}>
                   {r.notes ?? ""}
                 </td>
                 <td className="px-2 py-1.5">
@@ -143,7 +143,7 @@ export default function LiftsPage() {
                     onClick={() => {
                       void deleteLift(r.id).then(reload);
                     }}
-                    className="text-xs text-red-400 hover:text-red-600"
+                    className="text-xs text-danger hover:opacity-70"
                   >
                     ✕
                   </button>
@@ -152,7 +152,7 @@ export default function LiftsPage() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-slate-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-faint">
                   No lifts yet. Log one above or import your workbook.
                 </td>
               </tr>

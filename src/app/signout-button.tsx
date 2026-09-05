@@ -10,7 +10,7 @@ export default function SignOutButton() {
         await supabase.auth.signOut();
         location.href = "/signin";
       }}
-      className="rounded-md border px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+      className="rounded-lg border px-3 py-1.5 text-sm text-muted hover:bg-surface-2"
     >
       Sign out
     </button>

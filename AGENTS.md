@@ -25,6 +25,8 @@ You are the workforce (product, engineering, security, docs). The user is the pr
 
 ## Current state (update this when you change it)
 
-- Phase 0 + 1 complete: auth (password + magic link), day grid, today editor, lifts, importer with preview, month export, overview with ranking, bucket settings. Single-user; RLS locks every table to `auth.uid()`.
+- Phase 0 + 1 complete: auth (password + magic link), day grid (zoom levels, cell-label toggle), year heatmap view, today editor, lifts, importer with preview (xlsx / pasted grid / JSON incl. `day_metrics`), month export, home dashboard, overview with ranking, bucket settings. Single-user; RLS locks every table to `auth.uid()`.
+- Theming: light / dark / ghibli via CSS variables in `globals.css`, semantic Tailwind tokens (`bg-surface`, `text-ink`, `text-muted`, `bg-accent`, …) in `tailwind.config.ts`, per-device persistence in `src/lib/theme.ts`. **Never hardcode colors in pages — use the tokens** or all three themes break.
+- Known gotcha (fixed, don't reintroduce): Supabase returns max 1000 rows per query. Any fetch that can exceed that must page with `.range()` — see `fetchDayEntries`/`fetchAllDayEntries` in `src/lib/data.ts`.
 - Phase 2/3 (share rules, invites, Compare between friends) not started. Schema notes in `docs/ROADMAP.md`.
 - Parsers in `src/lib/` are unit-tested (`npm test`) and were validated against the owner's real workbook.
