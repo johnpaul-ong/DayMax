@@ -330,7 +330,7 @@ export default function OverviewPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
                 <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
                 <Tooltip labelFormatter={(d) => String(d)} />
-                <Legend formatter={(v) => DAY_METRIC_LINES.find((f) => f.key === v)?.label ?? v} />
+                <Legend formatter={(v: string) => DAY_METRIC_LINES.find((f) => f.key === v)?.label ?? v} />
                 {DAY_METRIC_LINES.map((f, i) => (
                   <Line key={f.key} type="monotone" strokeWidth={2.5} dataKey={f.key} name={f.label} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} connectNulls />
                 ))}
@@ -378,7 +378,7 @@ export default function OverviewPage() {
                     }}
                     labelFormatter={(d) => String(d)}
                   />
-                  <Legend formatter={(v) => fieldLabel(String(v))} />
+                  <Legend formatter={(v: string) => fieldLabel(String(v))} />
                   {trendKeys.map((k) => (
                     <Line
                       key={k}

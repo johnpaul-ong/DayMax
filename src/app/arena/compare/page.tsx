@@ -260,7 +260,7 @@ export default function ArenaComparePage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 10 }} unit="%" />
-                  <Tooltip formatter={(v: number, _n, item: any) => [`${v}% across ${item?.payload?.exercises} lift(s)`, "gain"]} />
+                  <Tooltip formatter={(v: number, _n: string, item: any) => [`${v}% across ${item?.payload?.exercises} lift(s)`, "gain"]} />
                   <Bar dataKey="gain" fill="var(--accent)" />
                 </BarChart>
               </ResponsiveContainer>
