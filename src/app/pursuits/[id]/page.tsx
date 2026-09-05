@@ -249,7 +249,7 @@ export default function PursuitPage() {
 
       <MembersSection members={members} total={pursuit.memberCount} />
 
-      {pursuit.kind === "life" && <LifeCommunity />}
+      {pursuit.kind === "life" && <LifeCommunity memberCount={pursuit.memberCount} />}
       {pursuit.kind === "lifts" && <LiftsCommunity />}
 
       {visibleStats.map((s) => (
@@ -367,7 +367,7 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
  * Built from leaderboard_day_totals — the same share-rule-enforcing function
  * the Arena uses, so nobody who set themselves to hidden ever shows up.
  */
-function LifeCommunity() {
+function LifeCommunity({ memberCount }: { memberCount: number }) {
   const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
@@ -449,8 +449,9 @@ function LifeCommunity() {
     <>
       <section className="grid gap-3 sm:grid-cols-4">
         <div className="card p-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-faint">People</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Logging (12wk)</p>
           <p className="mt-1 text-3xl font-bold tabular-nums">{people.length}</p>
+          <p className="mt-0.5 text-xs text-muted">of {memberCount} members</p>
         </div>
         <div className="card p-4">
           <p className="text-xs font-medium uppercase tracking-wider text-faint">Days logged (12wk)</p>
