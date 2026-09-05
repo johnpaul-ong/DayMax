@@ -8,17 +8,11 @@ Auth (password + magic link), day grid (fill range / keyboard / copy yesterday),
 
 **Success test: a full week logged in DayMax faster than in Excel. Do not start Phase 3 before this passes.**
 
-## Phase 2 — Templates, not a builder
-- Track instances (Day, Lifts) as first-class rows (`tracks` table) instead of implicit per-user data.
-- Personal subcategory management UI (rename labels, merge).
-- Share rules per member per track: `hidden | totals_only | raw_labels` (owner default: Work + Sports raw for the owner).
-- Bulk-fill improvements based on real usage pain.
+## ✅ Phase 2 — Templates, not a builder
+Tracks as first-class rows (`tracks`, migration 0005), label rename/merge tool in Settings, share rules per member per track (`hidden | totals_only | raw_labels`).
 
-## Phase 3 — Friends
-- Invite by email/link. Invite-only, no public profiles.
-- Day Compare = ranking (productive/brainrot/other + ratio) for day/week/all-time across track members. Totals only, enforced in SQL via `track_members.share_rule` — never client-side filtering.
-- Lifts compare = lift progression graphs.
-- **Minors:** age collected at signup; under-18 requires guardian acknowledgment; defaults to totals_only; body-measurement tracks opt-in with guardian agreement; no public anything.
+## ✅ Phase 3 — Friends
+Invite by shareable link (no email infra; optional email restriction, 14-day expiry). Day Compare = leaderboard on focus score + productive/brainrot hours for today/week/all-time, plus a daily-score chart — totals only, **enforced in SQL security-definer functions** (`compare_day_totals`, `compare_lifts`, `compare_raw_day`), buckets from the track owner's settings. Lifts compare = per-exercise progression lines per member; notes never shared. Minors: `is_minor()` from profile birthday; guardian acknowledgment required to join and to enable raw_labels — enforced in the database, not just the UI.
 
 ## Phase 4 — DELAYED
 Duplicate a track for a second friend group — only if invite-only groups prove insufficient.

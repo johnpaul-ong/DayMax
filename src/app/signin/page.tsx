@@ -28,7 +28,10 @@ export default function SignInPage() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setMsg(error.message);
-        else location.href = "/";
+        else {
+          const next = new URLSearchParams(location.search).get("next");
+          location.href = next && next.startsWith("/") ? next : "/";
+        }
       }
     } finally {
       setBusy(false);

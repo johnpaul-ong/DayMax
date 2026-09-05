@@ -33,6 +33,7 @@ export async function middleware(request: NextRequest) {
 
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
+    url.searchParams.set("next", request.nextUrl.pathname); // e.g. an invite link
     url.pathname = "/signin";
     return NextResponse.redirect(url);
   }
