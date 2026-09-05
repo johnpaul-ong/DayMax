@@ -10,19 +10,19 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
-  fetchCompareDay,
-  fetchCompareLifts,
+  acceptFriendRequest,
   fetchMemberDayMetrics,
   fetchMemberDayStrip,
+  fetchMemberDayTotals,
+  fetchMemberLifts,
   fetchMemberProfile,
-  fetchMembers,
-  fetchTracks,
-  type CompareDayRow,
+  sendFriendRequest,
   type CompareLiftRow,
   type DayStripRow,
+  type FriendStatus,
   type MemberDayMetricsRow,
+  type MemberDayTotal,
   type ProfileSection,
-  type TrackMember,
 } from "@/lib/friends";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
@@ -41,7 +41,9 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [name, setName] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [sections, setSections] = useState<ProfileSection[]>([]);
-  const [dayRows, setDayRows] = useState<CompareDayRow[]>([]);
+  const [friendStatus, setFriendStatus] = useState<FriendStatus>("none");
+  const [isSelf, setIsSelf] = useState(false);
+  const [dayRows, setDayRows] = useState<MemberDayTotal[]>([]);
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
   const [strip, setStrip] = useState<DayStripRow[]>([]);
   const [memberMetrics, setMemberMetrics] = useState<MemberDayMetricsRow[]>([]);
@@ -50,47 +52,44 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [period, setPeriod] = useState<"day" | "week" | "month">("day");
   const [exercise, setExercise] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function load() {
+    fetchMemberProfile(userId)
+      .then((profile) => {
+        setName(profile.displayName);
+        setUsername(profile.username);
+        setSections(profile.sections);
+        setFriendStatus(profile.friendStatus);
+        setIsSelf(profile.isSelf);
+      })
+      .catch((e) => setError(String(e.message ?? e)));
+  }
 
   useEffect(() => {
     if (!userId) return;
     setColors(loadBucketColors());
-    (async () => {
-      try {
-        const profile = await fetchMemberProfile(userId);
-        setName(profile.displayName);
-        setUsername(profile.username);
-        setSections(profile.sections);
-        // full day detail: only returned when they share raw labels (or are a legend)
-        fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
-        fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
-        fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
-        // find a shared track to pull data through — check them all at once
-        // instead of awaiting one at a time (that waterfall was slow with
-        // more than a couple of tracks).
-        const tracks = await fetchTracks();
-        const memberLists = await Promise.all(tracks.map((t) => fetchMembers(t.id).catch(() => [] as TrackMember[])));
-        const sharedIdx = memberLists.findIndex((members) => members.some((m) => m.userId === userId));
-        const shared = sharedIdx >= 0 ? tracks[sharedIdx].id : null;
-        if (!shared) return;
-        const [d, l] = await Promise.all([
-          fetchCompareDay(shared).catch(() => [] as CompareDayRow[]),
-          fetchCompareLifts(shared).catch(() => [] as CompareLiftRow[]),
-        ]);
-        setDayRows(d.filter((r) => r.memberId === userId));
-        const lifts = l.filter((r) => r.memberId === userId);
+    load();
+    // Every section reads through its own visibility-gated function, so these
+    // all fire at once and each simply returns nothing if it's not shared —
+    // no more hunting for a shared track first.
+    fetchMemberDayTotals(userId).then(setDayRows).catch(() => {});
+    fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
+    fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
+    fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
+    fetchMemberLifts(userId)
+      .then((lifts) => {
         setLiftRows(lifts);
         if (lifts.length) {
           const counts = new Map<string, number>();
           for (const r of lifts) counts.set(r.exercise, (counts.get(r.exercise) ?? 0) + 1);
           setExercise([...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
         }
-      } catch (e: any) {
-        setError(String(e.message ?? e));
-      }
-    })();
-  }, [userId]);
+      })
+      .catch(() => {});
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const agg = (list: CompareDayRow[]) => {
+  const agg = (list: MemberDayTotal[]) => {
     const p = list.reduce((s, r) => s + r.productive, 0);
     const b = list.reduce((s, r) => s + r.brainrot, 0);
     const o = list.reduce((s, r) => s + r.other, 0);
@@ -140,19 +139,82 @@ export default function ProfileView({ userId }: { userId: string }) {
     [liftRows, exercise]
   );
 
-  if (error) return <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>;
+  if (error)
+    return (
+      <div className="mx-auto max-w-md card p-6 text-center">
+        <h1 className="mb-1 text-lg font-semibold">This profile is private</h1>
+        <p className="text-sm text-muted">
+          They&apos;ve chosen not to show their page publicly. Send a friend request and they can share it with you.
+        </p>
+        <Link href="/search" className="mt-3 inline-block text-sm font-medium text-accent hover:underline">
+          ← Back to search
+        </Link>
+      </div>
+    );
   if (!name) return <p className="text-sm text-muted">Loading profile…</p>;
 
   const show = (s: ProfileSection) => sections.includes(s);
   const hasDayData = dayRows.length > 0;
 
+  async function friendAction() {
+    setBusy(true);
+    try {
+      if (friendStatus === "none") await sendFriendRequest(userId);
+      else if (friendStatus === "pending_in") {
+        const { listFriends } = await import("@/lib/friends");
+        const fs = await listFriends();
+        const match = fs.find((f) => f.memberId === userId && f.status === "pending");
+        if (match) await acceptFriendRequest(match.friendshipId);
+      }
+      load();
+    } catch (e: any) {
+      setError(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">
-          {name} {username && <span className="text-base font-normal text-faint">@{username}</span>}
-        </h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-lg font-bold text-accent">
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold">{name}</h1>
+          {username && <p className="text-sm text-faint">@{username}</p>}
+        </div>
+
+        {!isSelf && (
+          <div className="ml-auto">
+            {friendStatus === "friends" && (
+              <span className="rounded-full bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent">✓ Friends</span>
+            )}
+            {friendStatus === "pending_out" && (
+              <span className="rounded-full border px-3 py-1.5 text-sm text-muted">Request sent</span>
+            )}
+            {friendStatus === "pending_in" && (
+              <button onClick={() => void friendAction()} disabled={busy} className="btn-primary py-1.5">
+                {busy ? "…" : "Accept request"}
+              </button>
+            )}
+            {friendStatus === "none" && (
+              <button onClick={() => void friendAction()} disabled={busy} className="btn-primary py-1.5">
+                {busy ? "…" : "Add friend"}
+              </button>
+            )}
+          </div>
+        )}
+        {isSelf && (
+          <Link href="/settings" className="ml-auto btn-ghost py-1.5">Edit profile</Link>
+        )}
       </div>
+
+      {!isSelf && friendStatus !== "friends" && (
+        <p className="-mt-4 text-sm text-faint">
+          You&apos;re seeing {name}&apos;s public profile. Friends may see more.
+        </p>
+      )}
 
       {pursuits.length > 0 && (
         <section>
@@ -243,16 +305,20 @@ export default function ProfileView({ userId }: { userId: string }) {
         </section>
       )}
 
-      {strip.length > 0 && <ProfileYearHeatmap strip={strip} />}
+      {show("days") && strip.length > 0 && <ProfileYearHeatmap strip={strip} />}
 
-      {strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
+      {show("days") && strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
 
-      {strip.length > 0 && <ProfileYearBars strip={strip} />}
+      {show("days") && strip.length > 0 && <ProfileYearBars strip={strip} />}
 
-      {memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
+      {show("metrics") && memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
 
-      {!hasDayData && liftRows.length === 0 && (
-        <p className="card p-4 text-sm text-faint">Nothing shared yet — either {name} is hidden on your shared tracks or hasn&apos;t logged anything.</p>
+      {!hasDayData && liftRows.length === 0 && strip.length === 0 && (
+        <p className="card p-4 text-sm text-faint">
+          {sections.length === 0
+            ? `${name} hasn't shared anything publicly.`
+            : `Nothing here yet — ${name} hasn't logged anything.`}
+        </p>
       )}
     </div>
   );

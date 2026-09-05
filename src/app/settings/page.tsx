@@ -11,6 +11,7 @@ import { CATEGORIES, type Bucket } from "@/lib/categories";
 import { loadHiddenTabs, NAV_TABS, saveHiddenTabs } from "../nav-links";
 import { fetchBucketSettings, fetchProfile, saveBucketSettings, updateProfile } from "@/lib/data";
 import { COUNTRIES, lifeStats } from "@/lib/life";
+import { PROFILE_SECTIONS, type MyVisibility, type ProfileSection } from "@/lib/friends";
 import {
   applyTheme,
   DEFAULT_BUCKET_COLORS,
@@ -201,57 +202,111 @@ function LabelRenameSection() {
   );
 }
 
+/**
+ * Two audiences, two lists: what anyone can see, and what friends can see.
+ * Public is the default — going private hides the page from non-friends
+ * entirely, which is why the public column greys out when it's off.
+ */
 function ProfileVisibilitySection() {
-  const [sections, setSections] = useState<string[] | null>(null);
+  const [vis, setVis] = useState<MyVisibility | null>(null);
   const [discoverable, setDiscoverableState] = useState<boolean | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     import("@/lib/friends")
-      .then((f) => f.fetchMyProfileSections())
-      .then((s) => setSections(s))
-      .catch(() => setSections(null));
+      .then((f) => f.fetchMyVisibility())
+      .then(setVis)
+      .catch(() => setVis(null));
     import("@/lib/friends")
       .then((f) => f.fetchDiscoverable())
       .then(setDiscoverableState)
       .catch(() => {});
   }, []);
 
-  if (!sections) return null;
+  if (!vis) return null;
 
-  const OPTIONS = [
-    { key: "ranking", label: "Productivity ranking" },
-    { key: "hours", label: "Hours per day/week/month" },
-    { key: "lifts", label: "Lifts" },
-  ];
-
-  function toggle(key: string) {
-    const next = sections!.includes(key) ? sections!.filter((k) => k !== key) : [...sections!, key];
-    setSections(next);
+  function save(next: MyVisibility) {
+    setVis(next);
     import("@/lib/friends")
-      .then((f) => f.saveMyProfileSections(next as any))
+      .then((f) => f.saveMyVisibility(next))
       .then(() => setMsg("Saved."))
       .catch((e) => setMsg(String(e.message ?? e)));
   }
 
+  function toggle(which: "publicSections" | "friendSections", key: ProfileSection) {
+    const cur = vis![which];
+    const next = cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key];
+    save({ ...vis!, [which]: next });
+  }
+
   return (
     <div className="card mb-6 p-4">
-      <h2 className="mb-1 font-semibold">Your profile (what friends can see)</h2>
+      <h2 className="mb-1 font-semibold">Who can see your profile</h2>
       <p className="mb-3 text-sm text-muted">
-        Friends who share a track with you can open your profile. It only ever shows these sections — and your
-        per-track share rule still applies on top (hidden means hidden).
+        Your page lives at a link anyone can open — unless you make it private. Friends and everyone else get their
+        own list of what shows.
       </p>
-      <div className="flex flex-wrap gap-2">
-        {OPTIONS.map((o) => (
-          <button
-            key={o.key}
-            onClick={() => toggle(o.key)}
-            className={`rounded-full border px-3 py-1.5 text-sm ${sections.includes(o.key) ? "bg-accent-soft font-semibold text-accent" : "text-muted"}`}
-          >
-            {sections.includes(o.key) ? "✓ " : ""}{o.label}
-          </button>
-        ))}
+
+      <div className="mb-4 flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+        <button
+          onClick={() => save({ ...vis, isPublic: true })}
+          className={`flex-1 rounded-lg px-3 py-2 ${vis.isPublic ? "bg-surface font-semibold" : "text-muted"}`}
+        >
+          Public
+          <span className="block text-xs font-normal text-faint">Anyone signed in can open it</span>
+        </button>
+        <button
+          onClick={() => save({ ...vis, isPublic: false })}
+          className={`flex-1 rounded-lg px-3 py-2 ${!vis.isPublic ? "bg-surface font-semibold" : "text-muted"}`}
+        >
+          Private
+          <span className="block text-xs font-normal text-faint">Friends only</span>
+        </button>
       </div>
+
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-2 text-left text-xs text-muted">
+            <tr>
+              <th className="px-3 py-2">Section</th>
+              <th className="px-3 py-2 text-center">Everyone</th>
+              <th className="px-3 py-2 text-center">Friends</th>
+            </tr>
+          </thead>
+          <tbody>
+            {PROFILE_SECTIONS.map((o) => (
+              <tr key={o.key} className="border-b last:border-0">
+                <td className="px-3 py-2">
+                  <span className="font-medium">{o.label}</span>
+                  <span className="block text-xs text-faint">{o.hint}</span>
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={vis.isPublic && vis.publicSections.includes(o.key)}
+                    disabled={!vis.isPublic}
+                    onChange={() => toggle("publicSections", o.key)}
+                    className="h-4 w-4 disabled:opacity-30"
+                  />
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={vis.friendSections.includes(o.key)}
+                    onChange={() => toggle("friendSections", o.key)}
+                    className="h-4 w-4"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-faint">
+        What you wrote in each 15-minute slot is never shown by any of these — labels only ever go to someone you
+        explicitly set to &ldquo;raw labels&rdquo; on a shared track.
+      </p>
+
       {discoverable !== null && (
         <label className="mt-3 flex items-start gap-2 border-t pt-3 text-sm">
           <input
@@ -267,9 +322,8 @@ function ProfileVisibilitySection() {
             className="mt-0.5"
           />
           <span>
-            <b>Discoverable</b> — let people find you in friend search by name or @handle. On by default; turn it
-            off to go unlisted. Under-18 accounts never appear in search regardless of this setting; they can still
-            add friends themselves.
+            <b>Discoverable</b> — let people find you in search by name or @handle. On by default; turn it off to go
+            unlisted while keeping your profile link shareable.
           </span>
         </label>
       )}

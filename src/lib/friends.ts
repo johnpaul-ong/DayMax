@@ -197,16 +197,27 @@ export async function acceptInvite(token: string, guardianAcknowledged: boolean)
 
 // --- friend profiles -------------------------------------------------------
 
-export type ProfileSection = "ranking" | "hours" | "lifts";
-export const PROFILE_SECTIONS: Array<{ key: ProfileSection; label: string }> = [
-  { key: "ranking", label: "Productivity ranking" },
-  { key: "hours", label: "Hours per day/week/month" },
-  { key: "lifts", label: "Lifts" },
+export type ProfileSection = "ranking" | "hours" | "lifts" | "metrics" | "days";
+export const PROFILE_SECTIONS: Array<{ key: ProfileSection; label: string; hint: string }> = [
+  { key: "ranking", label: "Productivity ranking", hint: "WorkMax and focus score" },
+  { key: "hours", label: "Hours per day/week/month", hint: "Productive / brainrot / other totals" },
+  { key: "lifts", label: "Lifts", hint: "Exercises and weights over time" },
+  { key: "metrics", label: "How you felt", hint: "Emotional score, tiredness, friction" },
+  { key: "days", label: "Your days", hint: "The 15-minute grid and year heatmap — colours only, never your written labels" },
 ];
 
-export async function fetchMemberProfile(
-  userId: string
-): Promise<{ displayName: string; username: string | null; sections: ProfileSection[] }> {
+export type FriendStatus = "self" | "friends" | "pending_out" | "pending_in" | "none";
+
+export interface MemberProfile {
+  displayName: string;
+  username: string | null;
+  sections: ProfileSection[];
+  isPublic: boolean;
+  isSelf: boolean;
+  friendStatus: FriendStatus;
+}
+
+export async function fetchMemberProfile(userId: string): Promise<MemberProfile> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("member_profile", { member: userId });
   if (error) throw error;
@@ -214,7 +225,85 @@ export async function fetchMemberProfile(
   const sections: ProfileSection[] = Array.isArray(row?.sections)
     ? (row.sections as ProfileSection[])
     : ["ranking", "hours", "lifts"];
-  return { displayName: row?.display_name ?? "anonymous", username: row?.username ?? null, sections };
+  return {
+    displayName: row?.display_name ?? "anonymous",
+    username: row?.username ?? null,
+    sections,
+    isPublic: !!row?.is_public,
+    isSelf: !!row?.is_self,
+    friendStatus: (row?.friend_status ?? "none") as FriendStatus,
+  };
+}
+
+/** Day totals for a profile — gated on visibility, not on sharing a track. */
+export interface MemberDayTotal {
+  date: string;
+  productive: number;
+  brainrot: number;
+  social: number;
+  other: number;
+}
+
+export async function fetchMemberDayTotals(userId: string, from?: string, to?: string): Promise<MemberDayTotal[]> {
+  const params: Record<string, unknown> = { member: userId };
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await cachedRpcAll("member_day_totals", params);
+  return data.map((r: any) => ({
+    date: String(r.date),
+    productive: Number(r.productive),
+    brainrot: Number(r.brainrot),
+    social: Number(r.social ?? 0),
+    other: Number(r.other ?? 0),
+  }));
+}
+
+export async function fetchMemberLifts(userId: string): Promise<CompareLiftRow[]> {
+  const data = await cachedRpcAll("member_lifts", { member: userId });
+  return data.map((r: any) => ({
+    memberId: userId,
+    displayName: "",
+    date: String(r.date),
+    exercise: r.exercise,
+    weightKg: r.weight_kg,
+    reps: r.reps,
+  }));
+}
+
+// --- my own visibility settings ------------------------------------------------
+
+export interface MyVisibility {
+  isPublic: boolean;
+  friendSections: ProfileSection[];
+  publicSections: ProfileSection[];
+}
+
+export async function fetchMyVisibility(): Promise<MyVisibility> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("is_public, profile_sections, public_sections")
+    .eq("id", user_id)
+    .single();
+  if (error) throw error;
+  const fallback: ProfileSection[] = ["ranking", "hours", "lifts"];
+  return {
+    isPublic: data?.is_public ?? true,
+    friendSections: Array.isArray(data?.profile_sections) ? data.profile_sections : fallback,
+    publicSections: Array.isArray(data?.public_sections) ? data.public_sections : fallback,
+  };
+}
+
+export async function saveMyVisibility(v: Partial<MyVisibility>): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const row: Record<string, unknown> = {};
+  if (v.isPublic !== undefined) row.is_public = v.isPublic;
+  if (v.friendSections) row.profile_sections = v.friendSections;
+  if (v.publicSections) row.public_sections = v.publicSections;
+  const { error } = await supabase.from("profiles").update(row).eq("id", user_id);
+  if (error) throw error;
 }
 
 export async function fetchMyProfileSections(): Promise<ProfileSection[]> {
