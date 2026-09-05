@@ -47,8 +47,11 @@ function AppearanceSection() {
 
   return (
     <div className="card mb-6 p-4">
-      <h2 className="mb-1 font-semibold">Appearance</h2>
-      <p className="mb-3 text-sm text-muted">Saved on this device.</p>
+      <h2 className="mb-1 font-semibold">Appearance &amp; team</h2>
+      <p className="mb-3 text-sm text-muted">
+        Your theme is also your team — Light, Dark or Cottage. Every pursuit keeps score of the three, so switching
+        theme switches sides. Follows your account across devices.
+      </p>
       <div className="mb-3 flex gap-2">
         {THEMES.map((t) => (
           <button

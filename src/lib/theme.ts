@@ -2,11 +2,11 @@
 
 /** Theme + accent persistence. Stored locally per device. */
 
-export type ThemeName = "light" | "dark" | "ghibli";
+export type ThemeName = "light" | "dark" | "cottage";
 export const THEMES: Array<{ name: ThemeName; label: string; icon: string }> = [
   { name: "light", label: "Light", icon: "☀️" },
   { name: "dark", label: "Dark", icon: "🌙" },
-  { name: "ghibli", label: "Ghibli", icon: "🍃" },
+  { name: "cottage", label: "Cottage", icon: "🍃" },
 ];
 
 export function applyTheme(theme: ThemeName, accent?: string | null) {
@@ -25,7 +25,7 @@ export function loadTheme(): { theme: ThemeName; accent: string | null } {
   try {
     const theme = (localStorage.getItem("daymax-theme") as ThemeName) || "light";
     const accent = localStorage.getItem("daymax-accent");
-    return { theme: ["light", "dark", "ghibli"].includes(theme) ? theme : "light", accent };
+    return { theme: ["light", "dark", "cottage"].includes(theme) ? theme : "light", accent };
   } catch {
     return { theme: "light", accent: null };
   }

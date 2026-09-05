@@ -208,8 +208,11 @@ export default function WelcomePage() {
 
         {step === 2 && (
           <>
-            <h2 className="font-semibold">Pick a look</h2>
-            <p className="-mt-2 text-sm text-muted">Changes as you tap. Follows your account across devices.</p>
+            <h2 className="font-semibold">Pick your team</h2>
+            <p className="-mt-2 text-sm text-muted">
+              Your theme is your team. Every pursuit keeps score of Light vs Dark vs Cottage, so this is the only
+              tribal decision you have to make. Changes as you tap.
+            </p>
 
             <div className="grid grid-cols-3 gap-2">
               {THEMES.map((t) => (
@@ -225,6 +228,7 @@ export default function WelcomePage() {
                 </button>
               ))}
             </div>
+            <p className="-mt-1 text-xs text-faint">You can switch sides later in Settings.</p>
 
             <div>
               <span className="text-xs font-medium uppercase tracking-wider text-faint">Accent</span>

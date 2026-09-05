@@ -13,7 +13,8 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchLeaderboard, type LeaderboardRow } from "@/lib/friends";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { DEFAULT_BUCKET_COLORS, loadBucketColors, loadTheme, type BucketColors } from "@/lib/theme";
+import { fetchTeamTotals, teamMeta, type TeamTotal } from "@/lib/teams";
 import { localToday } from "@/lib/dates";
 
 type Scope = "avengers" | "friends" | "everyone";
@@ -76,6 +77,53 @@ function Board({
           ))}
         </ol>
       )}
+    </div>
+  );
+}
+
+/** Light vs Dark vs Cottage, across everyone — WorkMax averaged per member. */
+function TeamBoard() {
+  const [rows, setRows] = useState<TeamTotal[]>([]);
+  const [mine, setMine] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchTeamTotals().then(setRows).catch(() => {});
+    setMine(loadTheme().theme);
+  }, []);
+
+  if (rows.length === 0) return null;
+  const max = Math.max(...rows.map((r) => r.workMax), 1);
+
+  return (
+    <div className="mb-4 card p-4">
+      <h2 className="font-semibold">Teams</h2>
+      <p className="mb-3 text-xs text-muted">
+        WorkMax averaged per member, so size doesn&apos;t win it. Your team is your theme.
+      </p>
+      <div className="space-y-2.5">
+        {rows.map((r, i) => {
+          const t = teamMeta(r.team);
+          return (
+            <div key={r.team} className="flex items-center gap-3">
+              <span className="w-4 text-center text-xs font-bold text-faint">{i + 1}</span>
+              <span className="text-lg">{t.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {t.label}
+                  {r.team === mine && <span className="ml-1.5 text-xs text-accent">you</span>}
+                  <span className="ml-1.5 text-xs font-normal text-faint">
+                    {r.members} · {r.productive.toLocaleString()}h productive
+                  </span>
+                </p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div className="h-full rounded-full" style={{ width: `${(r.workMax / max) * 100}%`, background: t.color }} />
+                </div>
+              </div>
+              <span className="tabular-nums font-bold">{r.workMax}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -187,6 +235,8 @@ export default function ArenaPage() {
       {scope === "friends" && scoped.length <= 1 && (
         <p className="mb-3 text-sm text-faint">No human friends sharing data yet — invite some from the Friends tab. For now it&apos;s you against the legends.</p>
       )}
+
+      <TeamBoard />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Board

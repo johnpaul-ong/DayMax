@@ -60,6 +60,8 @@ import {
 } from "@/lib/pursuits";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { localToday } from "@/lib/dates";
+import { fetchPursuitTeams, teamMeta, type Team, type TeamStanding } from "@/lib/teams";
+import { loadTheme } from "@/lib/theme";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -252,6 +254,8 @@ export default function PursuitPage() {
         account). Other Life-kind pursuits — like the Avengers one — do, and
         the server returns an empty list for the one that shouldn't.
       */}
+      <TeamStandings pursuitId={id} />
+
       <MembersSection members={members} total={pursuit.memberCount} />
 
       {pursuit.kind === "life" && <LifeCommunity pursuitId={id} memberCount={pursuit.memberCount} />}
@@ -298,6 +302,59 @@ export default function PursuitPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Light vs Dark vs Cottage, for this pursuit. Ranked on a PER-MEMBER average
+ * so the biggest team doesn't win automatically — a team of three can beat a
+ * team of thirty by being better, which is the only way this stays interesting.
+ */
+function TeamStandings({ pursuitId }: { pursuitId: string }) {
+  const [rows, setRows] = useState<TeamStanding[]>([]);
+  const [mine, setMine] = useState<Team | null>(null);
+
+  useEffect(() => {
+    fetchPursuitTeams(pursuitId).then(setRows).catch(() => {});
+    setMine(loadTheme().theme);
+  }, [pursuitId]);
+
+  if (rows.length === 0) return null;
+  const max = Math.max(...rows.map((r) => r.score), 1);
+
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">Team standings</h2>
+      <p className="mb-2 text-sm text-muted">
+        Averaged per member, so a bigger team doesn&apos;t win by turning up. Your team is whichever theme you
+        picked — change it in Settings and you switch sides.
+      </p>
+      <div className="card divide-y">
+        {rows.map((r, i) => {
+          const t = teamMeta(r.team);
+          return (
+            <div key={r.team} className="flex items-center gap-3 px-4 py-3">
+              <span className="w-5 text-center font-bold text-faint">{i + 1}</span>
+              <span className="text-xl">{t.icon}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">
+                  {t.label}
+                  {r.team === mine && <span className="ml-1.5 text-xs font-normal text-accent">your team</span>}
+                  <span className="ml-1.5 text-xs font-normal text-faint">
+                    {r.members} member{r.members === 1 ? "" : "s"}
+                  </span>
+                </p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div className="h-full rounded-full" style={{ width: `${(r.score / max) * 100}%`, background: t.color }} />
+                </div>
+                <p className="mt-0.5 text-xs text-faint">{r.detail}</p>
+              </div>
+              <span className="tabular-nums text-lg font-bold">{r.score}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
