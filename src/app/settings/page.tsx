@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { CATEGORIES, type Bucket } from "@/lib/categories";
+import { loadHiddenTabs, NAV_TABS, saveHiddenTabs } from "../nav-links";
 import { fetchBucketSettings, fetchProfile, saveBucketSettings, updateProfile } from "@/lib/data";
 import { COUNTRIES, lifeStats } from "@/lib/life";
 import {
@@ -121,6 +122,39 @@ function BucketColorRows() {
   );
 }
 
+function NavigationSection() {
+  const [hidden, setHidden] = useState<string[] | null>(null);
+  useEffect(() => setHidden(loadHiddenTabs()), []);
+  if (hidden === null) return null;
+
+  function toggle(href: string) {
+    const next = hidden!.includes(href) ? hidden!.filter((h) => h !== href) : [...hidden!, href];
+    setHidden(next);
+    saveHiddenTabs(next);
+  }
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Navigation</h2>
+      <p className="mb-3 text-sm text-muted">
+        Not a lifter? Hide the whole tab. DayMax is your app — show only what you track. (Saved on this device;
+        Settings can&apos;t be hidden, for obvious reasons.)
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {NAV_TABS.filter((t) => t.href !== "/settings").map((t) => (
+          <button
+            key={t.href}
+            onClick={() => toggle(t.href)}
+            className={`rounded-full border px-3 py-1.5 text-sm ${!hidden.includes(t.href) ? "bg-accent-soft font-semibold text-accent" : "text-muted line-through"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LabelRenameSection() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -168,6 +202,7 @@ function LabelRenameSection() {
 
 function ProfileVisibilitySection() {
   const [sections, setSections] = useState<string[] | null>(null);
+  const [discoverable, setDiscoverableState] = useState<boolean | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,6 +210,10 @@ function ProfileVisibilitySection() {
       .then((f) => f.fetchMyProfileSections())
       .then((s) => setSections(s))
       .catch(() => setSections(null));
+    import("@/lib/friends")
+      .then((f) => f.fetchDiscoverable())
+      .then(setDiscoverableState)
+      .catch(() => {});
   }, []);
 
   if (!sections) return null;
@@ -212,6 +251,26 @@ function ProfileVisibilitySection() {
           </button>
         ))}
       </div>
+      {discoverable !== null && (
+        <label className="mt-3 flex items-start gap-2 border-t pt-3 text-sm">
+          <input
+            type="checkbox"
+            checked={discoverable}
+            onChange={(e) => {
+              setDiscoverableState(e.target.checked);
+              import("@/lib/friends")
+                .then((f) => f.setDiscoverable(e.target.checked))
+                .then(() => setMsg("Saved."))
+                .catch((ex) => setMsg(String(ex.message ?? ex)));
+            }}
+            className="mt-0.5"
+          />
+          <span>
+            <b>Discoverable</b> — let people find you in friend search. Off by default. Under-18 accounts never
+            appear in search regardless of this setting; they can still add friends themselves.
+          </span>
+        </label>
+      )}
       {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
     </div>
   );
@@ -324,6 +383,7 @@ export default function SettingsPage() {
       <ProfileSection />
       <ProfileVisibilitySection />
       <AppearanceSection />
+      <NavigationSection />
       <LabelRenameSection />
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
       <p className="mb-3 text-sm text-muted">

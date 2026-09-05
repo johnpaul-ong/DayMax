@@ -10,6 +10,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
+  acceptFriendRequest,
+  addTrackMember,
   createInvite,
   createTrack,
   deleteInvite,
@@ -19,10 +21,16 @@ import {
   fetchInvites,
   fetchMembers,
   fetchTracks,
+  listFriends,
+  removeFriendship,
   removeMember,
+  searchProfiles,
+  sendFriendRequest,
   setMyShareRule,
   type CompareDayRow,
   type CompareLiftRow,
+  type FoundProfile,
+  type Friendship,
   type Invite,
   type ShareRule,
   type Track,
@@ -41,6 +49,129 @@ const RULE_INFO: Record<ShareRule, string> = {
   totals_only: "Friends see your bucket totals and focus score, never labels.",
   raw_labels: "Friends can also open your day detail with labels. Most people should not pick this.",
 };
+
+/** People: search for friends, handle requests, manage your friend list. */
+function PeopleSection() {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<FoundProfile[]>([]);
+  const [friends, setFriends] = useState<Friendship[]>([]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  function reload() {
+    listFriends().then(setFriends).catch(() => {});
+  }
+  useEffect(reload, []);
+
+  const friendIds = useMemo(() => new Set(friends.map((f) => f.memberId)), [friends]);
+  const incoming = friends.filter((f) => f.status === "pending" && f.direction === "incoming");
+  const outgoing = friends.filter((f) => f.status === "pending" && f.direction === "outgoing");
+  const accepted = friends.filter((f) => f.status === "accepted");
+
+  async function search() {
+    if (!q.trim()) return;
+    setSearching(true);
+    setMsg(null);
+    try {
+      const r = await searchProfiles(q.trim());
+      setResults(r);
+      if (r.length === 0) setMsg("Nobody found — they may not have discovery turned on (Settings), or use an invite link instead.");
+    } catch (e: any) {
+      setMsg(String(e.message ?? e).includes("does not exist") ? "Friend search needs migration 0012 — run it in the Supabase SQL Editor." : String(e.message ?? e));
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  return (
+    <div className="mb-6 card p-4">
+      <h2 className="mb-1 font-semibold">People</h2>
+      <p className="mb-3 text-sm text-muted">
+        Search by name or username. Only people who turned on discovery show up — under-18s never do; they add you instead.
+      </p>
+      <div className="mb-3 flex gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void search()}
+          placeholder="Search people…"
+          className="flex-1 rounded-lg border bg-surface px-3 py-2 text-sm"
+        />
+        <button onClick={() => void search()} disabled={searching || !q.trim()} className="btn-primary">
+          {searching ? "…" : "Search"}
+        </button>
+      </div>
+      {msg && <p className="mb-2 text-sm text-muted">{msg}</p>}
+      {results.map((r) => (
+        <div key={r.memberId} className="flex items-center gap-2 py-1 text-sm">
+          <span className="font-medium">{r.displayName}</span>
+          <span className="text-xs text-faint">@{r.username}</span>
+          {friendIds.has(r.memberId) ? (
+            <span className="ml-auto text-xs text-faint">already connected</span>
+          ) : (
+            <button
+              onClick={() =>
+                void sendFriendRequest(r.memberId)
+                  .then(() => {
+                    setResults((rs) => rs.filter((x) => x.memberId !== r.memberId));
+                    reload();
+                  })
+                  .catch((e) => setMsg(String(e.message ?? e)))
+              }
+              className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast"
+            >
+              Add friend
+            </button>
+          )}
+        </div>
+      ))}
+
+      {incoming.length > 0 && (
+        <div className="mt-3 border-t pt-2">
+          <h3 className="mb-1 text-sm font-semibold">Requests for you</h3>
+          {incoming.map((f) => (
+            <div key={f.friendshipId} className="flex items-center gap-2 py-1 text-sm">
+              <span className="font-medium">{f.displayName}</span>
+              <span className="text-xs text-faint">@{f.username}</span>
+              <button onClick={() => void acceptFriendRequest(f.friendshipId).then(reload)} className="ml-auto rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-contrast">
+                Accept
+              </button>
+              <button onClick={() => void removeFriendship(f.friendshipId).then(reload)} className="rounded-lg border px-3 py-1 text-xs">
+                Decline
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(accepted.length > 0 || outgoing.length > 0) && (
+        <div className="mt-3 border-t pt-2">
+          <h3 className="mb-1 text-sm font-semibold">Your friends</h3>
+          {accepted.map((f) => (
+            <div key={f.friendshipId} className="flex items-center gap-2 py-1 text-sm">
+              <Link href={`/friends/${f.memberId}`} className="font-medium hover:text-accent hover:underline">
+                {f.displayName}
+              </Link>
+              <span className="text-xs text-faint">@{f.username}</span>
+              <button onClick={() => void removeFriendship(f.friendshipId).then(reload)} className="ml-auto text-xs text-danger hover:opacity-70">
+                remove
+              </button>
+            </div>
+          ))}
+          {outgoing.map((f) => (
+            <div key={f.friendshipId} className="flex items-center gap-2 py-1 text-sm opacity-60">
+              <span className="font-medium">{f.displayName}</span>
+              <span className="text-xs text-faint">@{f.username} · request sent</span>
+              <button onClick={() => void removeFriendship(f.friendshipId).then(reload)} className="ml-auto text-xs text-danger hover:opacity-70">
+                cancel
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** One-click friend adding: makes sure you own a track, mints a link, copies it. */
 function AddFriendCard({ tracks, me, onChanged }: { tracks: Track[]; me: string | null; onChanged: () => void }) {
@@ -150,6 +281,8 @@ export default function FriendsPage() {
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
+      <PeopleSection />
+
       <AddFriendCard tracks={tracks} me={me} onChanged={reload} />
 
       <div className="mb-6 card flex flex-wrap items-end gap-2 p-4">
@@ -204,6 +337,7 @@ export default function FriendsPage() {
 function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDeleted: () => void }) {
   const [members, setMembers] = useState<TrackMember[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
+  const [friends, setFriends] = useState<Friendship[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -211,9 +345,14 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
 
   function reload() {
     fetchMembers(track.id).then(setMembers).catch((e) => setErr(String(e.message ?? e)));
-    if (isOwner) fetchInvites(track.id).then(setInvites).catch(() => {});
+    if (isOwner) {
+      fetchInvites(track.id).then(setInvites).catch(() => {});
+      listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
+    }
   }
   useEffect(reload, [track.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addableFriends = friends.filter((f) => !members.some((m) => m.userId === f.memberId));
 
   const myRule = members.find((m) => m.userId === me)?.shareRule ?? "totals_only";
 
@@ -254,6 +393,21 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
           </div>
         ))}
         <p className="mt-1 text-xs text-faint">Your rule: {RULE_INFO[myRule]}</p>
+        {isOwner && addableFriends.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-xs text-muted">Add a friend to this track:</span>
+            {addableFriends.map((f) => (
+              <button
+                key={f.memberId}
+                onClick={() => void addTrackMember(track.id, f.memberId).then(reload).catch((e) => setErr(String(e.message ?? e)))}
+                className="rounded-full border px-3 py-1 text-xs hover:bg-surface-2"
+              >
+                + {f.displayName}
+              </button>
+            ))}
+            <span className="w-full text-xs text-faint">They join as hidden and choose their own sharing — nobody shares data because you clicked a button.</span>
+          </div>
+        )}
       </div>
 
       {isOwner && (
@@ -339,7 +493,8 @@ function DayCompare({ trackId }: { trackId: string }) {
     const agg = (list: CompareDayRow[]) => {
       const p = list.reduce((s, r) => s + r.productive, 0);
       const b = list.reduce((s, r) => s + r.brainrot, 0);
-      return { p, b, score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null };
+      const o = list.reduce((s, r) => s + r.other, 0);
+      return { p, b, o, score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null };
     };
     return [...byMember.entries()]
       .map(([id, m]) => ({
@@ -390,7 +545,7 @@ function DayCompare({ trackId }: { trackId: string }) {
                   <td key={j} className="whitespace-nowrap px-3 py-1.5 tabular-nums">
                     <span className="font-semibold">{a.score ?? "—"}</span>
                     <span className="ml-1 text-xs text-faint">
-                      (<span style={{ color: colors.productive }}>{a.p.toFixed(1)}h</span>/<span style={{ color: colors.brainrot }}>{a.b.toFixed(1)}h</span>)
+                      (<span style={{ color: colors.productive }}>{a.p.toFixed(1)}</span>/<span style={{ color: colors.brainrot }}>{a.b.toFixed(1)}</span>/<span className="text-muted">{a.o.toFixed(1)}</span>h)
                     </span>
                   </td>
                 ))}

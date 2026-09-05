@@ -248,6 +248,7 @@ export interface LeaderboardRow {
   productive: number;
   brainrot: number;
   social: number;
+  other: number;
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
@@ -260,6 +261,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     productive: Number(r.productive),
     brainrot: Number(r.brainrot),
     social: Number(r.social ?? 0),
+    other: Number(r.other ?? 0),
   }));
 }
 
@@ -333,4 +335,82 @@ export async function fetchLeaderboardLifts(): Promise<LeaderboardLiftRow[]> {
     exercise: r.exercise,
     weightKg: Number(r.weight_kg),
   }));
+}
+
+// --- friend search & requests -------------------------------------------------
+
+export interface FoundProfile {
+  memberId: string;
+  displayName: string;
+  username: string;
+}
+
+export async function searchProfiles(q: string): Promise<FoundProfile[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("search_profiles", { q });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ memberId: r.member_id, displayName: r.display_name, username: r.username }));
+}
+
+export interface Friendship {
+  friendshipId: number;
+  memberId: string;
+  displayName: string;
+  username: string;
+  status: "pending" | "accepted";
+  direction: "incoming" | "outgoing";
+}
+
+export async function listFriends(): Promise<Friendship[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("list_friends");
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    friendshipId: r.friendship_id,
+    memberId: r.member_id,
+    displayName: r.display_name,
+    username: r.username,
+    status: r.status,
+    direction: r.direction,
+  }));
+}
+
+export async function sendFriendRequest(memberId: string): Promise<void> {
+  const supabase = createClient();
+  const requester = await uid();
+  const { error } = await supabase.from("friendships").insert({ requester, addressee: memberId });
+  if (error) throw error;
+}
+
+export async function acceptFriendRequest(friendshipId: number): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("friendships").update({ status: "accepted" }).eq("id", friendshipId);
+  if (error) throw error;
+}
+
+export async function removeFriendship(friendshipId: number): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("friendships").delete().eq("id", friendshipId);
+  if (error) throw error;
+}
+
+export async function addTrackMember(trackId: string, memberId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("add_track_member", { t: trackId, member: memberId });
+  if (error) throw error;
+}
+
+export async function fetchDiscoverable(): Promise<boolean> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase.from("profiles").select("discoverable").eq("id", user_id).single();
+  if (error) throw error;
+  return !!data?.discoverable;
+}
+
+export async function setDiscoverable(v: boolean): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase.from("profiles").update({ discoverable: v }).eq("id", user_id);
+  if (error) throw error;
 }

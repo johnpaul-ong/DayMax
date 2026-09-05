@@ -118,13 +118,14 @@ export default function ArenaComparePage() {
 
   // week/month: hours per person from leaderboard totals (works for everyone)
   const periodBars = useMemo(() => {
-    const byId = new Map<string, { name: string; productive: number; brainrot: number; social: number }>();
+    const byId = new Map<string, { name: string; productive: number; brainrot: number; social: number; other: number }>();
     for (const r of board) {
       if (r.date < from || r.date > to) continue;
-      const cur = byId.get(r.memberId) ?? { name: r.displayName, productive: 0, brainrot: 0, social: 0 };
+      const cur = byId.get(r.memberId) ?? { name: r.displayName, productive: 0, brainrot: 0, social: 0, other: 0 };
       cur.productive += r.productive;
       cur.brainrot += r.brainrot;
       cur.social += r.social;
+      cur.other += r.other;
       byId.set(r.memberId, cur);
     }
     return Array.from(byId.values()).sort((a, b) => b.productive - a.productive);
@@ -244,6 +245,7 @@ export default function ArenaComparePage() {
                   <Legend />
                   <Bar dataKey="productive" fill={colors.productive} />
                   <Bar dataKey="brainrot" fill={colors.brainrot} />
+                  <Bar dataKey="other" fill={colors.other} />
                   <Bar dataKey="social" fill="#f59e0b" />
                 </BarChart>
               </ResponsiveContainer>
