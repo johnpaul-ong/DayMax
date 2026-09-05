@@ -1,15 +1,29 @@
 "use client";
 
 /**
- * One pursuit: its stats (each with your chart, everyone's leaderboard,
- * daily-target streaks), logging with notes (notes stay private), members,
- * owner tools (add stats, add friends, public toggle, delete).
+ * A pursuit's home: what it is (owner-editable), who's leading, what stats
+ * are recorded, and a chart per stat — the owner picks each chart's style
+ * (line / bar / pie) and can hide graphs. Notes stay private to their author.
  */
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { listFriends, type Friendship } from "@/lib/friends";
 import {
   addPursuitMember,
@@ -24,6 +38,8 @@ import {
   logEntry,
   setPursuitPublic,
   setShowOnProfile,
+  updatePursuitDescription,
+  updateStat,
   type MyEntry,
   type Pursuit,
   type PursuitStat,
@@ -37,11 +53,18 @@ const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 export default function PursuitPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const ws = weekStart(todayISO);
   const [pursuit, setPursuit] = useState<Pursuit | null>(null);
   const [stats, setStats] = useState<PursuitStat[]>([]);
   const [friends, setFriends] = useState<Friendship[]>([]);
+  const [firstStatData, setFirstStatData] = useState<StatEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // description editing
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [desc, setDesc] = useState("");
 
   // add-stat form
   const [sName, setSName] = useState("");
@@ -52,26 +75,91 @@ export default function PursuitPage() {
 
   function reload() {
     fetchDirectory()
-      .then((ds) => setPursuit(ds.find((d) => d.id === id) ?? null))
+      .then((ds) => {
+        const p = ds.find((d) => d.id === id) ?? null;
+        setPursuit(p);
+        if (p) setDesc(p.description);
+      })
       .catch((e) => setError(String(e.message ?? e)));
-    fetchStats(id).then(setStats).catch(() => {});
+    fetchStats(id)
+      .then((ss) => {
+        setStats(ss);
+        const first = ss.find((s) => !s.hidden && s.cadence === "daily") ?? ss.find((s) => !s.hidden);
+        if (first) fetchStatData(first.id).then(setFirstStatData).catch(() => {});
+      })
+      .catch(() => {});
     listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // top people: this-week totals on the pursuit's first visible stat
+  const topPeople = useMemo(() => {
+    const byMember = new Map<string, { name: string; week: number }>();
+    for (const e of firstStatData) {
+      if (e.date < ws || e.date > todayISO) continue;
+      const cur = byMember.get(e.memberId) ?? { name: e.displayName, week: 0 };
+      cur.week += e.value;
+      byMember.set(e.memberId, cur);
+    }
+    return [...byMember.values()].sort((a, b) => b.week - a.week).slice(0, 3);
+  }, [firstStatData, ws, todayISO]);
+
   if (error) return <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>;
   if (!pursuit) return <p className="text-sm text-muted">Loading pursuit…</p>;
 
+  const visibleStats = stats.filter((s) => !s.hidden || pursuit.isOwner);
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <div>
+      <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{pursuit.name}</h1>
           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">{pursuit.isPublic ? "public" : "invite-only"}</span>
           <span className="text-sm text-faint">{pursuit.memberCount} member{pursuit.memberCount === 1 ? "" : "s"} · by {pursuit.ownerName}{pursuit.isOwner && " (you)"}</span>
         </div>
-        <p className="mt-1 text-sm text-muted">{pursuit.description}</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-sm">
+
+        {editingDesc ? (
+          <div className="mt-2">
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} className="w-full rounded-lg border bg-surface px-2 py-1.5 text-sm" />
+            <div className="mt-1 flex gap-2">
+              <button
+                onClick={() => void updatePursuitDescription(id, desc.trim()).then(() => { setEditingDesc(false); reload(); }).catch((e) => setMsg(String(e.message ?? e)))}
+                className="btn-primary py-1"
+              >
+                Save
+              </button>
+              <button onClick={() => setEditingDesc(false)} className="btn-ghost py-1">Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-muted">
+            {pursuit.description || "No description yet."}
+            {pursuit.isOwner && (
+              <button onClick={() => setEditingDesc(true)} className="ml-2 text-xs font-medium text-accent hover:underline">edit</button>
+            )}
+          </p>
+        )}
+
+        {topPeople.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Top this week</p>
+            <div className="flex flex-wrap gap-2">
+              {topPeople.map((t, i) => (
+                <span key={t.name} className="rounded-full border bg-surface px-3 py-1 text-sm">
+                  <span className="font-semibold text-faint">{i + 1}</span> {t.name} <span className="text-xs text-muted">{Math.round(t.week).toLocaleString()}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {stats.length > 0 && (
+          <p className="mt-3 text-xs text-faint">
+            Recording: {stats.filter((s) => !s.hidden).map((s) => s.name).join(" · ") || "nothing visible yet"}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2 text-sm">
           {pursuit.isMember && !pursuit.isOwner && (
             <button onClick={() => void leavePursuit(id).then(() => (location.href = "/pursuits"))} className="btn-ghost py-1">Leave</button>
           )}
@@ -83,16 +171,12 @@ export default function PursuitPage() {
           )}
           {pursuit.isOwner && (
             <>
-              <button
-                onClick={() => void setPursuitPublic(id, !pursuit.isPublic).then(reload).catch((e) => setMsg(String(e.message ?? e)))}
-                className="btn-ghost py-1"
-              >
+              <button onClick={() => void setPursuitPublic(id, !pursuit.isPublic).then(reload).catch((e) => setMsg(String(e.message ?? e)))} className="btn-ghost py-1">
                 Make {pursuit.isPublic ? "invite-only" : "public"}
               </button>
               <button
                 onClick={() => {
-                  if (confirm(`Delete "${pursuit.name}" and all its stats for everyone?`))
-                    void deletePursuit(id).then(() => (location.href = "/pursuits"));
+                  if (confirm(`Delete "${pursuit.name}" and all its stats for everyone?`)) void deletePursuit(id).then(() => (location.href = "/pursuits"));
                 }}
                 className="rounded-xl border px-4 py-1 text-sm text-danger"
               >
@@ -114,10 +198,10 @@ export default function PursuitPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
-      {stats.map((s) => (
-        <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onDeleted={reload} />
+      {visibleStats.map((s) => (
+        <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={reload} />
       ))}
-      {stats.length === 0 && (
+      {visibleStats.length === 0 && (
         <p className="card p-4 text-sm text-faint">
           No stats yet. {pursuit.isOwner ? "Add the first one below — e.g. “Games played” (daily) or “Blitz rating” (whenever)." : "The owner hasn't added any yet."}
         </p>
@@ -143,10 +227,7 @@ export default function PursuitPage() {
                 if (!sName.trim()) return;
                 const t = sTarget.trim() === "" ? null : Number(sTarget);
                 void createStat(id, { name: sName.trim(), unit: sUnit.trim(), direction: sDir, cadence: sCadence, target: Number.isFinite(t as number) ? t : null })
-                  .then(() => {
-                    setSName(""); setSUnit(""); setSTarget("");
-                    reload();
-                  })
+                  .then(() => { setSName(""); setSUnit(""); setSTarget(""); reload(); })
                   .catch((e) => setMsg(String(e.message ?? e)));
               }}
               disabled={!sName.trim()}
@@ -161,7 +242,7 @@ export default function PursuitPage() {
   );
 }
 
-function StatSection({ stat, isOwner, isMember, onDeleted }: { stat: PursuitStat; isOwner: boolean; isMember: boolean; onDeleted: () => void }) {
+function StatSection({ stat, isOwner, isMember, onChanged }: { stat: PursuitStat; isOwner: boolean; isMember: boolean; onChanged: () => void }) {
   const todayISO = new Date().toISOString().slice(0, 10);
   const ws = weekStart(todayISO);
   const [all, setAll] = useState<StatEntry[]>([]);
@@ -178,7 +259,7 @@ function StatSection({ stat, isOwner, isMember, onDeleted }: { stat: PursuitStat
   }
   useEffect(reload, [stat.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const chart = useMemo(() => {
+  const lineData = useMemo(() => {
     const byDate = new Map<string, Record<string, string | number | null>>();
     const names = new Set<string>();
     for (const e of all) {
@@ -189,43 +270,57 @@ function StatSection({ stat, isOwner, isMember, onDeleted }: { stat: PursuitStat
     return { data: [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1)), names: [...names].sort() };
   }, [all]);
 
-  const board = useMemo(() => {
+  const perMember = useMemo(() => {
     const byMember = new Map<string, { name: string; rows: StatEntry[] }>();
     for (const e of all) {
       if (!byMember.has(e.memberId)) byMember.set(e.memberId, { name: e.displayName, rows: [] });
       byMember.get(e.memberId)!.rows.push(e);
     }
-    const better = (a: number, b: number) => (stat.direction === "more" ? b - a : a - b);
-    return [...byMember.values()]
-      .map((m) => {
-        const vals = m.rows.map((r) => r.value);
-        const week = m.rows.filter((r) => r.date >= ws && r.date <= todayISO).reduce((s, r) => s + r.value, 0);
-        return {
-          name: m.name,
-          today: m.rows.find((r) => r.date === todayISO)?.value ?? null,
-          week,
-          total: vals.reduce((s, v) => s + v, 0),
-          best: stat.direction === "more" ? Math.max(...vals) : Math.min(...vals),
-          latest: m.rows.sort((a, b) => (a.date < b.date ? -1 : 1))[m.rows.length - 1]?.value ?? null,
-        };
-      })
-      .sort((a, b) => (stat.cadence === "daily" ? b.week - a.week : better(a.latest ?? -Infinity, b.latest ?? -Infinity)));
-  }, [all, stat, todayISO, ws]);
+    return [...byMember.values()].map((m) => {
+      const vals = m.rows.map((r) => r.value);
+      const week = m.rows.filter((r) => r.date >= ws && r.date <= todayISO).reduce((s, r) => s + r.value, 0);
+      const sorted = [...m.rows].sort((a, b) => (a.date < b.date ? -1 : 1));
+      return {
+        name: m.name,
+        today: m.rows.find((r) => r.date === todayISO)?.value ?? null,
+        week,
+        total: vals.reduce((s, v) => s + v, 0),
+        best: stat.direction === "more" ? Math.max(...vals) : Math.min(...vals),
+        latest: sorted[sorted.length - 1]?.value ?? null,
+      };
+    });
+  }, [all, stat.direction, todayISO, ws]);
+
+  const board = useMemo(
+    () =>
+      [...perMember].sort((a, b) =>
+        stat.cadence === "daily" ? b.week - a.week : stat.direction === "more" ? (b.latest ?? -Infinity) - (a.latest ?? -Infinity) : (a.latest ?? Infinity) - (b.latest ?? Infinity)
+      ),
+    [perMember, stat]
+  );
 
   const notes = mine.filter((m) => m.note).slice(0, 8);
 
   return (
-    <section className="card p-4">
+    <section className={`card p-4 ${stat.hidden ? "opacity-60" : ""}`}>
       <div className="mb-2 flex flex-wrap items-baseline gap-2">
-        <h2 className="font-semibold">{stat.name}</h2>
+        <h2 className="font-semibold">{stat.name} {stat.hidden && <span className="text-xs font-normal text-warn">(hidden — only you see this)</span>}</h2>
         <span className="text-xs text-faint">
           {stat.unit && `${stat.unit} · `}{stat.cadence === "daily" ? "daily" : "log whenever"} · {stat.direction === "more" ? "more is better" : "less is better"}
           {stat.target != null && ` · target ${stat.target}`}
         </span>
         {isOwner && (
-          <button onClick={() => void deleteStat(stat.id).then(onDeleted)} className="ml-auto text-xs text-danger hover:opacity-70">
-            remove stat
-          </button>
+          <span className="ml-auto inline-flex items-center gap-2 text-xs">
+            <select value={stat.chart} onChange={(e) => void updateStat(stat.id, { chart: e.target.value as any }).then(onChanged)} className="rounded-lg border bg-surface px-1.5 py-0.5">
+              <option value="line">line</option>
+              <option value="bar">bar</option>
+              <option value="pie">pie</option>
+            </select>
+            <button onClick={() => void updateStat(stat.id, { hidden: !stat.hidden }).then(onChanged)} className="text-accent hover:underline">
+              {stat.hidden ? "show" : "hide"}
+            </button>
+            <button onClick={() => void deleteStat(stat.id).then(onChanged)} className="text-danger hover:opacity-70">remove</button>
+          </span>
         )}
       </div>
 
@@ -233,18 +328,13 @@ function StatSection({ stat, isOwner, isMember, onDeleted }: { stat: PursuitStat
         <div className="mb-3 flex flex-wrap items-end gap-2">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border bg-surface px-2 py-2 text-sm" />
           <input type="number" step="any" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder={stat.unit || "value"} className="w-28 rounded-lg border bg-surface px-2 py-2 text-sm" />
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (private) — e.g. what the words were about" className="min-w-56 flex-1 rounded-lg border bg-surface px-2 py-2 text-sm" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (private)" className="min-w-56 flex-1 rounded-lg border bg-surface px-2 py-2 text-sm" />
           <button
             onClick={() => {
               const v = Number(value);
               if (!Number.isFinite(v)) return;
               void logEntry(stat.id, date, v, note.trim() || null)
-                .then(() => {
-                  setValue(""); setNote("");
-                  setSaved(true);
-                  setTimeout(() => setSaved(false), 2000);
-                  reload();
-                })
+                .then(() => { setValue(""); setNote(""); setSaved(true); setTimeout(() => setSaved(false), 2000); reload(); })
                 .catch((e) => setErr(String(e.message ?? e)));
             }}
             disabled={value.trim() === ""}
@@ -257,20 +347,46 @@ function StatSection({ stat, isOwner, isMember, onDeleted }: { stat: PursuitStat
       )}
       {err && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{err}</p>}
 
-      {chart.data.length > 0 && (
+      {all.length > 0 && (
         <div className="mb-3 h-52">
           <ResponsiveContainer>
-            <LineChart data={chart.data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-              <YAxis tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
-              <Tooltip labelFormatter={(d) => String(d)} />
-              {chart.names.length > 1 && <Legend />}
-              {stat.target != null && <ReferenceLine y={stat.target} strokeDasharray="6 3" stroke="var(--accent)" label={{ value: `target ${stat.target}`, fontSize: 10 }} />}
-              {chart.names.map((n, i) => (
-                <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
-              ))}
-            </LineChart>
+            {stat.chart === "pie" ? (
+              <PieChart>
+                <Pie
+                  data={perMember.map((m) => ({ name: m.name, value: Math.round((stat.cadence === "daily" ? m.total : m.latest ?? 0) * 100) / 100 }))}
+                  dataKey="value"
+                  nameKey="name"
+                  label={(p: any) => `${p.name} (${p.value})`}
+                >
+                  {perMember.map((_, i) => (
+                    <Cell key={i} fill={LINE_COLORS[i % LINE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            ) : stat.chart === "bar" ? (
+              <BarChart data={perMember.map((m) => ({ name: m.name, thisWeek: Math.round(m.week * 100) / 100, best: m.best }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="thisWeek" fill="var(--accent)" />
+                <Bar dataKey="best" fill="#16a34a" />
+              </BarChart>
+            ) : (
+              <LineChart data={lineData.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis tick={{ fontSize: 10 }} domain={["auto", "auto"]} />
+                <Tooltip labelFormatter={(d) => String(d)} />
+                {lineData.names.length > 1 && <Legend />}
+                {stat.target != null && <ReferenceLine y={stat.target} strokeDasharray="6 3" stroke="var(--accent)" label={{ value: `target ${stat.target}`, fontSize: 10 }} />}
+                {lineData.names.map((n, i) => (
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+                ))}
+              </LineChart>
+            )}
           </ResponsiveContainer>
         </div>
       )}

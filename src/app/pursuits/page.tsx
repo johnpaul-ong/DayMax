@@ -1,16 +1,33 @@
 "use client";
 
 /**
- * My pursuits: everything you're a member of, plus create your own.
- * Life and Lifts are built-in; everything else is yours to invent.
+ * My pursuits: quick chips to jump between them, a summary card per pursuit
+ * with your recent trend, and the create form.
  */
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createPursuit, fetchDirectory, pursuitHref, type Pursuit } from "@/lib/pursuits";
+import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  createPursuit,
+  fetchDirectory,
+  fetchMyEntries,
+  fetchStats,
+  pursuitHref,
+  type Pursuit,
+} from "@/lib/pursuits";
+
+interface Spark {
+  statName: string;
+  points: Array<{ date: string; value: number }>;
+  today: number | null;
+  total: number;
+}
 
 export default function PursuitsPage() {
+  const todayISO = new Date().toISOString().slice(0, 10);
   const [pursuits, setPursuits] = useState<Pursuit[]>([]);
+  const [sparks, setSparks] = useState<Record<string, Spark | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -19,7 +36,34 @@ export default function PursuitsPage() {
 
   function reload() {
     fetchDirectory()
-      .then(setPursuits)
+      .then(async (ds) => {
+        setPursuits(ds);
+        const mine = ds.filter((d) => d.isMember && d.kind === "custom").slice(0, 8);
+        const out: Record<string, Spark | null> = {};
+        await Promise.all(
+          mine.map(async (m) => {
+            try {
+              const stats = await fetchStats(m.id);
+              const first = stats.find((st) => !st.hidden);
+              if (!first) return void (out[m.id] = null);
+              const entries = await fetchMyEntries(first.id);
+              const points = entries
+                .slice(0, 60)
+                .sort((a, b) => (a.date < b.date ? -1 : 1))
+                .map((e) => ({ date: e.date, value: e.value }));
+              out[m.id] = {
+                statName: first.name,
+                points,
+                today: entries.find((e) => e.date === todayISO)?.value ?? null,
+                total: entries.reduce((sum, e) => sum + e.value, 0),
+              };
+            } catch {
+              out[m.id] = null;
+            }
+          })
+        );
+        setSparks(out);
+      })
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
@@ -29,35 +73,60 @@ export default function PursuitsPage() {
       )
       .finally(() => setLoading(false));
   }
-  useEffect(reload, []);
+  useEffect(reload, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mine = pursuits.filter((p) => p.isMember);
 
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">My pursuits</h1>
-      <p className="mb-4 text-sm text-muted">
-        The things you're chasing. Each pursuit has its own stats — daily targets, ratings, whatever fits — and its own
-        leaderboard among members. <Link href="/pursuits/explore" className="font-medium text-accent hover:underline">Explore what others pursue →</Link>
-      </p>
+
+      {mine.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {mine.map((p) => (
+            <Link key={p.id} href={pursuitHref(p)} className="rounded-full border bg-surface px-3 py-1 text-sm font-medium hover:text-accent">
+              {p.name}
+            </Link>
+          ))}
+          <Link href="/pursuits/explore" className="rounded-full border px-3 py-1 text-sm text-muted hover:text-accent">Explore →</Link>
+        </div>
+      )}
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : (
         <div className="mb-6 grid gap-3 sm:grid-cols-2">
-          {mine.map((p) => (
-            <Link key={p.id} href={pursuitHref(p)} className="card p-4 transition hover:-translate-y-0.5">
-              <div className="flex items-baseline justify-between">
-                <h2 className="font-semibold">{p.name}</h2>
-                <span className="text-xs text-faint">{p.memberCount} member{p.memberCount === 1 ? "" : "s"}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted">{p.description || "No description."}</p>
-              <p className="mt-2 text-xs text-faint">
-                by {p.ownerName}{p.isOwner && " (you)"} · {p.isPublic ? "public" : "invite-only"}
-              </p>
-            </Link>
-          ))}
+          {mine.map((p) => {
+            const sp = sparks[p.id];
+            return (
+              <Link key={p.id} href={pursuitHref(p)} className="card p-4 transition hover:-translate-y-0.5">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-semibold">{p.name}</h2>
+                  <span className="text-xs text-faint">{p.memberCount} member{p.memberCount === 1 ? "" : "s"}</span>
+                </div>
+                <p className="mt-1 text-sm text-muted">{p.description || "No description."}</p>
+                {sp && sp.points.length > 1 && (
+                  <div className="mt-2">
+                    <div className="h-14">
+                      <ResponsiveContainer>
+                        <LineChart data={sp.points}>
+                          <Tooltip labelFormatter={(d) => String(d)} formatter={(v: number) => [v, sp.statName]} />
+                          <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <p className="text-xs text-faint">
+                      {sp.statName}: today {sp.today ?? "—"} · total {Math.round(sp.total).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-faint">
+                  by {p.ownerName}{p.isOwner && " (you)"} · {p.isPublic ? "public" : "invite-only"}
+                </p>
+              </Link>
+            );
+          })}
         </div>
       )}
 

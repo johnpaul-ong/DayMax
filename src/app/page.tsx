@@ -13,7 +13,6 @@ import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, focusScore, hoursByCategory, weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, LiftEntry } from "@/lib/types";
-import SignOutButton from "./signout-button";
 
 // ---------- customizable layout ----------
 
@@ -286,12 +285,14 @@ export default function HomePage() {
           </h1>
           <p className="text-sm text-muted">{todayEntries.length}/96 slots logged today</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/today" className="btn-primary">Log now</Link>
-          <button onClick={() => setCustomizing((v) => !v)} className="btn-ghost">{customizing ? "Done" : "Customize"}</button>
-          <SignOutButton />
-        </div>
+
       </div>
+
+      {loading ? (
+        <p className="text-sm text-muted">Loading your day…</p>
+      ) : (
+        layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
+      )}
 
       {customizing && (
         <div className="card p-3">
@@ -313,11 +314,9 @@ export default function HomePage() {
         </div>
       )}
 
-      {loading ? (
-        <p className="text-sm text-muted">Loading your day…</p>
-      ) : (
-        layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
-      )}
+      <div className="flex justify-center pt-2">
+        <button onClick={() => setCustomizing((v) => !v)} className="btn-ghost">{customizing ? "Done customizing" : "Customize this page"}</button>
+      </div>
     </div>
   );
 }

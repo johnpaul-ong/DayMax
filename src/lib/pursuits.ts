@@ -27,6 +27,8 @@ export interface PursuitStat {
   direction: "more" | "less";
   cadence: "daily" | "whenever";
   target: number | null;
+  chart: "line" | "bar" | "pie";
+  hidden: boolean;
 }
 
 export interface StatEntry {
@@ -140,7 +142,7 @@ export async function fetchStats(pursuitId: string): Promise<PursuitStat[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("pursuit_stats")
-    .select("id, pursuit_id, name, unit, direction, cadence, target")
+    .select("id, pursuit_id, name, unit, direction, cadence, target, chart, hidden")
     .eq("pursuit_id", pursuitId)
     .order("created_at");
   if (error) throw error;
@@ -152,6 +154,8 @@ export async function fetchStats(pursuitId: string): Promise<PursuitStat[]> {
     direction: r.direction,
     cadence: r.cadence,
     target: r.target,
+    chart: r.chart ?? "line",
+    hidden: !!r.hidden,
   }));
 }
 
@@ -161,6 +165,18 @@ export async function createStat(
 ): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("pursuit_stats").insert({ pursuit_id: pursuitId, ...s });
+  if (error) throw error;
+}
+
+export async function updatePursuitDescription(id: string, description: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("pursuits").update({ description }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateStat(id: string, patch: { chart?: "line" | "bar" | "pie"; hidden?: boolean; target?: number | null }): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("pursuit_stats").update(patch).eq("id", id);
   if (error) throw error;
 }
 

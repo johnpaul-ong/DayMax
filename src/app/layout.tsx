@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 import NavLinks from "./nav-links";
-import ThemeSwitcher from "./theme-switcher";
+import ThemeSync from "./theme-switcher";
 
 export const metadata: Metadata = {
   title: "DayMax",
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Day<span className="text-accent">Max</span>
             </Link>
             <NavLinks />
-            <ThemeSwitcher />
+            <ThemeSync />
           </div>
         </nav>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>

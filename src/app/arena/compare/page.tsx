@@ -167,7 +167,12 @@ export default function ArenaComparePage() {
           ))}
         </div>
         <button onClick={() => shift(-1)} className="rounded-lg border px-2.5 py-1 text-sm">←</button>
-        <span className="text-sm font-medium tabular-nums">{periodLabel}</span>
+        {scope === "month" ? (
+          <input type="month" value={date.slice(0, 7)} onChange={(e) => e.target.value && setDate(`${e.target.value}-01`)} className="rounded-lg border bg-surface px-2 py-1 text-sm" />
+        ) : (
+          <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm" />
+        )}
+        {scope !== "day" && <span className="text-xs tabular-nums text-faint">{periodLabel}</span>}
         <button onClick={() => shift(1)} disabled={from >= todayISO} className="rounded-lg border px-2.5 py-1 text-sm disabled:opacity-40">→</button>
         <Link href="/arena" className="ml-auto text-sm font-medium text-accent hover:underline">← Arena</Link>
       </div>

@@ -181,7 +181,13 @@ export default function TodayPage() {
                 color: c ? "rgba(255,255,255,.95)" : "var(--faint)",
               }}
             >
-              {s % 4 === 0 ? slotToTime(s) : ""}
+              {c?.label ? (
+                <span className="block truncate px-0.5 text-[7px] leading-tight">{c.label}</span>
+              ) : s % 4 === 0 ? (
+                slotToTime(s)
+              ) : (
+                ""
+              )}
             </button>
           );
         })}

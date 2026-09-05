@@ -9,6 +9,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { listFriends, searchProfiles, sendFriendRequest, type FoundProfile, type Friendship } from "@/lib/friends";
 import { fetchDirectory, joinPursuit, type Pursuit, pursuitHref } from "@/lib/pursuits";
+import { fetchTracks, type Track } from "@/lib/friends";
+import { createClient } from "@/lib/supabase/client";
+import { AddFriendCard, PeopleSection } from "../friends/social";
+import ExploreDirectory from "../pursuits/explore/page";
 
 export default function SearchPage() {
   const [q, setQ] = useState("");
@@ -19,9 +23,14 @@ export default function SearchPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [me, setMe] = useState<string | null>(null);
+
   useEffect(() => {
     listFriends().then(setFriends).catch(() => {});
     fetchDirectory().then(setPursuits).catch(() => {});
+    fetchTracks().then(setTracks).catch(() => {});
+    createClient().auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
   }, []);
 
   const friendIds = useMemo(() => new Set(friends.map((f) => f.memberId)), [friends]);
@@ -123,6 +132,12 @@ export default function SearchPage() {
           )}
         </div>
       )}
+
+      <div className="mt-8 space-y-6">
+        <PeopleSection />
+        <AddFriendCard tracks={tracks} me={me} onChanged={() => fetchTracks().then(setTracks).catch(() => {})} />
+        <ExploreDirectory />
+      </div>
     </div>
   );
 }
