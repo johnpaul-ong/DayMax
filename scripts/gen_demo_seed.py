@@ -107,13 +107,14 @@ def thor_day(r, lokiweek):
     elif roll < 0.72: # feast & tavern day
         q(p, wake, wake + 2.5, 7)
         q(p, wake + 2.5, wake + 3.5, 2)
-        q(p, wake + 3.5, 18, 3); q(p, 18, 20, 7); q(p, 20, 24, 3)
+        q(p, wake + 3.5, 17, 3); q(p, 17, 18.5 + r.uniform(0, 1.5), 6)
+        q(p, 19, 20, 7); q(p, 20, 23, 3); q(p, 23, 24, 9)
     elif roll < 0.87: # quest (mostly travel + a little smiting)
         q(p, wake, wake + 1, 7); q(p, wake + 1, 15 + r.uniform(0, 2), 4)
         q(p, 17, 19 + r.uniform(0, 1), 2); q(p, 20, 22, 7); q(p, 22, 24, 3)
     else:            # napping like Odin
-        q(p, wake, wake + 1.5, 7); q(p, wake + 1.5, 17 + r.uniform(0, 2), 0)
-        q(p, 19, 21, 7); q(p, 21, 24, 9)
+        q(p, wake, wake + 1.5, 7); q(p, wake + 1.5, 14 + r.uniform(0, 2), 0)
+        q(p, 15, 19, 6); q(p, 19, 21, 7); q(p, 21, 24, 9)
     return p
 
 def steve_day(r):
@@ -334,7 +335,7 @@ LABEL_CASE = """
          when '6' then (case p.user_id
             when '{bruce}' then 'SMASH'
             when '{tony}' then 'lab youtube spiral'
-            when '{thor}' then 'moping about Loki'
+            when '{thor}' then 'Midgardian television'
             else 'doomscrolling' end)
          when '3' then (case p.user_id when '{thor}' then 'tavern' when '{tony}' then 'gala' else 'friends' end)
          when '4' then (case p.user_id when '{bruce}' then 'fleeing the scene' else 'travel' end)

@@ -35,6 +35,7 @@ export default function FriendProfilePage() {
   const ws = weekStart(todayISO);
 
   const [name, setName] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [sections, setSections] = useState<ProfileSection[]>([]);
   const [dayRows, setDayRows] = useState<CompareDayRow[]>([]);
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
@@ -51,6 +52,7 @@ export default function FriendProfilePage() {
       try {
         const profile = await fetchMemberProfile(userId);
         setName(profile.displayName);
+        setUsername(profile.username);
         setSections(profile.sections);
         // full day detail: only returned when they share raw labels (or are a legend)
         fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
@@ -136,7 +138,9 @@ export default function FriendProfilePage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">{name}</h1>
+        <h1 className="text-2xl font-bold">
+          {name} {username && <span className="text-base font-normal text-faint">@{username}</span>}
+        </h1>
         <p className="text-sm text-muted">Showing only what {name} chose to share.</p>
       </div>
 
@@ -220,25 +224,49 @@ export default function FriendProfilePage() {
   );
 }
 
-/** Every logged day as a vertical 96-slot bar — hover any sliver for the activity. */
+/** Read-only month grid (like the Month page): reliable hover, optional inline text. */
 function ProfileDayStrip({ name, strip }: { name: string; strip: DayStripRow[] }) {
-  const days = useMemo(() => {
-    const byDate = new Map<string, { slots: (number | null)[]; labels: (string | null)[] }>();
+  const byDate = useMemo(() => {
+    const map = new Map<string, Map<number, { category: number; label: string | null }>>();
     for (const r of strip) {
-      if (!byDate.has(r.date)) byDate.set(r.date, { slots: new Array(SLOTS_PER_DAY).fill(null), labels: new Array(SLOTS_PER_DAY).fill(null) });
-      const d = byDate.get(r.date)!;
-      d.slots[r.slot] = r.category;
-      d.labels[r.slot] = r.label;
+      if (!map.has(r.date)) map.set(r.date, new Map());
+      map.get(r.date)!.set(r.slot, { category: r.category, label: r.label });
     }
-    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+    return map;
   }, [strip]);
+
+  const months = useMemo(() => [...new Set([...byDate.keys()].map((d) => d.slice(0, 7)))].sort(), [byDate]);
+  const [ym, setYm] = useState<string>("");
+  const [showText, setShowText] = useState(false);
+  const month = ym || months[months.length - 1] || "";
+
+  const dates = useMemo(() => {
+    if (!month) return [];
+    const [y, m] = month.split("-").map(Number);
+    const n = new Date(y, m, 0).getDate();
+    return Array.from({ length: n }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+  }, [month]);
+
+  if (months.length === 0) return null;
 
   return (
     <section>
-      <h2 className="mb-1 font-semibold">Every day, every 15 minutes</h2>
-      <p className="mb-2 text-sm text-muted">
-        {name} shares full day detail — {days.length.toLocaleString()} days. Hover a bar to see what they were doing.
-      </p>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">Their days, 15 minutes at a time</h2>
+        <select value={month} onChange={(e) => setYm(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
+          {months.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        <button
+          onClick={() => setShowText((v) => !v)}
+          className={`rounded-lg border px-2.5 py-1 text-sm ${showText ? "bg-accent-soft font-semibold text-accent" : ""}`}
+          title="Show activity text in cells"
+        >
+          Aa
+        </button>
+      </div>
+      <p className="mb-2 text-sm text-muted">{name} shares full day detail. Hover any cell — or hit Aa to read it straight off the grid.</p>
       <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
         {CATEGORIES.map((c) => (
           <span key={c.code} className="inline-flex items-center gap-1">
@@ -247,26 +275,45 @@ function ProfileDayStrip({ name, strip }: { name: string; strip: DayStripRow[] }
           </span>
         ))}
       </div>
-      <div className="card overflow-x-auto p-4">
-        <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
-          {days.map(([date, d]) => (
-            <div key={date} className="flex flex-col items-center">
-              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
-                {d.slots.map((cat, s) => (
-                  <div
-                    key={s}
-                    title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${d.labels[s] ? ` (${d.labels[s]})` : ""}` : ""}`}
-                    className="w-full flex-1"
-                    style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)" }}
-                  />
-                ))}
-              </div>
-              <span className="mt-1 text-[8px] text-faint" style={{ writingMode: "vertical-rl" }}>
-                {date.slice(5)}
-              </span>
-            </div>
-          ))}
-        </div>
+      <div className="max-h-[70vh] overflow-auto rounded-xl border bg-surface">
+        <table className="daygrid border-collapse">
+          <thead className="sticky top-0 z-10 bg-surface">
+            <tr>
+              <th className="sticky left-0 z-20 bg-surface px-1 py-1">time</th>
+              {dates.map((d) => (
+                <th key={d} style={{ minWidth: showText ? 90 : 34 }} className="px-1 py-1">
+                  {Number(d.slice(8))}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => (
+              <tr key={s}>
+                <td className="sticky left-0 z-10 bg-surface px-1 text-right font-mono text-[10px] text-faint">
+                  {s % 4 === 0 ? slotToTime(s) : ""}
+                </td>
+                {dates.map((date) => {
+                  const c = byDate.get(date)?.get(s);
+                  return (
+                    <td
+                      key={date}
+                      title={c ? `${date} ${slotToTime(s)} — ${categoryName(c.category)}${c.label ? `: ${c.label}` : ""}` : `${date} ${slotToTime(s)}`}
+                      className="overflow-hidden whitespace-nowrap align-middle"
+                      style={{ height: 13, maxWidth: showText ? 90 : 34, background: c ? categoryColor(c.category) + "dd" : undefined }}
+                    >
+                      {showText && c?.label ? (
+                        <span className="block truncate px-0.5 text-[9px] font-medium text-white/95" style={{ lineHeight: "13px" }}>
+                          {c.label}
+                        </span>
+                      ) : null}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

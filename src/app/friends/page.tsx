@@ -297,6 +297,7 @@ function DayCompare({ trackId }: { trackId: string }) {
   return (
     <div>
       <h3 className="mb-1 text-sm font-semibold">Leaderboard (ranked by this week&apos;s focus score)</h3>
+      <p className="mb-1 text-xs text-faint">Focus score = productive ÷ (productive + brainrot) × 100. Someone with little brainrot scores high even on a light day — hours are shown next to it for honesty.</p>
       <div className="mb-3 overflow-x-auto card">
         <table className="w-full text-sm">
           <thead className="bg-surface-2 text-left text-xs text-muted">
@@ -328,6 +329,7 @@ function DayCompare({ trackId }: { trackId: string }) {
       </div>
       <p className="mb-2 text-xs text-faint">Score and hours shown together so nobody can game one stat.</p>
 
+      <h4 className="mb-1 text-sm font-semibold">Daily focus score (/100)</h4>
       <div className="h-56 card p-2">
         <ResponsiveContainer>
           <LineChart data={chart.data}>

@@ -180,13 +180,15 @@ export const PROFILE_SECTIONS: Array<{ key: ProfileSection; label: string }> = [
   { key: "lifts", label: "Lifts" },
 ];
 
-export async function fetchMemberProfile(userId: string): Promise<{ displayName: string; sections: ProfileSection[] }> {
+export async function fetchMemberProfile(
+  userId: string
+): Promise<{ displayName: string; username: string | null; sections: ProfileSection[] }> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("member_profile", { member: userId });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   const sections = Array.isArray(row?.sections) ? (row.sections as ProfileSection[]) : ["ranking", "hours", "lifts"];
-  return { displayName: row?.display_name ?? "anonymous", sections };
+  return { displayName: row?.display_name ?? "anonymous", username: row?.username ?? null, sections };
 }
 
 export async function fetchMyProfileSections(): Promise<ProfileSection[]> {

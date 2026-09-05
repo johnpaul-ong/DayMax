@@ -51,7 +51,11 @@ function Board({
 }) {
   return (
     <div className="card p-4">
-      <h2 className="font-semibold">{title}</h2>
+      <h2 className="font-semibold">
+        <Link href="/arena/compare" className="hover:text-accent hover:underline" title="See everyone's day side by side">
+          {title}
+        </Link>
+      </h2>
       <p className="mb-2 text-xs text-muted">{subtitle}</p>
       {rows.length === 0 ? (
         <p className="text-sm text-faint">Nobody qualifies yet.</p>
@@ -154,7 +158,8 @@ export default function ArenaPage() {
     <div className="mx-auto max-w-4xl">
       <h1 className="mb-1 text-2xl font-bold">The Arena</h1>
       <p className="mb-5 text-sm text-muted">
-        Everyone you can see — the resident legends plus friends from your tracks. Click a name for their profile.
+        Everyone you can see — the resident legends plus friends from your tracks. Click a name for their profile, a
+        board title to see <Link href="/arena/compare" className="font-medium text-accent hover:underline">everyone&apos;s day side by side</Link>.
         Get on the boards by logging your day.
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}

@@ -218,6 +218,7 @@ function ProfileVisibilitySection() {
 }
 
 function ProfileSection() {
+  const [displayName, setDisplayName] = useState<string>("");
   const [birthDate, setBirthDate] = useState<string>("");
   const [country, setCountry] = useState<string>("");
   const [targetWeight, setTargetWeight] = useState<string>("");
@@ -227,6 +228,7 @@ function ProfileSection() {
   useEffect(() => {
     fetchProfile()
       .then((p) => {
+        setDisplayName(p.displayName ?? "");
         setBirthDate(p.birthDate ?? "");
         setCountry(p.country ?? "");
         setTargetWeight(p.targetWeightKg != null ? String(p.targetWeightKg) : "");
@@ -239,6 +241,15 @@ function ProfileSection() {
       <h2 className="mb-1 font-semibold">You</h2>
       <p className="mb-3 text-sm text-muted">Powers the &ldquo;life lived&rdquo; card on Home. Stays private like everything else.</p>
       <div className="flex flex-wrap gap-3">
+        <label className="text-xs text-muted">
+          Display name (shown to friends and in the Arena)
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your name"
+            className="mt-0.5 block w-44 rounded-lg border bg-surface px-2 py-2 text-sm text-ink"
+          />
+        </label>
         <label className="text-xs text-muted">
           Birthday
           <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="mt-0.5 block rounded-lg border bg-surface px-2 py-2 text-sm text-ink" />
@@ -269,7 +280,7 @@ function ProfileSection() {
             setSaving(true);
             setMsg(null);
             const tw = targetWeight.trim() === "" ? null : Number(targetWeight);
-            updateProfile({ birthDate: birthDate || null, country: country || null, targetWeightKg: Number.isFinite(tw as number) ? tw : null })
+            updateProfile({ displayName: displayName.trim() || null, birthDate: birthDate || null, country: country || null, targetWeightKg: Number.isFinite(tw as number) ? tw : null })
               .then(() => setMsg("Saved."))
               .catch((e) => setMsg(String(e.message ?? e)))
               .finally(() => setSaving(false));
