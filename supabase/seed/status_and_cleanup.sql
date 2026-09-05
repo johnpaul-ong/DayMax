@@ -105,17 +105,25 @@ order by slots desc, u.created_at;
 
 
 -- ===========================================================================
--- 3. DELETE THE EMPTY DUPLICATES  *** THIS ONE DELETES DATA ***
---    Keeps every account with any data, and every demo account.
---    Look at section 2 first. If the account you sign in with shows slots = 0,
---    do NOT run this — delete the others by id instead (see 3b).
+-- 3. DELETING ACCOUNTS  *** DANGEROUS — AND PROBABLY UNNECESSARY ***
+--
+--    NOTE: the "three @jpong accounts" were never real. pursuit_member_list
+--    was missing `where m.pursuit_id = p`, so it returned every membership row
+--    in the table — one account showed up once per pursuit it had joined.
+--    Migration 0023 fixes it. Run section 2 first: if it shows ONE non-demo
+--    account, there is nothing to delete and you should skip this section
+--    entirely.
+--
+--    Left here only for a genuine abandoned signup. Commented out on purpose.
 -- ===========================================================================
--- 3a. the safe sweep: accounts that have never logged anything
-delete from auth.users u
- where coalesce((select p.is_demo from public.profiles p where p.id = u.id), false) = false
-   and not exists (select 1 from public.day_entries     d where d.user_id = u.id)
-   and not exists (select 1 from public.lift_entries    l where l.user_id = u.id)
-   and not exists (select 1 from public.pursuit_entries e where e.user_id = u.id);
+-- 3a. the sweep: accounts that have never logged anything.
+--     DO NOT RUN THIS if the account you sign in with shows slots = 0 —
+--     it will delete the account you are using.
+-- delete from auth.users u
+--  where coalesce((select p.is_demo from public.profiles p where p.id = u.id), false) = false
+--    and not exists (select 1 from public.day_entries     d where d.user_id = u.id)
+--    and not exists (select 1 from public.lift_entries    l where l.user_id = u.id)
+--    and not exists (select 1 from public.pursuit_entries e where e.user_id = u.id);
 
 -- 3b. or delete specific ones, once you've picked them from section 2:
 -- delete from auth.users where id in ('paste-uuid', 'paste-another-uuid');

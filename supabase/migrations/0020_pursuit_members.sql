@@ -63,7 +63,8 @@ begin
   from public.pursuit_members m
   left join public.profiles pr on pr.id = m.user_id
   join auth.users u on u.id = m.user_id
-  where (k = 'custom' or public.is_connected(m.user_id))
+  where m.pursuit_id = p
+    and (k = 'custom' or public.is_connected(m.user_id))
     and (not public.is_minor(m.user_id) or public.is_connected(m.user_id))
   order by (m.role = 'owner') desc, coalesce(pr.display_name, 'anonymous');
 end $$;
