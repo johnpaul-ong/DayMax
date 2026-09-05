@@ -32,7 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-page text-ink">
-        <nav className="sticky top-0 z-40 border-b bg-surface/80 backdrop-blur-md">
+        <nav className="sticky top-0 z-40 border-b bg-surface">
           <div className="mx-auto flex max-w-6xl items-center gap-0.5 overflow-x-auto px-3 py-2.5">
             <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
               Day<span className="text-accent">Max</span>

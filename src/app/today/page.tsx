@@ -170,7 +170,7 @@ export default function TodayPage() {
                 } else setUntil(s);
               }}
               title={`${slotToTime(s)}${c ? ` — ${c.category} ${c.label ?? ""}` : ""}`}
-              className={`h-8 rounded-md text-[9px] leading-none ${isEdge ? "ring-2 ring-accent" : inRange ? "ring-2 ring-accent/40" : ""}`}
+              className={`h-8 rounded-md text-[9px] leading-none ${isEdge ? "ring-2 ring-accent" : inRange ? "ring-1 ring-accent" : ""}`}
               style={{
                 background: c ? categoryColor(c.category) : "var(--surface-2)",
                 color: c ? "rgba(255,255,255,.95)" : "var(--faint)",
