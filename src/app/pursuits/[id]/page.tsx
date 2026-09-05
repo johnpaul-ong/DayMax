@@ -42,6 +42,7 @@ import {
   deleteStat,
   fetchDirectory,
   fetchMyEntries,
+  fetchPursuitMembers,
   fetchStatData,
   fetchStats,
   leavePursuit,
@@ -53,6 +54,7 @@ import {
   updateStat,
   type MyEntry,
   type Pursuit,
+  type PursuitMember,
   type PursuitStat,
   type StatEntry,
 } from "@/lib/pursuits";
@@ -70,6 +72,7 @@ export default function PursuitPage() {
   const [pursuit, setPursuit] = useState<Pursuit | null>(null);
   const [stats, setStats] = useState<PursuitStat[]>([]);
   const [friends, setFriends] = useState<Friendship[]>([]);
+  const [members, setMembers] = useState<PursuitMember[]>([]);
   const [firstStatData, setFirstStatData] = useState<StatEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -101,6 +104,7 @@ export default function PursuitPage() {
       })
       .catch(() => {});
     listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
+    fetchPursuitMembers(id).then(setMembers).catch(() => {});
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -243,6 +247,8 @@ export default function PursuitPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
+      <MembersSection members={members} total={pursuit.memberCount} />
+
       {pursuit.kind === "life" && <LifeCommunity />}
       {pursuit.kind === "lifts" && <LiftsCommunity />}
 
@@ -287,6 +293,72 @@ export default function PursuitPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Who's in this pursuit. Names link to profiles when you're allowed to open
+ * them — for built-in pursuits like Life that's demo legends, friends and
+ * track-mates, so the list shows how many others are in there without turning
+ * the whole user base into a browsable directory.
+ */
+function MembersSection({ members, total }: { members: PursuitMember[]; total: number }) {
+  const [expanded, setExpanded] = useState(false);
+  if (members.length === 0) return null;
+  const shown = expanded ? members : members.slice(0, 12);
+  const hidden = total - members.length;
+
+  return (
+    <section>
+      <div className="mb-2 flex flex-wrap items-baseline gap-2">
+        <h2 className="font-semibold">Members</h2>
+        <span className="text-sm text-faint">
+          {total} in this pursuit
+          {hidden > 0 && ` · ${hidden} you're not connected to`}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {shown.map((m) => {
+          const inner = (
+            <>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+                {m.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium">{m.displayName}</span>
+                <span className="block truncate text-[10px] text-faint">
+                  @{m.username}
+                  {m.role === "owner" && " · owner"}
+                  {m.isDemo && " · legend"}
+                </span>
+              </span>
+            </>
+          );
+          return m.isVisible ? (
+            <Link
+              key={m.memberId}
+              href={`/friends/${m.memberId}`}
+              className="flex max-w-[13rem] items-center gap-2 rounded-xl border bg-surface px-3 py-2 transition hover:-translate-y-0.5 hover:text-accent"
+            >
+              {inner}
+            </Link>
+          ) : (
+            <span
+              key={m.memberId}
+              title="Add them as a friend to see their profile"
+              className="flex max-w-[13rem] items-center gap-2 rounded-xl border bg-surface px-3 py-2 opacity-60"
+            >
+              {inner}
+            </span>
+          );
+        })}
+        {!expanded && members.length > 12 && (
+          <button onClick={() => setExpanded(true)} className="rounded-xl border px-3 py-2 text-sm text-muted hover:text-accent">
+            +{members.length - 12} more
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

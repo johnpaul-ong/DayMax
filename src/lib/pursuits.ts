@@ -221,6 +221,29 @@ export async function logEntry(statId: string, date: string, value: number, note
   if (error) throw error;
 }
 
+export interface PursuitMember {
+  memberId: string;
+  displayName: string;
+  username: string;
+  role: "owner" | "member";
+  isDemo: boolean;
+  /** Can you open their profile? Names only link through when true. */
+  isVisible: boolean;
+}
+
+/** Who else is in this pursuit. */
+export async function fetchPursuitMembers(pursuitId: string): Promise<PursuitMember[]> {
+  const data = await rpcAll("pursuit_member_list", { p: pursuitId });
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    username: r.username,
+    role: r.role,
+    isDemo: !!r.is_demo,
+    isVisible: !!r.is_visible,
+  }));
+}
+
 export interface MemberPursuit {
   id: string;
   name: string;
