@@ -120,15 +120,18 @@ def tony_day(r):
     workend = 17.5 + r.uniform(0, 2.5)
     q(p, lunch + 0.5, workend, 1)
     roll = r.random()
-    if roll < 0.30:
+    if roll < 0.26:
         q(p, workend, min(24, workend + 4 + r.uniform(0, 2)), 3)      # gala / party
-    elif roll < 0.37:
-        q(p, workend, workend + 1.5, 6)                                # rare: one youtube video, honest
-        q(p, workend + 1.5, 24, 0)
-    elif roll < 0.65:
-        q(p, workend, workend + 2, 3); q(p, workend + 2, 24, 0)        # dinner with Pepper
+    elif roll < 0.48:
+        # "strategic leisure": three hours of scrolling he will not admit to
+        q(p, workend, workend + 2 + r.uniform(0, 1.5), 6)
+    elif roll < 0.72:
+        q(p, workend, workend + 2, 3)                                  # dinner with Pepper
+        q(p, workend + 2, workend + 3.25 + r.uniform(0, 1), 9)         # then the telly
     else:
-        q(p, workend, min(23.5, workend + 3 + r.uniform(0, 2)), 1)     # back to the lab
+        labend = min(22.5, workend + 2.5 + r.uniform(0, 1.5))
+        q(p, workend, labend, 1)                                       # back to the lab
+        q(p, labend, labend + 1 + r.uniform(0, 0.75), 9)               # winds down badly
     return p
 
 def thor_day(r, lokiweek):
@@ -146,8 +149,9 @@ def thor_day(r, lokiweek):
         train = 3 + r.uniform(0, 2.5)
         q(p, t, t + train, 2); t += train
         q(p, t, t + 1.5, 7); t += 1.5
-        q(p, t, min(22, t + 1.5), 2)
-        q(p, 22, 24, 3)
+        q(p, t, min(21, t + 1.5), 2)
+        q(p, 21, 22.5 + r.uniform(0, 1), 9)   # Midgardian television. He is fond of it.
+        q(p, 23.5, 24, 3)
     elif roll < 0.72: # feast & tavern day
         q(p, wake, wake + 2.5, 7)
         q(p, wake + 2.5, wake + 3.5, 2)
@@ -155,7 +159,7 @@ def thor_day(r, lokiweek):
         q(p, 19, 20, 7); q(p, 20, 23, 3); q(p, 23, 24, 9)
     elif roll < 0.87: # quest (mostly travel + a little smiting)
         q(p, wake, wake + 1, 7); q(p, wake + 1, 15 + r.uniform(0, 2), 4)
-        q(p, 17, 19 + r.uniform(0, 1), 2); q(p, 20, 22, 7); q(p, 22, 24, 3)
+        q(p, 17, 19 + r.uniform(0, 1), 2); q(p, 20, 21, 7); q(p, 21, 23 + r.uniform(0, 0.5), 9)
     else:            # napping like Odin
         q(p, wake, wake + 1.5, 7); q(p, wake + 1.5, 14 + r.uniform(0, 2), 0)
         q(p, 15, 19, 6); q(p, 19, 21, 7); q(p, 21, 24, 9)
@@ -175,8 +179,11 @@ def steve_day(r):
     t = workend + 2
     q(p, t, t + 0.5, 7)
     q(p, t + 0.5, t + 2, 3 if r.random() < 0.4 else 8)
-    q(p, t + 2, t + 2.75, 9)
-    q(p, 21 + r.uniform(0, 1), 24, 0)
+    # the pictures, a ball game, a record — note the sleep block below starts
+    # AFTER this ends, or q() would silently paint straight over the top of it
+    leisure_end = t + 3.25 + r.uniform(0, 0.75)
+    q(p, t + 2, leisure_end, 9)
+    q(p, leisure_end, 24, 0)
     return p
 
 def nat_day(r):

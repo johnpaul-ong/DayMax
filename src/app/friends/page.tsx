@@ -31,7 +31,7 @@ import {
   type TrackMember,
 } from "@/lib/friends";
 import { createClient } from "@/lib/supabase/client";
-import { weekStart } from "@/lib/ranking";
+import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { localToday } from "@/lib/dates";
 
@@ -292,7 +292,13 @@ function DayCompare({ trackId }: { trackId: string }) {
       const p = list.reduce((s, r) => s + r.productive, 0);
       const b = list.reduce((s, r) => s + r.brainrot, 0);
       const o = list.reduce((s, r) => s + r.other, 0);
-      return { p, b, o, score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null };
+      return {
+        p,
+        b,
+        o,
+        score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null,
+        workMax: workMaxFrom(p, b),
+      };
     };
     return [...byMember.entries()]
       .map(([id, m]) => ({
@@ -302,7 +308,7 @@ function DayCompare({ trackId }: { trackId: string }) {
         week: agg(m.rows.filter((r) => r.date >= ws && r.date <= todayISO)),
         all: agg(m.rows),
       }))
-      .sort((a, b) => (b.week.score ?? -1) - (a.week.score ?? -1))
+      .sort((a, b) => (b.week.workMax ?? -1) - (a.week.workMax ?? -1))
       .slice(0, 5);
   }, [rows, todayISO, ws]);
 
@@ -322,8 +328,11 @@ function DayCompare({ trackId }: { trackId: string }) {
 
   return (
     <div>
-      <h3 className="mb-1 text-sm font-semibold">Top 5 (ranked by this week&apos;s focus score)</h3>
-      <p className="mb-1 text-xs text-faint">Focus score = productive ÷ (productive + brainrot) × 100. Someone with little brainrot scores high even on a light day — hours are shown next to it for honesty.</p>
+      <h3 className="mb-1 text-sm font-semibold">Top 5 (ranked by this week&apos;s WorkMax)</h3>
+      <p className="mb-1 text-xs text-faint">
+        <b>WorkMax</b> = focus ÷ 100 × productive hours, so quality and quantity both count. <b>Focus</b> = productive ÷
+        (productive + brainrot) × 100 on its own, which stays high on a light day — hours are shown next to both.
+      </p>
       <div className="mb-3 overflow-x-auto card">
         <table className="w-full text-sm">
           <thead className="bg-surface-2 text-left text-xs text-muted">
@@ -342,9 +351,9 @@ function DayCompare({ trackId }: { trackId: string }) {
                 <td className="px-3 py-1.5 font-medium">{m.name}</td>
                 {[m.today, m.week, m.all].map((a, j) => (
                   <td key={j} className="whitespace-nowrap px-3 py-1.5 tabular-nums">
-                    <span className="font-semibold">{a.score ?? "—"}</span>
+                    <span className="font-semibold">{a.workMax ?? "—"}</span>
                     <span className="ml-1 text-xs text-faint">
-                      (<span style={{ color: colors.productive }}>{a.p.toFixed(1)}</span>/<span style={{ color: colors.brainrot }}>{a.b.toFixed(1)}</span>/<span className="text-muted">{a.o.toFixed(1)}</span>h)
+                      focus {a.score ?? "—"} · (<span style={{ color: colors.productive }}>{a.p.toFixed(1)}</span>/<span style={{ color: colors.brainrot }}>{a.b.toFixed(1)}</span>/<span className="text-muted">{a.o.toFixed(1)}</span>h)
                     </span>
                   </td>
                 ))}

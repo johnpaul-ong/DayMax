@@ -11,7 +11,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { fetchLeaderboard, type LeaderboardRow } from "@/lib/friends";
-import { weekStart } from "@/lib/ranking";
+import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { localToday } from "@/lib/dates";
@@ -36,6 +36,8 @@ interface Contender {
   weekScore: number | null;
   prevWeekScore: number | null;
   improvement: number | null;
+  weekWorkMax: number | null;
+  allWorkMax: number | null;
 }
 
 
@@ -124,19 +126,25 @@ export default function ArenaPage() {
       const prevWeek = m.rows.filter((r) => r.date >= prevWs && r.date < ws);
       const weekScore = score(week);
       const prevWeekScore = score(prevWeek);
+      const weekP = week.reduce((s, r) => s + r.productive, 0);
+      const weekB = week.reduce((s, r) => s + r.brainrot, 0);
+      const allP = m.rows.reduce((s, r) => s + r.productive, 0);
+      const allB = m.rows.reduce((s, r) => s + r.brainrot, 0);
       return {
         id,
         name: m.name,
         isDemo: m.isDemo,
         todayP: m.rows.filter((r) => r.date === todayISO).reduce((s, r) => s + r.productive, 0),
-        weekP: week.reduce((s, r) => s + r.productive, 0),
-        weekB: week.reduce((s, r) => s + r.brainrot, 0),
+        weekP,
+        weekB,
         weekS: week.reduce((s, r) => s + r.social, 0),
-        allP: m.rows.reduce((s, r) => s + r.productive, 0),
-        allB: m.rows.reduce((s, r) => s + r.brainrot, 0),
+        allP,
+        allB,
         weekScore,
         prevWeekScore,
         improvement: weekScore != null && prevWeekScore != null ? Math.round((weekScore - prevWeekScore) * 10) / 10 : null,
+        weekWorkMax: workMaxFrom(weekP, weekB),
+        allWorkMax: workMaxFrom(allP, allB),
       };
     });
   }, [rows, todayISO, ws]);
@@ -182,6 +190,18 @@ export default function ArenaPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Board
+          title="WorkMax — this week"
+          subtitle="Focus score × hours put in. The one that counts."
+          rows={top((c) => c.weekWorkMax)}
+          value={(c) => `${c.weekWorkMax}`}
+        />
+        <Board
+          title="WorkMax — all time"
+          subtitle="Effective productive hours, ever"
+          rows={top((c) => c.allWorkMax)}
+          value={(c) => `${c.allWorkMax?.toFixed(0)}`}
+        />
+        <Board
           title="Most productive today"
           subtitle="Productive hours logged today"
           rows={top((c) => c.todayP)}
@@ -225,7 +245,9 @@ export default function ArenaPage() {
         />
       </div>
       <p className="mt-3 text-xs text-faint">
-        Hours in <span style={{ color: colors.productive }}>productive</span> and{" "}
+        <b>WorkMax</b> = focus score ÷ 100 × productive hours — quality times quantity, so a clean 10-hour week can&apos;t
+        beat a clean 40-hour one. <b>Focus score</b> = productive ÷ (productive + brainrot) × 100, quality only. Hours in{" "}
+        <span style={{ color: colors.productive }}>productive</span> and{" "}
         <span style={{ color: colors.brainrot }}>brainrot</span> use the default buckets. Members with sharing set to
         hidden never appear.
       </p>

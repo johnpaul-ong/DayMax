@@ -10,7 +10,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchProfile } from "@/lib/data";
 import { lifeStats, type LifeStats } from "@/lib/life";
-import { bucketize, focusScore, hoursByCategory, weekStart } from "@/lib/ranking";
+import { bucketize, focusScore, hoursByCategory, weekStart, workMax } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
@@ -227,6 +227,7 @@ export default function HomePage() {
         <Stat label="Brainrot" value={`${(t?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
         <Stat label="Other" value={`${(t?.other ?? 0).toFixed(1)}h`} color={colors.other} />
         <Stat label="Focus score" value={t && focusScore(t) !== null ? `${focusScore(t)}` : "—"} sub="productive ÷ (productive + brainrot) × 100" />
+        <Stat label="WorkMax" value={t && workMax(t) !== null ? `${workMax(t)}` : "—"} sub="focus ÷ 100 × productive hours" />
       </div>
     );
   }

@@ -58,7 +58,7 @@ import {
   type PursuitStat,
   type StatEntry,
 } from "@/lib/pursuits";
-import { weekStart } from "@/lib/ranking";
+import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { localToday } from "@/lib/dates";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
@@ -401,24 +401,32 @@ function LifeCommunity({ memberCount }: { memberCount: number }) {
     };
     return [...byId.values()].map((m) => {
       const week = m.rows.filter((r) => r.date >= ws && r.date <= todayISO);
+      const weekP = week.reduce((s, r) => s + r.productive, 0);
+      const weekB = week.reduce((s, r) => s + r.brainrot, 0);
+      const allP = m.rows.reduce((s, r) => s + r.productive, 0);
+      const allB = m.rows.reduce((s, r) => s + r.brainrot, 0);
       return {
         id: m.id,
         name: m.name,
         weekScore: score(week),
-        weekP: week.reduce((s, r) => s + r.productive, 0),
-        weekB: week.reduce((s, r) => s + r.brainrot, 0),
-        allP: m.rows.reduce((s, r) => s + r.productive, 0),
+        weekP,
+        weekB,
+        allP,
         allScore: score(m.rows),
+        weekWorkMax: workMaxFrom(weekP, weekB),
+        allWorkMax: workMaxFrom(allP, allB),
         days: new Set(m.rows.map((r) => r.date)).size,
       };
     });
   }, [rows, ws, todayISO]);
 
+  // ranked on WorkMax, not focus score — a spotless 5-hour week shouldn't
+  // outrank a spotless 40-hour one
   const topWeek = useMemo(
-    () => [...people].filter((p) => p.weekScore != null).sort((a, b) => (b.weekScore ?? 0) - (a.weekScore ?? 0)).slice(0, 5),
+    () => [...people].filter((p) => p.weekWorkMax != null).sort((a, b) => (b.weekWorkMax ?? 0) - (a.weekWorkMax ?? 0)).slice(0, 5),
     [people]
   );
-  const topAllTime = useMemo(() => [...people].sort((a, b) => b.allP - a.allP).slice(0, 5), [people]);
+  const topAllTime = useMemo(() => [...people].sort((a, b) => (b.allWorkMax ?? 0) - (a.allWorkMax ?? 0)).slice(0, 5), [people]);
 
   // daily focus score for the top few, last six weeks
   const chart = useMemo(() => {
@@ -470,13 +478,23 @@ function LifeCommunity({ memberCount }: { memberCount: number }) {
       <section className="grid gap-4 sm:grid-cols-2">
         <LeaderCard
           title="Top this week"
-          subtitle="Focus score since Monday"
-          rows={topWeek.map((p) => ({ id: p.id, name: p.name, value: `${p.weekScore}`, sub: `${p.weekP.toFixed(1)}h productive` }))}
+          subtitle="WorkMax — focus score × hours since Monday"
+          rows={topWeek.map((p) => ({
+            id: p.id,
+            name: p.name,
+            value: `${p.weekWorkMax}`,
+            sub: `${p.weekP.toFixed(1)}h productive · focus ${p.weekScore ?? "—"}`,
+          }))}
         />
         <LeaderCard
           title="Last 12 weeks"
-          subtitle="Productive hours over the recent stretch"
-          rows={topAllTime.map((p) => ({ id: p.id, name: p.name, value: `${p.allP.toFixed(0)}h`, sub: `score ${p.allScore ?? "—"}` }))}
+          subtitle="WorkMax over the recent stretch"
+          rows={topAllTime.map((p) => ({
+            id: p.id,
+            name: p.name,
+            value: `${p.allWorkMax?.toFixed(0) ?? "—"}`,
+            sub: `${p.allP.toFixed(0)}h productive · focus ${p.allScore ?? "—"}`,
+          }))}
         />
       </section>
 

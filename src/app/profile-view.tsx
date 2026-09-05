@@ -26,7 +26,7 @@ import {
 } from "@/lib/friends";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
-import { weekStart } from "@/lib/ranking";
+import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
@@ -94,7 +94,13 @@ export default function ProfileView({ userId }: { userId: string }) {
     const p = list.reduce((s, r) => s + r.productive, 0);
     const b = list.reduce((s, r) => s + r.brainrot, 0);
     const o = list.reduce((s, r) => s + r.other, 0);
-    return { p, b, o, score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null };
+    return {
+      p,
+      b,
+      o,
+      score: p + b > 0 ? Math.round((p / (p + b)) * 1000) / 10 : null,
+      workMax: workMaxFrom(p, b),
+    };
   };
 
   const ranking = useMemo(
@@ -172,7 +178,8 @@ export default function ProfileView({ userId }: { userId: string }) {
             {ranking.map((r) => (
               <div key={r.label} className="card p-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-faint">{r.label}</h3>
-                <p className="mt-1 text-2xl font-bold tabular-nums">{r.score ?? "—"}<span className="text-xs font-normal text-faint"> /100</span></p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{r.workMax ?? "—"}<span className="text-xs font-normal text-faint"> WorkMax</span></p>
+                <p className="text-xs text-muted">focus {r.score ?? "—"}/100</p>
                 <p className="text-xs text-muted">
                   <span style={{ color: colors.productive }}>{r.p.toFixed(1)}h</span> productive ·{" "}
                   <span style={{ color: colors.brainrot }}>{r.b.toFixed(1)}h</span> brainrot

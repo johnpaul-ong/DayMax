@@ -46,6 +46,32 @@ export function focusScore(t: BucketTotals): number | null {
   return Math.round((t.productive / scored) * 1000) / 10;
 }
 
+/**
+ * WorkMax: focus score as a 0..1 quality multiplier, times the hours actually
+ * put in. Focus score alone says nothing about volume — someone with 31 clean
+ * hours and someone with 79 clean hours both score 100 — so WorkMax is the
+ * one worth ranking on. Reads as "effective productive hours": you get full
+ * credit for productive time only if you weren't also rotting.
+ *
+ *   31h productive, 0h brainrot  -> 1.00 x 31 = 31.0
+ *   79h productive, 0h brainrot  -> 1.00 x 79 = 79.0
+ *   79h productive, 20h brainrot -> 0.80 x 79 = 62.4
+ *
+ * Null only when there's nothing to score at all.
+ */
+export function workMax(t: BucketTotals): number | null {
+  const f = focusScore(t);
+  if (f === null) return null;
+  return Math.round((f / 100) * t.productive * 10) / 10;
+}
+
+/** WorkMax straight from raw hours, for callers that don't build BucketTotals. */
+export function workMaxFrom(productive: number, brainrot: number): number | null {
+  const scored = productive + brainrot;
+  if (scored === 0) return null;
+  return Math.round((productive / scored) * productive * 10) / 10;
+}
+
 /** ISO date of the Monday of the week containing `date`. */
 export function weekStart(dateISO: string): string {
   const d = new Date(dateISO + "T00:00:00");
