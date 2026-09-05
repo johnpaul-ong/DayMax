@@ -8,11 +8,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
-import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchLifts, fetchProfile } from "@/lib/data";
+import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchProfile } from "@/lib/data";
 import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, focusScore, hoursByCategory, weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
-import type { BucketSettings, DayEntry, LiftEntry } from "@/lib/types";
+import type { BucketSettings, DayEntry } from "@/lib/types";
 
 // ---------- customizable layout ----------
 
@@ -21,17 +21,13 @@ const HOME_SECTIONS = [
   { key: "today", label: "Today" },
   { key: "week", label: "This week" },
   { key: "life", label: "Your life" },
-  { key: "lifts", label: "Recent lifts" },
-  { key: "links", label: "Quick links" },
 ] as const;
 type HomeKey = (typeof HOME_SECTIONS)[number]["key"];
 const DEFAULT_LAYOUT: Array<{ key: HomeKey; visible: boolean }> = [
   { key: "today", visible: true },
   { key: "week", visible: true },
   { key: "life", visible: true },
-  { key: "lifts", visible: true },
   { key: "strip", visible: false },
-  { key: "links", visible: true },
 ];
 
 function loadLayout(): Array<{ key: HomeKey; visible: boolean }> {
@@ -148,7 +144,6 @@ export default function HomePage() {
   const ws = weekStart(todayISO);
   const [weekEntries, setWeekEntries] = useState<DayEntry[]>([]);
   const [allEntries, setAllEntries] = useState<DayEntry[] | null>(null);
-  const [lifts, setLifts] = useState<Array<LiftEntry & { id: number }>>([]);
   const [settings, setSettings] = useState<BucketSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [life, setLife] = useState<LifeStats | null>(null);
@@ -162,10 +157,9 @@ export default function HomePage() {
   useEffect(() => {
     setColors(loadBucketColors());
     setLayout(loadLayout());
-    Promise.all([fetchDayEntries(ws, todayISO), fetchLifts(), fetchBucketSettings()])
-      .then(([e, l, s]) => {
+    Promise.all([fetchDayEntries(ws, todayISO), fetchBucketSettings()])
+      .then(([e, s]) => {
         setWeekEntries(e);
-        setLifts(l);
         setSettings(s);
       })
       .finally(() => setLoading(false));
@@ -212,8 +206,6 @@ export default function HomePage() {
       .map(([code, hours]) => ({ code: Number(code), hours }));
   }, [todayEntries]);
 
-  const recentLifts = lifts.slice(0, 5);
-
   function statRow(t: ReturnType<typeof bucketize> | null) {
     return (
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -255,43 +247,6 @@ export default function HomePage() {
       </section>
     ),
     life: () => (life ? <section key="life">{<LifeCard life={life} country={country} />}</section> : null),
-    lifts: () => (
-      <section key="lifts">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-muted">Recent lifts</h2>
-          <Link href="/lifts" className="text-sm font-medium text-accent hover:underline">All lifts →</Link>
-        </div>
-        {recentLifts.length === 0 ? (
-          <p className="card p-4 text-sm text-muted">No lifts logged yet.</p>
-        ) : (
-          <div className="card divide-y overflow-hidden">
-            {recentLifts.map((l) => (
-              <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                <span className="w-24 shrink-0 tabular-nums text-faint">{l.date}</span>
-                <span className="font-medium">{l.exercise}</span>
-                <span className="ml-auto tabular-nums text-muted">
-                  {l.weightKg != null ? `${l.weightKg}kg` : ""} {l.reps ? `× ${l.reps}` : ""}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    ),
-    links: () => (
-      <section key="links" className="grid gap-3 sm:grid-cols-3">
-        {[
-          { href: "/day", title: "Month grid", desc: "The Excel-killer. Drag, type, done." },
-          { href: "/year", title: "Year view", desc: "Every day of the year at a glance." },
-          { href: "/arena", title: "The Arena", desc: "You vs the Avengers vs your friends." },
-        ].map((c) => (
-          <Link key={c.href} href={c.href} className="card p-4 transition hover:-translate-y-0.5">
-            <h3 className="font-semibold">{c.title}</h3>
-            <p className="mt-1 text-sm text-muted">{c.desc}</p>
-          </Link>
-        ))}
-      </section>
-    ),
   };
 
   return (
