@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName } from "@/lib/categories";
 import { fetchBucketSettings, fetchDayEntries, fetchLifts, fetchProfile } from "@/lib/data";
 import { lifeStats, type LifeStats } from "@/lib/life";
-import { bucketize, hoursByCategory, productiveRatio, weekStart } from "@/lib/ranking";
+import { bucketize, focusScore, hoursByCategory, weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, LiftEntry } from "@/lib/types";
 import SignOutButton from "./signout-button";
@@ -26,25 +26,57 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub?
 }
 
 function LifeCard({ life, country }: { life: LifeStats; country: string | null }) {
+  const totalWeeks = Math.round(life.expectancy * 52.18);
+  const livedWeeks = Math.min(totalWeeks, Math.round(life.ageYears * 52.18));
   return (
     <div className="card p-5">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold text-muted">Life lived</h2>
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold text-muted">Your life</h2>
         <span className="text-xs text-faint">
-          vs {life.expectancy.toFixed(1)}y life expectancy{country ? ` (${country})` : " (world avg)"}
+          life expectancy {life.expectancy.toFixed(1)}y{country ? ` (${country})` : " (world avg)"}
         </span>
       </div>
-      <div className="flex items-center gap-4">
-        <p className="text-3xl font-bold tabular-nums">{life.percentLived.toFixed(1)}%</p>
-        <div className="flex-1">
-          <div className="h-3 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            ~{life.yearsLeft.toFixed(1)} years (~{Math.round(life.weeksLeft).toLocaleString()} weeks) left on average. Make the slots count.
-          </p>
+
+      <div className="mb-3 flex flex-wrap gap-6">
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{life.percentLived.toFixed(1)}%</p>
+          <p className="text-xs text-muted">lived</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{life.ageYears.toFixed(1)}</p>
+          <p className="text-xs text-muted">years old</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{life.yearsLeft.toFixed(1)}</p>
+          <p className="text-xs text-muted">years left</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{Math.round(life.weeksLeft).toLocaleString()}</p>
+          <p className="text-xs text-muted">weeks left</p>
         </div>
       </div>
+
+      <div className="mb-3 h-3 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
+      </div>
+
+      {/* your life in weeks: one dot per week, one row per year */}
+      <div
+        className="grid gap-[2px]"
+        style={{ gridTemplateColumns: "repeat(52, minmax(0, 1fr))" }}
+        title={`${livedWeeks.toLocaleString()} of ${totalWeeks.toLocaleString()} expected weeks lived`}
+      >
+        {Array.from({ length: totalWeeks }, (_, i) => (
+          <div
+            key={i}
+            className="aspect-square w-full rounded-[1px]"
+            style={{ background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)", opacity: i < livedWeeks ? 0.85 : 1 }}
+          />
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-faint">
+        Every square is one week. Each row is a year. The gray ones are all you have — make the slots count.
+      </p>
     </div>
   );
 }
@@ -118,9 +150,9 @@ export default function HomePage() {
               <Stat label="Productive" value={`${(todayTotals?.productive ?? 0).toFixed(1)}h`} color={colors.productive} />
               <Stat label="Brainrot" value={`${(todayTotals?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
               <Stat
-                label="Ratio"
-                value={todayTotals ? (productiveRatio(todayTotals) === null ? "∞" : String(productiveRatio(todayTotals))) : "—"}
-                sub="productive : brainrot"
+                label="Focus score"
+                value={todayTotals && focusScore(todayTotals) !== null ? `${focusScore(todayTotals)}` : "—"}
+                sub="productive ÷ (productive + brainrot) × 100"
               />
             </div>
             {todayTopCats.length > 0 && (
@@ -141,9 +173,9 @@ export default function HomePage() {
               <Stat label="Productive" value={`${(weekTotals?.productive ?? 0).toFixed(1)}h`} color={colors.productive} />
               <Stat label="Brainrot" value={`${(weekTotals?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
               <Stat
-                label="Ratio"
-                value={weekTotals ? (productiveRatio(weekTotals) === null ? "∞" : String(productiveRatio(weekTotals))) : "—"}
-                sub="productive : brainrot"
+                label="Focus score"
+                value={weekTotals && focusScore(weekTotals) !== null ? `${focusScore(weekTotals)}` : "—"}
+                sub="productive ÷ (productive + brainrot) × 100"
               />
             </div>
           </section>

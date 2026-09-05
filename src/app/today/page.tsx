@@ -93,11 +93,16 @@ export default function TodayPage() {
     }
   }
 
+  const [metricsSaved, setMetricsSaved] = useState(false);
+
   async function saveMetrics() {
     if (!metrics) return;
     setSaving(true);
+    setMetricsSaved(false);
     try {
       await upsertDayMetrics([{ ...metrics, date }]);
+      setMetricsSaved(true);
+      setTimeout(() => setMetricsSaved(false), 2500);
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
@@ -208,9 +213,12 @@ export default function TodayPage() {
               className="mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-ink"
             />
           </label>
-          <button onClick={() => void saveMetrics()} disabled={saving} className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
-            Save metrics
-          </button>
+          <span className="mt-2 inline-flex items-center gap-2">
+            <button onClick={() => void saveMetrics()} disabled={saving} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
+              {saving ? "Saving…" : "Save metrics"}
+            </button>
+            {metricsSaved && <span className="text-sm font-medium text-ok">Saved ✓</span>}
+          </span>
         </div>
       )}
     </div>

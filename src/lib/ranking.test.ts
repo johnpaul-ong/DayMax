@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultBuckets } from "./categories";
-import { bucketize, computeRanking, hoursByCategory, productiveRatio, weekStart } from "./ranking";
+import { bucketize, computeRanking, focusScore, hoursByCategory, productiveRatio, weekStart } from "./ranking";
 import type { DayEntry } from "./types";
 
 function slots(date: string, category: number, count: number, offset = 0): DayEntry[] {
@@ -45,6 +45,15 @@ describe("ranking", () => {
   it("ratio is null (∞) when brainrot is zero but productive > 0", () => {
     expect(productiveRatio({ productive: 5, brainrot: 0, other: 0 })).toBeNull();
     expect(productiveRatio({ productive: 0, brainrot: 0, other: 0 })).toBe(0);
+  });
+
+  it("focus score is bounded and fair between people", () => {
+    // 8h productive / 2h brainrot and 16h productive / 4h brainrot = same score
+    expect(focusScore({ productive: 8, brainrot: 2, other: 6 })).toBe(80);
+    expect(focusScore({ productive: 16, brainrot: 4, other: 0 })).toBe(80);
+    expect(focusScore({ productive: 5, brainrot: 0, other: 0 })).toBe(100); // no infinity
+    expect(focusScore({ productive: 0, brainrot: 3, other: 0 })).toBe(0);
+    expect(focusScore({ productive: 0, brainrot: 0, other: 8 })).toBeNull();
   });
 
   it("ranking never sees labels", () => {

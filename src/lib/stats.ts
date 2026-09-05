@@ -92,6 +92,31 @@ export function buildDayPoints(entries: DayEntry[], metrics: DayMetrics[], setti
   });
 }
 
+export interface PairCorrelation {
+  xKey: string;
+  yKey: string;
+  r: number;
+  n: number;
+}
+
+/** Correlate every unique field pair across day points, ranked by |r|. */
+export function allPairCorrelations(points: DayPoint[], minN = 5): PairCorrelation[] {
+  const out: PairCorrelation[] = [];
+  const keys = CORRELATION_FIELDS.map((f) => f.key);
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const pairs = points
+        .filter((p) => p[keys[i]] != null && p[keys[j]] != null)
+        .map((p) => [p[keys[i]] as number, p[keys[j]] as number] as [number, number]);
+      if (pairs.length < minN) continue;
+      const r = pearson(pairs);
+      if (r === null) continue;
+      out.push({ xKey: keys[i], yKey: keys[j], r, n: pairs.length });
+    }
+  }
+  return out.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+}
+
 export const CORRELATION_FIELDS: Array<{ key: string; label: string }> = [
   { key: "productive", label: "Productive hours" },
   { key: "brainrot", label: "Brainrot hours" },

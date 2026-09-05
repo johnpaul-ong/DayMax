@@ -34,6 +34,18 @@ export function productiveRatio(t: BucketTotals): number | null {
   return Math.round((t.productive / t.brainrot) * 100) / 100;
 }
 
+/**
+ * Focus score: productive / (productive + brainrot) * 100, bounded 0..100.
+ * The fair between-people stat — a raw ratio explodes (4:1 vs 8:1 can be one
+ * lazy hour apart) and hits infinity on perfect days. 50 = break-even.
+ * Null when nothing productive or brainrot was logged.
+ */
+export function focusScore(t: BucketTotals): number | null {
+  const scored = t.productive + t.brainrot;
+  if (scored === 0) return null;
+  return Math.round((t.productive / scored) * 1000) / 10;
+}
+
 /** ISO date of the Monday of the week containing `date`. */
 export function weekStart(dateISO: string): string {
   const d = new Date(dateISO + "T00:00:00");
@@ -46,6 +58,7 @@ export interface RankingRow {
   period: "day" | "week" | "all";
   totals: BucketTotals;
   ratio: number | null;
+  score: number | null;
 }
 
 /**
@@ -59,7 +72,7 @@ export function computeRanking(entries: DayEntry[], settings: BucketSettings, to
 
   const mk = (period: RankingRow["period"], list: DayEntry[]): RankingRow => {
     const totals = bucketize(hoursByCategory(list), settings);
-    return { period, totals, ratio: productiveRatio(totals) };
+    return { period, totals, ratio: productiveRatio(totals), score: focusScore(totals) };
   };
   return [mk("day", dayEntries), mk("week", weekEntries), mk("all", entries)];
 }

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { CATEGORIES, type Bucket } from "@/lib/categories";
 import { fetchBucketSettings, fetchProfile, saveBucketSettings, updateProfile } from "@/lib/data";
-import { COUNTRIES } from "@/lib/life";
+import { COUNTRIES, lifeStats } from "@/lib/life";
 import {
   applyTheme,
   DEFAULT_BUCKET_COLORS,
@@ -171,6 +171,17 @@ function ProfileSection() {
         </button>
       </div>
       {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+      {birthDate && (() => {
+        const life = lifeStats(birthDate, country || null);
+        if (!life) return null;
+        return (
+          <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+            You are <b>{life.ageYears.toFixed(1)}</b> years old — <b>{life.percentLived.toFixed(1)}%</b> of a{" "}
+            {life.expectancy.toFixed(1)}-year expected life{country ? ` in ${country}` : ""} — with{" "}
+            <b>~{life.yearsLeft.toFixed(1)} years</b> (~{Math.round(life.weeksLeft).toLocaleString()} weeks) left on average.
+          </p>
+        );
+      })()}
     </div>
   );
 }

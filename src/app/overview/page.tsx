@@ -33,7 +33,7 @@ import {
   type LiftGoal,
 } from "@/lib/data";
 import { computeRanking, weekStart } from "@/lib/ranking";
-import { bucketsByPeriod, buildDayPoints, CORRELATION_FIELDS, describeR, pearson, type Period } from "@/lib/stats";
+import { allPairCorrelations, bucketsByPeriod, buildDayPoints, CORRELATION_FIELDS, describeR, pearson, type Period } from "@/lib/stats";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, DayMetrics, LiftEntry } from "@/lib/types";
 
@@ -102,6 +102,7 @@ export default function OverviewPage() {
     [dayPoints, xField, yField]
   );
   const r = useMemo(() => pearson(scatterData.map((p) => [p.x, p.y] as [number, number])), [scatterData]);
+  const rankedPairs = useMemo(() => allPairCorrelations(dayPoints), [dayPoints]);
   const fieldLabel = (k: string) => CORRELATION_FIELDS.find((f) => f.key === k)?.label ?? k;
 
   // lift progression with % change and goals
@@ -156,7 +157,10 @@ export default function OverviewPage() {
                 <p><span className="font-bold" style={{ color: colors.productive }}>{rk.totals.productive.toFixed(1)}h</span> productive</p>
                 <p><span className="font-bold" style={{ color: colors.brainrot }}>{rk.totals.brainrot.toFixed(1)}h</span> brainrot</p>
                 <p><span className="font-bold text-muted">{rk.totals.other.toFixed(1)}h</span> other</p>
-                <p className="pt-1 text-xs text-muted">ratio {rk.ratio === null ? "∞" : rk.ratio} productive:brainrot</p>
+                <p className="pt-1 text-sm font-semibold">
+                  Focus score: {rk.score === null ? "—" : rk.score}
+                  <span className="ml-1 font-normal text-xs text-faint">/100 · ratio {rk.ratio === null ? "∞" : rk.ratio}</span>
+                </p>
               </div>
             </div>
           ))}
@@ -229,6 +233,46 @@ export default function OverviewPage() {
             </ResponsiveContainer>
           )}
         </div>
+
+        {rankedPairs.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-1 text-sm font-semibold">Every pair, ranked</h3>
+            <p className="mb-2 text-xs text-muted">All metric pairs with 5+ shared days, strongest relationships first. Click a row to plot it above.</p>
+            <div className="max-h-72 overflow-auto card">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-surface-2 text-left text-xs text-muted">
+                  <tr>
+                    <th className="px-3 py-2">Pair</th>
+                    <th className="px-3 py-2">r</th>
+                    <th className="px-3 py-2">Strength</th>
+                    <th className="px-3 py-2">Days</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedPairs.map((p) => (
+                    <tr
+                      key={`${p.xKey}|${p.yKey}`}
+                      onClick={() => {
+                        setXField(p.xKey);
+                        setYField(p.yKey);
+                      }}
+                      className={`cursor-pointer border-b last:border-0 hover:bg-surface-2 ${
+                        (xField === p.xKey && yField === p.yKey) || (xField === p.yKey && yField === p.xKey) ? "bg-accent-soft" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-1.5">{fieldLabel(p.xKey)} × {fieldLabel(p.yKey)}</td>
+                      <td className="px-3 py-1.5 font-mono tabular-nums" style={{ color: p.r > 0 ? colors.productive : colors.brainrot }}>
+                        {p.r >= 0 ? "+" : ""}{p.r.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-1.5 text-xs text-muted">{describeR(p.r)}</td>
+                      <td className="px-3 py-1.5 text-xs text-faint">{p.n}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </section>
 
       {liftSeries.length > 0 && (

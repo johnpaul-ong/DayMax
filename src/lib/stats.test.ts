@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultBuckets } from "./categories";
-import { bucketsByPeriod, buildDayPoints, pearson } from "./stats";
+import { allPairCorrelations, bucketsByPeriod, buildDayPoints, pearson } from "./stats";
 import type { DayEntry } from "./types";
 
 function slots(date: string, category: number, count: number, offset = 0): DayEntry[] {
@@ -36,6 +36,29 @@ describe("bucketsByPeriod", () => {
     expect(months).toHaveLength(1);
     expect(months[0].productive).toBe(3);
     expect(months[0].brainrot).toBe(1);
+  });
+});
+
+describe("allPairCorrelations", () => {
+  it("ranks pairs by |r| and skips pairs with too few days", () => {
+    // 6 days where tired goes up and productive goes down perfectly
+    const points = Array.from({ length: 6 }, (_, i) => ({
+      date: `2026-09-0${i + 1}`,
+      productive: 10 - i,
+      brainrot: null,
+      sleep: null,
+      emotionalScore: null,
+      tired: i + 1,
+      startFriction: i < 3 ? i : null, // only 3 days -> below minN
+      endBrainFatigue: null,
+      weightKg: null,
+    }));
+    const ranked = allPairCorrelations(points, 5);
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0].xKey).toBe("productive");
+    expect(ranked[0].yKey).toBe("tired");
+    expect(ranked[0].r).toBeCloseTo(-1);
+    expect(ranked[0].n).toBe(6);
   });
 });
 
