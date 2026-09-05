@@ -61,6 +61,24 @@ async function uid(): Promise<string> {
   return user.id;
 }
 
+/**
+ * Supabase caps RPC results at 1000 rows just like table queries —
+ * a year of 15-minute slots is ~35k rows per person, so ALWAYS page.
+ */
+async function rpcAll(fn: string, params: Record<string, unknown> = {}): Promise<any[]> {
+  const supabase = createClient();
+  const all: any[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase.rpc(fn, params).range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || (data as any[]).length === 0) break;
+    all.push(...(data as any[]));
+    if ((data as any[]).length < page) break;
+  }
+  return all;
+}
+
 export async function fetchTracks(): Promise<Track[]> {
   const supabase = createClient();
   const { data, error } = await supabase.from("tracks").select("id, owner_id, kind, name, is_demo").order("created_at");
@@ -207,10 +225,8 @@ export async function saveMyProfileSections(sections: ProfileSection[]): Promise
 }
 
 export async function fetchCompareDay(trackId: string): Promise<CompareDayRow[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("compare_day_totals", { t: trackId });
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const data = await rpcAll("compare_day_totals", { t: trackId });
+  return data.map((r: any) => ({
     memberId: r.member_id,
     displayName: r.display_name,
     date: String(r.date),
@@ -233,10 +249,8 @@ export interface LeaderboardRow {
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("leaderboard_day_totals");
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const data = await rpcAll("leaderboard_day_totals");
+  return data.map((r: any) => ({
     memberId: r.member_id,
     displayName: r.display_name,
     isDemo: !!r.is_demo,
@@ -256,10 +270,8 @@ export interface DayStripRow {
 
 /** Full 15-min history for a profile (demo users, yourself, or raw_labels friends). */
 export async function fetchMemberDayStrip(userId: string): Promise<DayStripRow[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("member_day_strip", { member: userId });
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const data = await rpcAll("member_day_strip", { member: userId });
+  return data.map((r: any) => ({
     date: String(r.date),
     slot: r.slot,
     category: r.category,
@@ -268,15 +280,55 @@ export async function fetchMemberDayStrip(userId: string): Promise<DayStripRow[]
 }
 
 export async function fetchCompareLifts(trackId: string): Promise<CompareLiftRow[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("compare_lifts", { t: trackId });
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const data = await rpcAll("compare_lifts", { t: trackId });
+  return data.map((r: any) => ({
     memberId: r.member_id,
     displayName: r.display_name,
     date: String(r.date),
     exercise: r.exercise,
     weightKg: r.weight_kg,
     reps: r.reps,
+  }));
+}
+
+// --- profile metrics + arena lifts ------------------------------------------
+
+export interface MemberDayMetricsRow {
+  date: string;
+  emotionalScore: number | null;
+  tired: number | null;
+  startFriction: number | null;
+  endBrainFatigue: number | null;
+  weightKg: number | null;
+}
+
+export async function fetchMemberDayMetrics(userId: string): Promise<MemberDayMetricsRow[]> {
+  const data = await rpcAll("member_day_metrics", { member: userId });
+  return data.map((r: any) => ({
+    date: String(r.date),
+    emotionalScore: r.emotional_score,
+    tired: r.tired,
+    startFriction: r.start_friction,
+    endBrainFatigue: r.end_brain_fatigue,
+    weightKg: r.weight_kg,
+  }));
+}
+
+export interface LeaderboardLiftRow {
+  memberId: string;
+  displayName: string;
+  date: string;
+  exercise: string;
+  weightKg: number;
+}
+
+export async function fetchLeaderboardLifts(): Promise<LeaderboardLiftRow[]> {
+  const data = await rpcAll("leaderboard_lifts");
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    date: String(r.date),
+    exercise: r.exercise,
+    weightKg: Number(r.weight_kg),
   }));
 }

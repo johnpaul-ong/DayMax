@@ -12,6 +12,7 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import {
   fetchCompareDay,
   fetchCompareLifts,
+  fetchMemberDayMetrics,
   fetchMemberDayStrip,
   fetchMemberProfile,
   fetchMembers,
@@ -19,6 +20,7 @@ import {
   type CompareDayRow,
   type CompareLiftRow,
   type DayStripRow,
+  type MemberDayMetricsRow,
   type ProfileSection,
 } from "@/lib/friends";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
@@ -40,6 +42,7 @@ export default function FriendProfilePage() {
   const [dayRows, setDayRows] = useState<CompareDayRow[]>([]);
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
   const [strip, setStrip] = useState<DayStripRow[]>([]);
+  const [memberMetrics, setMemberMetrics] = useState<MemberDayMetricsRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [period, setPeriod] = useState<"day" | "week" | "month">("day");
@@ -56,6 +59,7 @@ export default function FriendProfilePage() {
         setSections(profile.sections);
         // full day detail: only returned when they share raw labels (or are a legend)
         fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
+        fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
         // find a shared track to pull data through
         const tracks = await fetchTracks();
         let shared: string | null = null;
@@ -217,10 +221,87 @@ export default function FriendProfilePage() {
 
       {strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
 
+      {strip.length > 0 && <ProfileYearBars strip={strip} />}
+
+      {memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
+
       {!hasDayData && liftRows.length === 0 && (
         <p className="card p-4 text-sm text-faint">Nothing shared yet — either {name} is hidden on your shared tracks or hasn&apos;t logged anything.</p>
       )}
     </div>
+  );
+}
+
+/** The whole year at a glance: every logged day as a slim vertical 96-slot bar. */
+function ProfileYearBars({ strip }: { strip: DayStripRow[] }) {
+  const days = useMemo(() => {
+    const byDate = new Map<string, { slots: (number | null)[]; labels: (string | null)[] }>();
+    for (const r of strip) {
+      if (!byDate.has(r.date)) byDate.set(r.date, { slots: new Array(SLOTS_PER_DAY).fill(null), labels: new Array(SLOTS_PER_DAY).fill(null) });
+      const d = byDate.get(r.date)!;
+      d.slots[r.slot] = r.category;
+      d.labels[r.slot] = r.label;
+    }
+    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  }, [strip]);
+
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">The whole year</h2>
+      <p className="mb-2 text-sm text-muted">{days.length.toLocaleString()} days side by side — scroll through their year, hover for detail.</p>
+      <div className="card overflow-x-auto p-4">
+        <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
+          {days.map(([date, d]) => (
+            <div key={date} className="flex flex-col items-center">
+              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
+                {d.slots.map((cat, s) => (
+                  <div
+                    key={s}
+                    title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${d.labels[s] ? ` (${d.labels[s]})` : ""}` : ""}`}
+                    className="w-full flex-1"
+                    style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)" }}
+                  />
+                ))}
+              </div>
+              <span className="mt-1 text-[8px] text-faint" style={{ writingMode: "vertical-rl" }}>
+                {date.slice(5)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const METRIC_LINES: Array<{ key: keyof MemberDayMetricsRow; label: string; color: string }> = [
+  { key: "emotionalScore", label: "Emotion", color: "#4f6ef7" },
+  { key: "tired", label: "Tired", color: "#dc2626" },
+  { key: "startFriction", label: "Start friction", color: "#f59e0b" },
+  { key: "endBrainFatigue", label: "Brain fatigue", color: "#a78bfa" },
+];
+
+/** Emotional score & friends over time — the good stuff. */
+function ProfileMetricsChart({ name, rows }: { name: string; rows: MemberDayMetricsRow[] }) {
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">How {name} felt</h2>
+      <p className="mb-2 text-sm text-muted">Emotional score, tiredness, start friction and brain fatigue, out of 10.</p>
+      <div className="h-64 card p-2">
+        <ResponsiveContainer>
+          <LineChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+            <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
+            <Tooltip labelFormatter={(d) => String(d)} />
+            <Legend />
+            {METRIC_LINES.map((m) => (
+              <Line key={m.key} type="monotone" strokeWidth={2.5} dataKey={m.key} name={m.label} stroke={m.color} dot={false} connectNulls />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
   );
 }
 
