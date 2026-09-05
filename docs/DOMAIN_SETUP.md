@@ -27,11 +27,9 @@ move on until that tick appears.
 **Supabase → Authentication → URL Configuration:**
 
 - **Site URL:** `https://daymax.me`
-- **Redirect URLs** — add every one of these:
+- **Redirect URLs** — these three, and delete the old `vercel.app` entries:
   - `https://daymax.me/**`
   - `https://www.daymax.me/**`
-  - `https://daymax-azure.vercel.app/**` *(keep until you're sure nobody's using it)*
-  - `https://*-your-team.vercel.app/**` *(Vercel preview deploys, optional)*
   - `http://localhost:3000/**` *(local development)*
 
 The `/**` wildcard matters — without it only the exact root path is allowed and
@@ -82,8 +80,27 @@ If it still fails, **Supabase → Logs → Auth Logs**, filtered to around the t
 she tried, will name the actual error — usually a redirect URL that isn't on the
 allow-list.
 
+## Troubleshooting
+
+**Vercel says "Invalid Configuration" on the domain.** DNS hasn't propagated, or
+a record is wrong. Check at your registrar that the A record for `@` matches
+what Vercel shows. `dig daymax.me` (or whatsmydns.net) tells you what the world
+currently sees.
+
+**Domain loads but shows someone else's page / a parking page.** The registrar
+is still serving its default nameservers or a forwarding rule. Turn off any
+"domain forwarding" or "parking" feature at the registrar.
+
+**Site loads but signing in throws `requested path is invalid`.** Step 2 isn't
+done, or the `/**` on the end of the redirect URL is missing.
+
+**Certificate warning.** Vercel issues the cert after DNS resolves; it can take
+a few minutes. If it's stuck over an hour, remove the domain in Vercel and
+re-add it.
+
 ## Afterwards
 
-Update `README.md` and the deploy notes to say `daymax.me`, and once you're
-confident nobody's bookmarked the old host, remove the `vercel.app` entry from
-the Redirect URLs list.
+Update `README.md` to say `daymax.me`. Vercel keeps serving the old
+`daymax-azure.vercel.app` URL as well — that's automatic and harmless, and since
+nobody uses it you can ignore it. Don't delete the Vercel project URL itself;
+it's how Vercel routes deployments internally.
