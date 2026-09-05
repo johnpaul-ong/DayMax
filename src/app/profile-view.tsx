@@ -26,7 +26,8 @@ import {
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
 import { weekStart } from "@/lib/ranking";
-import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -236,6 +237,8 @@ export default function ProfileView({ userId }: { userId: string }) {
         </section>
       )}
 
+      {strip.length > 0 && <ProfileYearHeatmap strip={strip} />}
+
       {strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
 
       {strip.length > 0 && <ProfileYearBars strip={strip} />}
@@ -410,6 +413,110 @@ function ProfileDayStrip({ name, strip }: { name: string; strip: DayStripRow[] }
                 })}
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Year heatmap: productive-vs-brainrot blend or dominant category, per day. */
+function ProfileYearHeatmap({ strip }: { strip: DayStripRow[] }) {
+  const [mode, setMode] = useState<"buckets" | "dominant">("buckets");
+  const colors = useMemo(() => (typeof window === "undefined" ? DEFAULT_BUCKET_COLORS : loadBucketColors()), []);
+  const buckets = useMemo(() => defaultBuckets(), []);
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, DayStripRow[]>();
+    for (const r of strip) map.set(r.date, [...(map.get(r.date) ?? []), r]);
+    return map;
+  }, [strip]);
+
+  const years = useMemo(() => [...new Set([...byDate.keys()].map((d) => Number(d.slice(0, 4))))].sort(), [byDate]);
+  const [year, setYear] = useState<number>(0);
+  const y = year || years[years.length - 1] || new Date().getFullYear();
+
+  function cell(date: string) {
+    const list = byDate.get(date);
+    if (!list) return null;
+    const catHours = new Map<number, number>();
+    let p = 0, b = 0;
+    for (const e of list) {
+      catHours.set(e.category, (catHours.get(e.category) ?? 0) + HOURS_PER_SLOT);
+      const bk = buckets[e.category] ?? "other";
+      if (bk === "productive") p += HOURS_PER_SLOT;
+      else if (bk === "brainrot") b += HOURS_PER_SLOT;
+    }
+    const opacity = Math.min(1, list.length / 96 + 0.25);
+    if (mode === "dominant") {
+      const top = [...catHours.entries()].sort(([, a2], [, b2]) => b2 - a2)[0];
+      return { color: categoryColor(top[0]), opacity, tip: `${date}: mostly ${categoryName(top[0])} (${top[1].toFixed(1)}h)` };
+    }
+    if (p + b === 0) return { color: "var(--faint)", opacity: 0.35, tip: `${date}: nothing productive or brainrot` };
+    return {
+      color: blendHex(colors.brainrot, colors.productive, p / (p + b)),
+      opacity,
+      tip: `${date}: ${p.toFixed(1)}h productive, ${b.toFixed(1)}h brainrot`,
+    };
+  }
+
+  if (years.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">Year at a glance</h2>
+        {years.length > 1 && (
+          <select value={y} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border bg-surface px-2 py-1 text-sm">
+            {years.map((yy) => (
+              <option key={yy} value={yy}>{yy}</option>
+            ))}
+          </select>
+        )}
+        <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+          {(["buckets", "dominant"] as const).map((m) => (
+            <button key={m} onClick={() => setMode(m)} className={`rounded-lg px-3 py-1 ${mode === m ? "bg-surface font-semibold" : "text-muted"}`}>
+              {m === "buckets" ? "Productive vs brainrot" : "Dominant category"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="card overflow-x-auto p-4">
+        <table className="border-separate" style={{ borderSpacing: 3 }}>
+          <thead>
+            <tr>
+              <th className="pr-2 text-left text-xs font-medium text-faint">·</th>
+              {Array.from({ length: 31 }, (_, i) => (
+                <th key={i} className="text-center text-[10px] font-normal text-faint">{i + 1}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {MONTH_NAMES.map((mn, mi) => {
+              const daysInMonth = new Date(y, mi + 1, 0).getDate();
+              const ym = `${y}-${String(mi + 1).padStart(2, "0")}`;
+              return (
+                <tr key={mi}>
+                  <td className="pr-2 text-xs font-medium text-muted">{mn}</td>
+                  {Array.from({ length: 31 }, (_, i) => {
+                    if (i >= daysInMonth) return <td key={i} />;
+                    const date = `${ym}-${String(i + 1).padStart(2, "0")}`;
+                    const c = cell(date);
+                    return (
+                      <td key={i}>
+                        <div
+                          title={c?.tip ?? `${date}: not logged`}
+                          className="h-4 w-4 rounded-[4px]"
+                          style={{ background: c ? c.color : "var(--surface-2)", opacity: c?.opacity ?? 1 }}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
