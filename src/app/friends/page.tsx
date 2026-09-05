@@ -42,6 +42,76 @@ const RULE_INFO: Record<ShareRule, string> = {
   raw_labels: "Friends can also open your day detail with labels. Most people should not pick this.",
 };
 
+/** One-click friend adding: makes sure you own a track, mints a link, copies it. */
+function AddFriendCard({ tracks, me, onChanged }: { tracks: Track[]; me: string | null; onChanged: () => void }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function addFriend() {
+    if (!me) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      let track = tracks.find((t) => !t.isDemo && t.ownerId === me && t.kind === "day");
+      if (!track) {
+        await createTrack("My Crew", "day");
+        onChanged();
+        const fresh = await fetchTracks();
+        track = fresh.find((t) => !t.isDemo && t.ownerId === me && t.kind === "day");
+      }
+      if (!track) throw new Error("Could not create a track");
+      const invite = await createInvite(track.id, null);
+      const url = `${location.origin}/join/${invite.token}`;
+      setLink(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+      } catch {}
+      // native share sheet on phones
+      if (navigator.share) {
+        navigator.share({ title: "Join me on DayMax", text: "Track your days with me on DayMax:", url }).catch(() => {});
+      }
+    } catch (e: any) {
+      setErr(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-6 card border-2 border-accent-soft p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1">
+          <h2 className="font-semibold">Add a friend</h2>
+          <p className="text-sm text-muted">One tap: get a link, send it however you like. They click it, sign up, and you&apos;re comparing days.</p>
+        </div>
+        <button onClick={() => void addFriend()} disabled={busy || !me} className="btn-primary">
+          {busy ? "Making link…" : "Get invite link"}
+        </button>
+      </div>
+      {err && <p className="mt-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{err}</p>}
+      {link && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+          <code className="max-w-full flex-1 truncate">{link}</code>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(link).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+            className="font-medium text-accent hover:underline"
+          >
+            {copied ? "Copied ✓" : "Copy"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FriendsPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [me, setMe] = useState<string | null>(null);
@@ -79,6 +149,8 @@ export default function FriendsPage() {
         Invite-only tracks. Compare uses totals and focus score — never your labels, unless a member explicitly shares them.
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
+
+      <AddFriendCard tracks={tracks} me={me} onChanged={reload} />
 
       <div className="mb-6 card flex flex-wrap items-end gap-2 p-4">
         <label className="text-xs text-muted">

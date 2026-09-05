@@ -12,11 +12,11 @@ START = datetime.date(2026, 1, 1)
 END = datetime.date(2026, 9, 4)
 
 USERS = {
-    "bruce": ("11111111-1111-4111-8111-111111111101", "bruce@demo.daymax.app", "Bruce Banner"),
+    "bruce": ("11111111-1111-4111-8111-111111111101", "hulk@demo.daymax.app", "Bruce Banner"),
     "tony": ("11111111-1111-4111-8111-111111111102", "tony@demo.daymax.app", "Tony Stark"),
     "thor": ("11111111-1111-4111-8111-111111111103", "thor@demo.daymax.app", "Thor Odinson"),
-    "steve": ("11111111-1111-4111-8111-111111111104", "steve@demo.daymax.app", "Steve Rogers"),
-    "natasha": ("11111111-1111-4111-8111-111111111105", "natasha@demo.daymax.app", "Natasha Romanoff"),
+    "steve": ("11111111-1111-4111-8111-111111111104", "captainamerica@demo.daymax.app", "Steve Rogers"),
+    "natasha": ("11111111-1111-4111-8111-111111111105", "blackwidow@demo.daymax.app", "Natasha Romanoff"),
 }
 TRACK_ID = "22222222-2222-4222-8222-222222222201"
 
@@ -201,8 +201,14 @@ for key, (uid_, email, name) in USERS.items():
             note = (r.choice(NOTES["thor_loki"]) if loki else r.choice(NOTES["thor"])) if r.random() < 0.35 else None
             weight = round(r.uniform(288, 292), 1)
         elif key == "steve":
-            p = steve_day(r); emo = 8; tired = round(r.uniform(2, 4))
-            note = r.choice(NOTES["steve"]) if r.random() < 0.25 else None
+            p = steve_day(r)
+            if r.random() < 0.05:
+                emo = 5.5
+                note = "Thought about Peggy."
+            else:
+                emo = round(r.uniform(7, 9.5) * 2) / 2
+                note = r.choice(NOTES["steve"]) if r.random() < 0.25 else None
+            tired = round(r.uniform(2, 5))
             weight = round(r.uniform(108, 110), 1)
         else:
             p = nat_day(r); emo = round(r.uniform(6, 8) * 2) / 2; tired = round(r.uniform(3, 6))
@@ -255,14 +261,19 @@ class Lift:
 def reps_for(r):
     return str(r.choice([3, 4, 5, 5, 5, 6, 8]))
 
+# one persistent RNG for progression walks: per-day seeded generators
+# produce anti-correlated draws and the walk never goes anywhere
+lift_rng = random.Random(909)
+
 state = {
-    "bruce": {"Bench": Lift(88, 0.10, 0.9)},
-    "tony": {"Suit-Assisted Deadlift": Lift(480, 1.6, 14), "Bench": Lift(76, 0.06, 0.8)},
+    "bruce": {"Bench": Lift(88, 0.12, 1.8)},
+    "tony": {"Suit-Assisted Deadlift": Lift(480, 1.6, 14), "Bench": Lift(76, 0.08, 1.5)},
     "thor": {"Deadlift": Lift(810, 0.0, 9, lo=700)},
     "steve": {"Bench": Lift(198, 0.28, 1.2), "Squat": Lift(238, 0.32, 1.6)},
-    "natasha": {"Squat": Lift(84, 0.12, 1.1)},
+    "natasha": {"Squat": Lift(84, 0.18, 2.0)},
 }
 nat_pullups = 15.0
+nat_pu_weight = 20.0
 
 for key, (uid_, email, name) in USERS.items():
     d, i = START, 0
@@ -274,17 +285,17 @@ for key, (uid_, email, name) in USERS.items():
             if d in hulk_days:
                 lifts.append((uid_, d.isoformat(), "Deadlift", 50000 + r.randint(0, 9000), "1", "HULK STRONGEST THERE IS"))
             elif d.weekday() in (1, 4) and not skip:
-                w, note = state["bruce"]["Bench"].session(r, week)
+                w, note = state["bruce"]["Bench"].session(lift_rng, week)
                 if (d - datetime.timedelta(days=1)) in hulk_days or (d - datetime.timedelta(days=2)) in hulk_days:
                     w = round(w * 1.12 / 2.5) * 2.5
                     note = "residual gamma. not asking questions"
                 lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "keeping the HR down"))
         elif key == "tony":
             if d.weekday() == 2 and not skip:
-                w, note = state["tony"]["Suit-Assisted Deadlift"].session(r, week)
+                w, note = state["tony"]["Suit-Assisted Deadlift"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Suit-Assisted Deadlift", w, "3", note or "the suit did most of it"))
             if d.weekday() == 5 and r.random() > 0.25:
-                w, note = state["tony"]["Bench"].session(r, week)
+                w, note = state["tony"]["Bench"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note))
         elif key == "thor":
             if d.weekday() in (0, 2, 4) and not skip:
@@ -292,20 +303,21 @@ for key, (uid_, email, name) in USERS.items():
                 lifts.append((uid_, d.isoformat(), "Mjolnir Curls", curls, str(r.choice([8, 10, 12, 15, 20])),
                               "FELT EXTRA WORTHY" if curls == 1200 else r.choice(["still worthy", "the hammer approves", "light as a feather"])))
                 if r.random() < 0.5:
-                    w, note = state["thor"]["Deadlift"].session(r, week)
+                    w, note = state["thor"]["Deadlift"].session(lift_rng, week)
                     lifts.append((uid_, d.isoformat(), "Deadlift", w, reps_for(r), note or "warm-up"))
         elif key == "steve":
             if d.weekday() in (0, 3) and not (r.random() < 0.03):  # he almost never misses
-                w, note = state["steve"]["Bench"].session(r, week)
+                w, note = state["steve"]["Bench"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Bench", w, reps_for(r), note or "I can do this all day"))
             if d.weekday() == 5 and not (r.random() < 0.03):
-                w, note = state["steve"]["Squat"].session(r, week)
+                w, note = state["steve"]["Squat"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
         else:
             if d.weekday() in (1, 4) and not skip:
-                nat_pullups = max(10, nat_pullups + r.gauss(0.12, 0.7))
-                lifts.append((uid_, d.isoformat(), "Pull Ups", 20, str(int(nat_pullups)), None))
-                w, note = state["natasha"]["Squat"].session(r, week)
+                nat_pullups = max(10, nat_pullups + lift_rng.gauss(0.12, 0.7))
+                nat_pu_weight = min(35, max(10, nat_pu_weight + lift_rng.gauss(0.06, 1.4)))
+                lifts.append((uid_, d.isoformat(), "Pull Ups", round(nat_pu_weight / 2.5) * 2.5, str(int(nat_pullups)), None))
+                w, note = state["natasha"]["Squat"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
         i += 1
         d += datetime.timedelta(days=1)
