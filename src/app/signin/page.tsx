@@ -23,8 +23,24 @@ export default function SignInPage() {
         });
         setMsg(error ? error.message : "Check your email for the sign-in link. (Check spam too.)");
       } else if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
-        setMsg(error ? error.message : "Account created. Check your email to confirm, then sign in.");
+        // emailRedirectTo matters: without it the confirmation link falls back
+        // to Supabase's Site URL, which is how you get a "requested path is
+        // invalid" dead link when the project URL and the deployment disagree.
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+        });
+        if (error) {
+          setMsg(error.message);
+        } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+          // Supabase returns success with no identities when the address is
+          // already registered — it won't say so, to avoid leaking who has an
+          // account. Say something useful without confirming it either way.
+          setMsg("If that address doesn't already have an account, a confirmation email is on its way. Otherwise, sign in or reset your password.");
+        } else {
+          setMsg("Account created. Check your email to confirm — the link expires, so use it soon. (Check spam too.)");
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setMsg(error.message);
@@ -85,6 +101,25 @@ export default function SignInPage() {
         </button>
       </form>
       {msg && <p className="mt-3 text-sm text-muted">{msg}</p>}
+
+      {mode === "password" && (
+        <button
+          onClick={async () => {
+            if (!email) return setMsg("Enter your email above first.");
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: `${location.origin}/auth/callback`,
+            });
+            setMsg(error ? error.message : "Password reset link sent — check your email.");
+          }}
+          className="mt-3 text-xs text-muted hover:text-accent hover:underline"
+        >
+          Forgot your password?
+        </button>
+      )}
+
+      <p className="mt-4 border-t pt-3 text-xs text-faint">
+        Confirmation link expired or never arrived? Try signing up again with the same address — we&apos;ll resend it.
+      </p>
     </div>
   );
 }

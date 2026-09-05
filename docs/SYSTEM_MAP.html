@@ -29,7 +29,7 @@ flowchart LR
   end
   subgraph Vercel["Vercel"]
     build["Build: npm run build<br/>(Next.js compile + type check)"]
-    edge["Hosting + middleware<br/>daymax-xxxx.vercel.app"]
+    edge["Hosting + middleware<br/>daymax.me"]
   end
   subgraph Supabase["Supabase"]
     auth["Auth<br/>(email+password, magic links)"]
@@ -166,7 +166,7 @@ flowchart LR
     code["Code change"] -->|git commit| main["main branch"]
     main -->|git push| gh["GitHub"]
     gh -->|webhook| vb["Vercel build<br/>+ env vars NEXT_PUBLIC_SUPABASE_*"]
-    vb -->|green| live["Live at daymax-xxxx.vercel.app"]
+    vb -->|green| live["Live at daymax.me"]
     mig["supabase/migrations/0001-0011<br/>(run once each, in order)"] -->|SQL editor| sdb[("Supabase Postgres")]
     live --- sdb
   end
