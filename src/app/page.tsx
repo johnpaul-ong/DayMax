@@ -77,12 +77,29 @@ function LifeCard({ life, country }: { life: LifeStats; country: string | null }
       <div className="mb-3 h-3 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
       </div>
-      <div className="grid gap-[2px]" style={{ gridTemplateColumns: "repeat(52, minmax(0, 1fr))" }} title={`${livedWeeks.toLocaleString()} of ${totalWeeks.toLocaleString()} expected weeks lived`}>
-        {Array.from({ length: totalWeeks }, (_, i) => (
-          <div key={i} className="aspect-square w-full rounded-[1px]" style={{ background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)", opacity: i < livedWeeks ? 0.85 : 1 }} />
-        ))}
+      <div className="overflow-x-auto">
+        <div className="flex flex-col gap-[2px]" style={{ width: "fit-content" }}>
+          {Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, year) => (
+            <div key={year} className="flex items-center gap-[2px]">
+              <span className="w-6 shrink-0 text-right font-mono text-[8px] text-faint">
+                {year % 10 === 0 ? year : ""}
+              </span>
+              {Array.from({ length: Math.min(52, totalWeeks - year * 52) }, (_, w) => {
+                const i = year * 52 + w;
+                return (
+                  <div
+                    key={w}
+                    title={`Age ${year}, week ${w + 1}${i < livedWeeks ? " — lived" : ""}`}
+                    className="h-[7px] w-[7px] shrink-0 rounded-[1.5px]"
+                    style={{ background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)", opacity: i < livedWeeks ? 0.85 : 1 }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
-      <p className="mt-2 text-xs text-faint">Every square is one week. Each row is a year. The gray ones are all you have — make the slots count.</p>
+      <p className="mt-2 text-xs text-faint">Every square is one week; every row is one year of your life (numbers = your age). The gray ones are all you have — make the slots count.</p>
     </div>
   );
 }
