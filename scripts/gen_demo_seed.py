@@ -9,7 +9,10 @@ import random, datetime
 random.seed(616)
 
 START = datetime.date(2026, 1, 1)
-END = datetime.date(2026, 9, 4)
+END = datetime.date(2026, 12, 31)
+FIGHT = datetime.date(2026, 9, 6)
+XMAS = datetime.date(2026, 12, 25)
+NYE = datetime.date(2026, 12, 31)
 
 USERS = {
     "bruce": ("11111111-1111-4111-8111-111111111101", "hulk@demo.daymax.app", "Bruce Banner"),
@@ -17,6 +20,7 @@ USERS = {
     "thor": ("11111111-1111-4111-8111-111111111103", "thor@demo.daymax.app", "Thor Odinson"),
     "steve": ("11111111-1111-4111-8111-111111111104", "captainamerica@demo.daymax.app", "Steve Rogers"),
     "natasha": ("11111111-1111-4111-8111-111111111105", "blackwidow@demo.daymax.app", "Natasha Romanoff"),
+    "john": ("11111111-1111-4111-8111-111111111106", "johndoe@demo.daymax.app", "John Doe"),
 }
 TRACK_ID = "22222222-2222-4222-8222-222222222201"
 
@@ -33,6 +37,46 @@ def q(p, t1, t2, cat):
     a, b = int(round(t1 * 4)), int(round(t2 * 4))
     for s in range(max(0, a), min(b, 96)):
         p[s] = str(cat)
+
+def john_day(r, d):
+    p = ["0"] * 96
+    if d.weekday() >= 5:  # weekend: chores, groceries, TV
+        wake = 8.5 + r.uniform(0, 1.5)
+        q(p, 0, wake, 0); q(p, wake, wake + 0.75, 7)
+        q(p, wake + 0.75, 12, 5)
+        q(p, 12, 12.5, 7); q(p, 12.5, 14, 4)
+        if r.random() < 0.3:
+            q(p, 14, 18, 3)
+        else:
+            q(p, 14, 18, 9)
+        q(p, 18, 19, 7); q(p, 19, 22.5, 9); q(p, 22.5, 23.25, 6); q(p, 23.25, 24, 0)
+        return p
+    wake = 6.75 + r.uniform(0, 0.5)
+    q(p, 0, wake, 0); q(p, wake, wake + 0.5, 5); q(p, wake + 0.5, wake + 0.75, 7)
+    q(p, wake + 0.75, wake + 1.5, 4)
+    q(p, wake + 1.5, 12.5, 1); q(p, 12.5, 13, 7); q(p, 13, 17 + r.uniform(0, 0.5), 1)
+    q(p, 17.25, 18, 4)
+    if d.weekday() in (1, 3) and r.random() < 0.55:
+        q(p, 18, 18.75, 2)
+    q(p, 19, 19.5, 7); q(p, 19.5, 22.25, 9); q(p, 22.25, 23, 6); q(p, 23, 24, 0)
+    return p
+
+def fight_day():
+    # the battle: identical slots for every Avenger
+    p = ["0"] * 96
+    q(p, 0, 6, 0); q(p, 6, 6.5, 7)
+    q(p, 6.5, 7, 1)      # ASSEMBLE call
+    q(p, 7, 8, 4)        # quinjet
+    q(p, 8, 18, 1)       # the battle
+    q(p, 18, 19.5, 7)    # shawarma
+    q(p, 19.5, 22, 3)    # debrief
+    q(p, 22, 24, 0)
+    return p
+
+def xmas_day(r):
+    p = ["0"] * 96
+    q(p, 0, 8, 0); q(p, 8, 10, 7); q(p, 10, 21, 8); q(p, 21, 22, 7); q(p, 22, 24, 0)
+    return p
 
 def bruce_day(r, hulk, posthulk):
     p = ["0"] * 96
@@ -164,6 +208,7 @@ while d <= END:
         if START <= hd <= END:
             hulk_days.add(hd)
     d = (d.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
+hulk_days.discard(datetime.date(2026, 9, 6))
 posthulk_days = {h + datetime.timedelta(days=1) for h in hulk_days}
 loki_weeks = {(2026, 14), (2026, 27)}
 
@@ -175,6 +220,7 @@ NOTES = {
     "thor": ["A GLORIOUS DAY OF TRAINING AND FEASTING!", "The hammer felt light today. As always.", "Midgardian burritos are a worthy feast.", "Another flagon! ANOTHER!"],
     "thor_loki": ["Brother trouble. Again.", "I am NOT crying. It is Asgardian rain."],
     "steve": ["I can do this all day.", "Good day. Helped Mrs. Nussbaum with her groceries.", "Early to bed, early to rise.", "Ran past Sam 23 times. On your left."],
+    "john": ["Watched TV.", "Long meeting that could have been an email.", "Had a sandwich for lunch. It was fine.", "Traffic was bad.", "Gym was busy, left early.", "Nothing much happened today.", "Bins night.", "Thought about starting a podcast. Did not."],
     "nat": ["\u2588\u2588\u2588\u2588 \u2588\u2588\u2588.", "Handled it.", "Budapest could never.", "Cleaned the ledger a little more."],
 }
 
@@ -184,7 +230,40 @@ for key, (uid_, email, name) in USERS.items():
     while d <= END:
         r = random.Random(f"{key}{d}")
         iso = d.isocalendar()
-        if key == "bruce":
+        if d == FIGHT and key != "john":
+            p = fight_day()
+            emo, note = {
+                "bruce": (0, "The other guy did most of it. Woke up in a shawarma shop."),
+                "tony": (9, "Saved the world before dinner. You are welcome, Earth."),
+                "thor": (10, "A BATTLE WORTHY OF SONG! And then shawarma."),
+                "steve": (8, "We did our job. Team dinner was nice."),
+                "natasha": (7, "Tuesday."),
+            }[key]
+            tired = 9
+            weight = 640 if key == "bruce" else {"tony": 78, "thor": 290, "steve": 109, "natasha": 60}[key]
+            patterns.append((uid_, d.isoformat(), "".join(p)))
+            day_metrics.append((uid_, d.isoformat(), emo, tired, note))
+            daily_metrics.append((uid_, d.isoformat(), weight))
+            d += datetime.timedelta(days=1)
+            continue
+        if d == XMAS:
+            p = xmas_day(r)
+            note = {"bruce": "Quiet Christmas. Green sweater, obviously.", "tony": "Bought everyone a tower. A small one.",
+                    "thor": "MIDGARDIAN YULE FEAST!", "steve": "Merry Christmas, everyone.",
+                    "natasha": "Family. Weird. Nice.", "john": "Christmas at the in-laws. The turkey was dry."}[key]
+            patterns.append((uid_, d.isoformat(), "".join(p)))
+            day_metrics.append((uid_, d.isoformat(), 9 if key != "john" else 7, 3, note))
+            d += datetime.timedelta(days=1)
+            continue
+        if key == "john":
+            p = john_day(r, d)
+            emo = round(r.uniform(5.5, 7.5) * 2) / 2
+            tired = round(r.uniform(4, 7))
+            note = r.choice(NOTES["john"]) if r.random() < 0.3 else None
+            if d == FIGHT:
+                note = "Something going on downtown. Traffic was terrible."
+            weight = round(r.uniform(81, 84), 1)
+        elif key == "bruce":
             hulk, post = d in hulk_days, d in posthulk_days
             p = bruce_day(r, hulk, post)
             emo = 0 if hulk else (4 if post else round(r.uniform(6, 8) * 2) / 2)
@@ -312,6 +391,10 @@ for key, (uid_, email, name) in USERS.items():
             if d.weekday() == 5 and not (r.random() < 0.03):
                 w, note = state["steve"]["Squat"].session(lift_rng, week)
                 lifts.append((uid_, d.isoformat(), "Squat", w, reps_for(r), note))
+        elif key == "john":
+            if d.weekday() == 1 and not (r.random() < 0.35) and d != FIGHT:
+                w = 60 + r.choice([-2.5, 0, 0, 0, 2.5])
+                lifts.append((uid_, d.isoformat(), "Bench", w, "8", r.choice(["did not want to be here", "gym was busy", None, None])))
         else:
             if d.weekday() in (1, 4) and not skip:
                 nat_pullups = max(10, nat_pullups + lift_rng.gauss(0.12, 0.7))
@@ -328,6 +411,7 @@ goals = [
     (USERS["thor"][0], "Deadlift", 1000, "kg"),
     (USERS["steve"][0], "Bench", 280, "kg"),
     (USERS["natasha"][0], "Pull Ups", 60, "reps"),
+    (USERS["john"][0], "Bench", 100, "kg"),
 ]
 
 LABEL_CASE = """
@@ -337,6 +421,7 @@ LABEL_CASE = """
             when '{tony}' then (array['suit R&D','arc reactor v52','avoiding board meetings'])[1 + (s.slot % 3)]
             when '{thor}' then 'royal duties'
             when '{steve}' then (array['helping old ladies','shield duty','motivational posters'])[1 + (s.slot % 3)]
+            when '{john}' then (array['spreadsheets','emails','meeting'])[1 + (s.slot % 3)]
             else '\u2588\u2588\u2588\u2588 classified' end)
          when '2' then (case p.user_id
             when '{bruce}' then 'calming yoga'
@@ -353,7 +438,7 @@ LABEL_CASE = """
          when '4' then (case p.user_id when '{bruce}' then 'fleeing the scene' else 'travel' end)
          when '7' then (case p.user_id when '{thor}' then 'FEAST' else null end)
          else null
-       end""".replace("{bruce}", USERS["bruce"][0]).replace("{tony}", USERS["tony"][0]).replace("{thor}", USERS["thor"][0]).replace("{steve}", USERS["steve"][0])
+       end""".replace("{bruce}", USERS["bruce"][0]).replace("{tony}", USERS["tony"][0]).replace("{thor}", USERS["thor"][0]).replace("{steve}", USERS["steve"][0]).replace("{john}", USERS["john"][0])
 
 out = []
 out.append("-- DayMax demo seed (GENERATED by scripts/gen_demo_seed.py - do not hand-edit).")
@@ -367,7 +452,7 @@ for uid_, email, name in USERS.values():
         f"insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, created_at, updated_at) values ('{uid_}','00000000-0000-0000-0000-000000000000','authenticated','authenticated','{email}', now(), now(), now());"
     )
 out.append("")
-BDAY = {"bruce": "1985-12-18", "tony": "1978-05-29", "thor": "1982-08-11", "steve": "1990-07-04", "natasha": "1988-11-22"}
+BDAY = {"bruce": "1985-12-18", "tony": "1978-05-29", "thor": "1982-08-11", "steve": "1990-07-04", "natasha": "1988-11-22", "john": "1989-03-15"}
 for k, (uid_, email, name) in USERS.items():
     out.append(
         f"update public.profiles set display_name='{esc(name)}', is_demo=true, birth_date='{BDAY[k]}', country='United States', profile_sections='[\"ranking\",\"hours\",\"lifts\"]'::jsonb where id='{uid_}';"
@@ -412,8 +497,7 @@ emit_values(
     "public.lift_goals (user_id, exercise, target_weight_kg, unit)",
     [f"('{u}','{esc(ex)}',{t},'{unit}')" for u, ex, t, unit in goals],
 )
-out.append("\n-- bring the legends up to today and keep them living (needs migration 0008)")
-out.append("select public.demo_fill_to_today();")
+out.append("\n-- full year seeded; migration 0016 reveals it progressively")
 
 sql = "\n".join(out)
 import io, pathlib

@@ -93,7 +93,7 @@ export default function FriendsPage() {
       <div className="mb-6 card flex flex-wrap items-end gap-2 p-4">
         <label className="text-xs text-muted">
           New track
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. The Boys" className="mt-0.5 block w-48 rounded-lg border bg-surface px-2 py-2 text-sm text-ink" />
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Long Torso Boys" className="mt-0.5 block w-48 rounded-lg border bg-surface px-2 py-2 text-sm text-ink" />
         </label>
         <select value={newKind} onChange={(e) => setNewKind(e.target.value as TrackKind)} className="rounded-lg border bg-surface px-2 py-2 text-sm">
           <option value="day">Day (productivity ranking)</option>

@@ -32,7 +32,7 @@ export function PeopleSection() {
     <div className="mb-6 card p-4">
       <h2 className="mb-1 font-semibold">People</h2>
       <p className="mb-3 text-sm text-muted">
-        Friend requests and your friend list. Under-18s are never searchable — they add you instead.
+        Friend requests and your friend list.
       </p>
       <p className="mb-3 text-sm">
         <Link href="/search" className="font-medium text-accent hover:underline">Search for people and pursuits →</Link>
@@ -127,7 +127,7 @@ export function AddFriendCard({ tracks, me, onChanged }: { tracks: Track[]; me: 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <h2 className="font-semibold">Add a friend</h2>
-          <p className="text-sm text-muted">One tap: get a link, send it however you like. They click it, sign up, and you&apos;re comparing days.</p>
+          <p className="text-sm text-muted">One tap: get a link, send it however you like.</p>
         </div>
         <button onClick={() => void addFriend()} disabled={busy || !me} className="btn-primary">
           {busy ? "Making link…" : "Get invite link"}

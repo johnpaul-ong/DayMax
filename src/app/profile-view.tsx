@@ -146,7 +146,6 @@ export default function ProfileView({ userId }: { userId: string }) {
         <h1 className="text-2xl font-bold">
           {name} {username && <span className="text-base font-normal text-faint">@{username}</span>}
         </h1>
-        <p className="text-sm text-muted">Showing only what {name} chose to share.</p>
       </div>
 
       {pursuits.length > 0 && (

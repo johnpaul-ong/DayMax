@@ -54,6 +54,8 @@ export default function ArenaComparePage() {
   const [lifts, setLifts] = useState<LeaderboardLiftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
+  const [roster, setRoster] = useState<Array<{ id: string; name: string; isDemo: boolean }>>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setColors(loadBucketColors());
@@ -87,6 +89,10 @@ export default function ArenaComparePage() {
         out.sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)));
         setPeople(out);
         setSkipped(noAccess);
+        const ros = [...ids.entries()].map(([id, info]) => ({ id, name: id === me ? `${info.name} (you)` : info.name, isDemo: info.isDemo }));
+        ros.sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)));
+        setRoster(ros);
+        setSelected(new Set(ros.map((r) => r.id)));
       } finally {
         setLoading(false);
       }
@@ -112,15 +118,15 @@ export default function ArenaComparePage() {
   }
 
   const dayColumns = useMemo(
-    () => people.map((p) => ({ ...p, day: p.byDate.get(date) ?? null })).filter((p) => p.day !== null || p.isDemo),
-    [people, date]
+    () => people.filter((p) => selected.has(p.id)).map((p) => ({ ...p, day: p.byDate.get(date) ?? null })).filter((p) => p.day !== null || p.isDemo),
+    [people, date, selected]
   );
 
   // week/month: hours per person from leaderboard totals (works for everyone)
   const periodBars = useMemo(() => {
     const byId = new Map<string, { name: string; productive: number; brainrot: number; social: number; other: number }>();
     for (const r of board) {
-      if (r.date < from || r.date > to) continue;
+      if (r.date < from || r.date > to || !selected.has(r.memberId)) continue;
       const cur = byId.get(r.memberId) ?? { name: r.displayName, productive: 0, brainrot: 0, social: 0, other: 0 };
       cur.productive += r.productive;
       cur.brainrot += r.brainrot;
@@ -129,13 +135,13 @@ export default function ArenaComparePage() {
       byId.set(r.memberId, cur);
     }
     return Array.from(byId.values()).sort((a, b) => b.productive - a.productive);
-  }, [board, from, to]);
+  }, [board, from, to, selected]);
 
   // relative lift gains inside the period: avg % change across exercises with 2+ sessions
   const liftGains = useMemo(() => {
     const byPerson = new Map<string, { name: string; byExercise: Map<string, Array<[string, number]>> }>();
     for (const l of lifts) {
-      if (l.date < from || l.date > to) continue;
+      if (l.date < from || l.date > to || !selected.has(l.memberId)) continue;
       if (!byPerson.has(l.memberId)) byPerson.set(l.memberId, { name: l.displayName, byExercise: new Map() });
       const p = byPerson.get(l.memberId)!;
       p.byExercise.set(l.exercise, [...(p.byExercise.get(l.exercise) ?? []), [l.date, l.weightKg]]);
@@ -153,7 +159,7 @@ export default function ArenaComparePage() {
       if (gains.length) out.push({ name, gain: Math.round((gains.reduce((s, g) => s + g, 0) / gains.length) * 10) / 10, exercises: gains.length });
     }
     return out.sort((a, b) => b.gain - a.gain);
-  }, [lifts, from, to]);
+  }, [lifts, from, to, selected]);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -176,6 +182,28 @@ export default function ArenaComparePage() {
         <button onClick={() => shift(1)} disabled={from >= todayISO} className="rounded-lg border px-2.5 py-1 text-sm disabled:opacity-40">→</button>
         <Link href="/arena" className="ml-auto text-sm font-medium text-accent hover:underline">← Arena</Link>
       </div>
+
+      {roster.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <button onClick={() => setSelected(new Set(roster.map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">All</button>
+          <button onClick={() => setSelected(new Set(roster.filter((r) => r.isDemo || r.name.endsWith("(you)")).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Avengers + you</button>
+          <button onClick={() => setSelected(new Set(roster.filter((r) => !r.isDemo).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">People only</button>
+          <span className="mx-1 text-faint">·</span>
+          {roster.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => {
+                const next = new Set(selected);
+                if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
+                setSelected(next);
+              }}
+              className={`rounded-full border px-2.5 py-1 text-xs ${selected.has(r.id) ? "bg-accent-soft font-semibold text-accent" : "text-faint line-through"}`}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <p className="mt-4 text-sm text-muted">Loading…</p>

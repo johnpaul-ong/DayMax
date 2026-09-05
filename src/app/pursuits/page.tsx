@@ -79,7 +79,7 @@ export default function PursuitsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 text-xl font-bold">My pursuits</h1>
+      <h1 className="mb-4 text-xl font-bold">My pursuits</h1>
 
       {mine.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-1.5">
@@ -132,7 +132,6 @@ export default function PursuitsPage() {
 
       <div className="card p-4">
         <h2 className="mb-1 font-semibold">Start a pursuit</h2>
-        <p className="mb-3 text-sm text-muted">Chess, 500 words a day, cold showers — name it, then add its stats on the pursuit page.</p>
         <div className="flex flex-wrap items-end gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Chess)" className="w-44 rounded-lg border bg-surface px-2 py-2 text-sm" />
           <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="One-line description" className="min-w-56 flex-1 rounded-lg border bg-surface px-2 py-2 text-sm" />
