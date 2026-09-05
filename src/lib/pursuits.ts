@@ -216,3 +216,10 @@ export async function fetchMemberPursuits(memberId: string): Promise<MemberPursu
   const data = await rpcAll("member_pursuits", { member: memberId });
   return data.map((r: any) => ({ id: r.id, name: r.name, kind: r.kind, memberCount: Number(r.member_count) }));
 }
+
+/** Where a pursuit lives: built-ins route to their dedicated pages. */
+export function pursuitHref(p: Pick<Pursuit, "id" | "kind">): string {
+  if (p.kind === "life") return "/day";
+  if (p.kind === "lifts") return "/lifts";
+  return `/pursuits/${p.id}`;
+}

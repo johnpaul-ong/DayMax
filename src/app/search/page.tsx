@@ -8,8 +8,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { listFriends, searchProfiles, sendFriendRequest, type FoundProfile, type Friendship } from "@/lib/friends";
-import { fetchDirectory, joinPursuit, type Pursuit } from "@/lib/pursuits";
-import { pursuitHref } from "../pursuits/page";
+import { fetchDirectory, joinPursuit, type Pursuit, pursuitHref } from "@/lib/pursuits";
 
 export default function SearchPage() {
   const [q, setQ] = useState("");

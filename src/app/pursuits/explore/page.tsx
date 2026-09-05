@@ -7,8 +7,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { fetchDirectory, joinPursuit, leavePursuit, type Pursuit } from "@/lib/pursuits";
-import { pursuitHref } from "../page";
+import { fetchDirectory, joinPursuit, leavePursuit, type Pursuit, pursuitHref } from "@/lib/pursuits";
 
 export default function ExplorePage() {
   const [pursuits, setPursuits] = useState<Pursuit[]>([]);

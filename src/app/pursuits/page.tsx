@@ -7,13 +7,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createPursuit, fetchDirectory, type Pursuit } from "@/lib/pursuits";
-
-export function pursuitHref(p: Pursuit): string {
-  if (p.kind === "life") return "/day";
-  if (p.kind === "lifts") return "/lifts";
-  return `/pursuits/${p.id}`;
-}
+import { createPursuit, fetchDirectory, pursuitHref, type Pursuit } from "@/lib/pursuits";
 
 export default function PursuitsPage() {
   const [pursuits, setPursuits] = useState<Pursuit[]>([]);
