@@ -33,6 +33,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { localToday } from "@/lib/dates";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -271,7 +272,7 @@ function TrackDetail({ track, me, onDeleted }: { track: Track; me: string; onDel
 }
 
 function DayCompare({ trackId }: { trackId: string }) {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [rows, setRows] = useState<CompareDayRow[]>([]);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);

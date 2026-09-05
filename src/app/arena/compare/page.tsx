@@ -22,6 +22,7 @@ import {
 import { weekStart } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { localToday } from "@/lib/dates";
 
 type Scope = "day" | "week" | "month";
 
@@ -45,7 +46,7 @@ function addMonths(iso: string, n: number): string {
 }
 
 export default function ArenaComparePage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [scope, setScope] = useState<Scope>("day");
   const [date, setDate] = useState(todayISO);
   const [people, setPeople] = useState<PersonDays[]>([]);

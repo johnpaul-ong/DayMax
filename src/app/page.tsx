@@ -13,6 +13,7 @@ import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, focusScore, hoursByCategory, weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 // ---------- customizable layout ----------
 
@@ -153,7 +154,7 @@ function YearStrip({ entries }: { entries: DayEntry[] }) {
 }
 
 export default function HomePage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [weekEntries, setWeekEntries] = useState<DayEntry[]>([]);
   const [allEntries, setAllEntries] = useState<DayEntry[] | null>(null);

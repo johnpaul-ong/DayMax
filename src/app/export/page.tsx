@@ -8,9 +8,10 @@
 import { useState } from "react";
 import { fetchDayEntries, fetchDayMetrics } from "@/lib/data";
 import { buildMonthGridXlsx } from "@/lib/xlsxIO";
+import { localToday, localMonth } from "@/lib/dates";
 
 export default function ExportPage() {
-  const [ym, setYm] = useState(new Date().toISOString().slice(0, 7));
+  const [ym, setYm] = useState(localMonth());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -114,7 +115,7 @@ function EverythingExport() {
       const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `daymax_everything_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `daymax_everything_${localToday()}.xlsx`;
       a.click();
       URL.revokeObjectURL(a.href);
       setMsg(`Exported ${sheets} sheets.`);

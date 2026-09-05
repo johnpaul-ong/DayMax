@@ -29,12 +29,13 @@ import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
 import { weekStart } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
+import { localToday } from "@/lib/dates";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 export default function ProfileView({ userId }: { userId: string }) {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
 
   const [name, setName] = useState<string | null>(null);

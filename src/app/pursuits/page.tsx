@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
+import { localToday } from "@/lib/dates";
 import {
   createPursuit,
   fetchDirectory,
@@ -25,7 +26,7 @@ interface Spark {
 }
 
 export default function PursuitsPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [pursuits, setPursuits] = useState<Pursuit[]>([]);
   const [sparks, setSparks] = useState<Record<string, Spark | null>>({});
   const [error, setError] = useState<string | null>(null);

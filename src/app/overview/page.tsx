@@ -37,6 +37,7 @@ import { computeRanking, weekStart } from "@/lib/ranking";
 import { allPairCorrelations, bucketsByPeriod, buildDayPoints, CORRELATION_FIELDS, describeR, pearson, type DayPoint, type Period } from "@/lib/stats";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, DayMetrics, LiftEntry } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 // ---------- configurable sections ----------
 
@@ -85,7 +86,7 @@ const TREND_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 export default function OverviewPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [entries, setEntries] = useState<DayEntry[]>([]);
   const [dayMetrics, setDayMetrics] = useState<DayMetrics[]>([]);
   const [lifts, setLifts] = useState<Array<LiftEntry & { id: number }>>([]);

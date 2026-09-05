@@ -14,6 +14,7 @@ import { fetchLeaderboard, type LeaderboardRow } from "@/lib/friends";
 import { weekStart } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { localToday } from "@/lib/dates";
 
 type Scope = "avengers" | "friends" | "everyone";
 const SCOPES: Array<{ key: Scope; label: string }> = [
@@ -78,7 +79,7 @@ function Board({
 }
 
 export default function ArenaPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [error, setError] = useState<string | null>(null);

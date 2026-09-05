@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchDailyMetrics, upsertDailyMetrics } from "@/lib/data";
 import { createClient } from "@/lib/supabase/client";
+import { localToday } from "@/lib/dates";
 
 interface MetricType {
   key: string;
@@ -24,7 +25,7 @@ const toKey = (name: string) =>
   name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
 
 export default function HabitsPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [types, setTypes] = useState<MetricType[]>([]);
   const [mine, setMine] = useState<string[]>([]); // metric keys I have data for
   const [series, setSeries] = useState<Record<string, Array<{ date: string; value: number }>>>({});

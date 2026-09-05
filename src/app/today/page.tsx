@@ -10,9 +10,10 @@ import { useEffect, useMemo, useState } from "react";
 import { CATEGORIES, categoryColor, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { deleteDayEntries, fetchDayEntries, fetchDayMetrics, upsertDayEntries, upsertDayMetrics } from "@/lib/data";
 import type { DayMetrics } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 export default function TodayPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [date, setDate] = useState(todayISO);
   const [cells, setCells] = useState<Map<number, { category: number; label: string | null }>>(new Map());
   const [cat, setCat] = useState<number>(0);

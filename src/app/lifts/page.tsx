@@ -31,6 +31,7 @@ import {
 } from "@/lib/data";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors } from "@/lib/theme";
 import type { LiftEntry } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 /** Best reps in a messy reps string: "2 + 10" -> 10, "AMRAP" -> 0. */
 function maxReps(reps: string | null): number {
@@ -228,7 +229,7 @@ function ProgressionSection({ rows }: { rows: LiftEntry[] }) {
 }
 
 export default function LiftsPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [rows, setRows] = useState<Array<LiftEntry & { id: number }>>([]);
   const [form, setForm] = useState<LiftEntry>({
     date: todayISO,

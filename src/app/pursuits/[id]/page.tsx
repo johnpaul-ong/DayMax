@@ -46,6 +46,7 @@ import {
   type StatEntry,
 } from "@/lib/pursuits";
 import { weekStart } from "@/lib/ranking";
+import { localToday } from "@/lib/dates";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -53,7 +54,7 @@ const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 export default function PursuitPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [pursuit, setPursuit] = useState<Pursuit | null>(null);
   const [stats, setStats] = useState<PursuitStat[]>([]);
@@ -270,7 +271,7 @@ export default function PursuitPage() {
 }
 
 function StatSection({ stat, isOwner, isMember, onChanged }: { stat: PursuitStat; isOwner: boolean; isMember: boolean; onChanged: () => void }) {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [all, setAll] = useState<StatEntry[]>([]);
   const [mine, setMine] = useState<MyEntry[]>([]);

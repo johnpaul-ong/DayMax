@@ -11,6 +11,7 @@ import { CATEGORIES, categoryColor, slotToTime, SLOTS_PER_DAY } from "@/lib/cate
 import { parseGridCell } from "@/lib/gridParse";
 import { deleteDayEntries, fetchDayEntries, upsertDayEntries } from "@/lib/data";
 import type { DayEntry } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 type CellMap = Map<string, { category: number; label: string | null }>;
 const key = (date: string, slot: number) => `${date}|${slot}`;
@@ -22,7 +23,7 @@ function monthDates(ym: string): string[] {
 }
 
 export default function DayGridPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [ym, setYm] = useState(todayISO.slice(0, 7));
   const dates = useMemo(() => monthDates(ym), [ym]);
 

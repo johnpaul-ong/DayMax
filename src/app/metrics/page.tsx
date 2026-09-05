@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchDayMetrics, upsertDayMetrics } from "@/lib/data";
 import type { DayMetrics } from "@/lib/types";
+import { localToday } from "@/lib/dates";
 
 const NUM_FIELDS: Array<{ key: keyof Omit<DayMetrics, "date" | "notes">; label: string }> = [
   { key: "emotionalScore", label: "Emotion /10" },
@@ -23,7 +24,7 @@ function emptyRow(date: string): DayMetrics {
 }
 
 export default function MetricsPage() {
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localToday();
   const [rows, setRows] = useState<DayMetrics[]>([]);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
