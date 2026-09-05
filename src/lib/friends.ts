@@ -205,7 +205,9 @@ export async function fetchMemberProfile(
   const { data, error } = await supabase.rpc("member_profile", { member: userId });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
-  const sections = Array.isArray(row?.sections) ? (row.sections as ProfileSection[]) : ["ranking", "hours", "lifts"];
+  const sections: ProfileSection[] = Array.isArray(row?.sections)
+    ? (row.sections as ProfileSection[])
+    : ["ranking", "hours", "lifts"];
   return { displayName: row?.display_name ?? "anonymous", username: row?.username ?? null, sections };
 }
 
