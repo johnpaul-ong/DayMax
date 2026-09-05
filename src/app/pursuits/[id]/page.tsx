@@ -104,6 +104,17 @@ export default function PursuitPage() {
     return [...byMember.values()].sort((a, b) => b.week - a.week).slice(0, 3);
   }, [firstStatData, ws, todayISO]);
 
+  // top people overall: all-time totals on the same stat, for the shared graph
+  const topAllTime = useMemo(() => {
+    const byMember = new Map<string, { name: string; total: number }>();
+    for (const e of firstStatData) {
+      const cur = byMember.get(e.memberId) ?? { name: e.displayName, total: 0 };
+      cur.total += e.value;
+      byMember.set(e.memberId, cur);
+    }
+    return [...byMember.values()].sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [firstStatData]);
+
   if (error) return <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>;
   if (!pursuit) return <p className="text-sm text-muted">Loading pursuit…</p>;
 
@@ -157,6 +168,22 @@ export default function PursuitPage() {
           <p className="mt-3 text-xs text-faint">
             Recording: {stats.filter((s) => !s.hidden).map((s) => s.name).join(" · ") || "nothing visible yet"}
           </p>
+        )}
+
+        {topAllTime.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Top people, all time</p>
+            <div className="h-40">
+              <ResponsiveContainer>
+                <BarChart data={topAllTime.map((t) => ({ name: t.name, total: Math.round(t.total * 100) / 100 }))} layout="vertical" margin={{ left: 8, right: 16 }}>
+                  <XAxis type="number" tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
+                  <Tooltip />
+                  <Bar dataKey="total" fill="var(--accent)" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         )}
 
         <div className="mt-3 flex flex-wrap gap-2 text-sm">

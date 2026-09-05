@@ -17,8 +17,8 @@ import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/li
 
 type Scope = "avengers" | "friends" | "everyone";
 const SCOPES: Array<{ key: Scope; label: string }> = [
-  { key: "avengers", label: "You vs the Avengers" },
-  { key: "friends", label: "You vs friends" },
+  { key: "avengers", label: `You vs "Avengers Assemble"` },
+  { key: "friends", label: "You vs Friends" },
   { key: "everyone", label: "Everyone" },
 ];
 

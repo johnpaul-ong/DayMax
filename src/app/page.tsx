@@ -75,20 +75,34 @@ function LifeCard({ life, country }: { life: LifeStats; country: string | null }
         <div className="h-full rounded-full bg-accent" style={{ width: `${life.percentLived}%` }} />
       </div>
       <div className="overflow-x-auto">
-        <div className="flex flex-col gap-[2px]" style={{ width: "fit-content" }}>
+        <div style={{ display: "inline-grid", rowGap: 2 }}>
           {Array.from({ length: Math.ceil(totalWeeks / 52) }, (_, year) => (
-            <div key={year} className="flex items-center gap-[2px]">
-              <span className="w-6 shrink-0 text-right font-mono text-[8px] text-faint">
+            <div
+              key={year}
+              style={{
+                display: "grid",
+                gridTemplateColumns: `24px repeat(52, 7px)`,
+                columnGap: 2,
+                alignItems: "center",
+              }}
+            >
+              <span className="text-right font-mono text-[8px] text-faint">
                 {year % 10 === 0 ? year : ""}
               </span>
-              {Array.from({ length: Math.min(52, totalWeeks - year * 52) }, (_, w) => {
+              {Array.from({ length: 52 }, (_, w) => {
                 const i = year * 52 + w;
+                if (i >= totalWeeks) return <span key={w} />;
                 return (
-                  <div
+                  <span
                     key={w}
                     title={`Age ${year}, week ${w + 1}${i < livedWeeks ? " — lived" : ""}`}
-                    className="h-[7px] w-[7px] shrink-0 rounded-[1.5px]"
-                    style={{ background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)", opacity: i < livedWeeks ? 0.85 : 1 }}
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: 1.5,
+                      background: i < livedWeeks ? "var(--accent)" : "var(--surface-2)",
+                      opacity: i < livedWeeks ? 0.85 : 1,
+                    }}
                   />
                 );
               })}

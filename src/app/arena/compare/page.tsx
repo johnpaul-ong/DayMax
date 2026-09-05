@@ -8,7 +8,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import {
@@ -56,6 +56,10 @@ export default function ArenaComparePage() {
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [roster, setRoster] = useState<Array<{ id: string; name: string; isDemo: boolean }>>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // which "person:YYYY-MM" windows we've already pulled from the server —
+  // day-strip data is a whole year per person, so we only fetch the months
+  // actually being looked at instead of everyone's entire history up front.
+  const loadedMonths = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setColors(loadBucketColors());
@@ -69,35 +73,52 @@ export default function ArenaComparePage() {
         const ids = new Map<string, { name: string; isDemo: boolean }>();
         for (const r of rows) ids.set(r.memberId, { name: r.displayName, isDemo: r.isDemo });
         if (me && !ids.has(me)) ids.set(me, { name: "You", isDemo: false });
-        const out: PersonDays[] = [];
-        const noAccess: string[] = [];
-        await Promise.all(
-          Array.from(ids.entries()).slice(0, 10).map(async ([id, info]) => {
-            try {
-              const strip: DayStripRow[] = await fetchMemberDayStrip(id);
-              const byDate = new Map<string, Map<number, { category: number; label: string | null }>>();
-              for (const r of strip) {
-                if (!byDate.has(r.date)) byDate.set(r.date, new Map());
-                byDate.get(r.date)!.set(r.slot, { category: r.category, label: r.label });
-              }
-              out.push({ id, name: id === me ? `${info.name} (you)` : info.name, isDemo: info.isDemo, byDate });
-            } catch {
-              noAccess.push(info.name);
-            }
-          })
-        );
-        out.sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)));
-        setPeople(out);
-        setSkipped(noAccess);
         const ros = [...ids.entries()].map(([id, info]) => ({ id, name: id === me ? `${info.name} (you)` : info.name, isDemo: info.isDemo }));
         ros.sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : a.name.localeCompare(b.name)));
-        setRoster(ros);
-        setSelected(new Set(ros.map((r) => r.id)));
+        setRoster(ros.slice(0, 10));
+        setSelected(new Set(ros.slice(0, 10).map((r) => r.id)));
+        setPeople(ros.slice(0, 10).map((r) => ({ id: r.id, name: r.name, isDemo: r.isDemo, byDate: new Map() })));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  // Fetch just the month containing the selected date, per person, the first
+  // time it's needed — not the whole year for everyone on every page load.
+  useEffect(() => {
+    if (scope !== "day" || roster.length === 0) return;
+    const month = date.slice(0, 7);
+    const [y, mo] = month.split("-").map(Number);
+    const monthFrom = `${month}-01`;
+    const monthTo = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+    const todo = roster.filter((r) => !loadedMonths.current.has(`${r.id}:${month}`));
+    if (todo.length === 0) return;
+    const noAccess: string[] = [];
+    Promise.all(
+      todo.map(async (r) => {
+        loadedMonths.current.add(`${r.id}:${month}`);
+        try {
+          const strip: DayStripRow[] = await fetchMemberDayStrip(r.id, monthFrom, monthTo);
+          setPeople((prev) =>
+            prev.map((p) => {
+              if (p.id !== r.id) return p;
+              const byDate = new Map(p.byDate);
+              for (const row of strip) {
+                if (!byDate.has(row.date)) byDate.set(row.date, new Map());
+                byDate.get(row.date)!.set(row.slot, { category: row.category, label: row.label });
+              }
+              return { ...p, byDate };
+            })
+          );
+        } catch {
+          noAccess.push(r.name);
+        }
+      })
+    ).then(() => {
+      if (noAccess.length) setSkipped((prev) => [...new Set([...prev, ...noAccess])]);
+    });
+  }, [scope, date, roster]);
 
   // period boundaries for week/month scopes
   const [from, to, periodLabel] = useMemo((): [string, string, string] => {
@@ -185,9 +206,9 @@ export default function ArenaComparePage() {
 
       {roster.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setSelected(new Set(roster.map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">All</button>
-          <button onClick={() => setSelected(new Set(roster.filter((r) => r.isDemo || r.name.endsWith("(you)")).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Avengers + you</button>
-          <button onClick={() => setSelected(new Set(roster.filter((r) => !r.isDemo).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">People only</button>
+          <button onClick={() => setSelected(new Set(roster.map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Everyone</button>
+          <button onClick={() => setSelected(new Set(roster.filter((r) => r.isDemo || r.name.endsWith("(you)")).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">&quot;Avengers Assemble&quot;</button>
+          <button onClick={() => setSelected(new Set(roster.filter((r) => !r.isDemo).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Friends</button>
           <span className="mx-1 text-faint">·</span>
           {roster.map((r) => (
             <button

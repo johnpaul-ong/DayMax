@@ -272,9 +272,17 @@ export interface DayStripRow {
   label: string | null;
 }
 
-/** Full 15-min history for a profile (demo users, yourself, or raw_labels friends). */
-export async function fetchMemberDayStrip(userId: string): Promise<DayStripRow[]> {
-  const data = await rpcAll("member_day_strip", { member: userId });
+/**
+ * 15-min history for a profile (demo users, yourself, or raw_labels friends).
+ * Pass from/to to limit to a window — e.g. Side by side only needs a few
+ * weeks around the selected date, not someone's whole year. Omit both for
+ * the full history (what the profile page's year views need).
+ */
+export async function fetchMemberDayStrip(userId: string, from?: string, to?: string): Promise<DayStripRow[]> {
+  const params: Record<string, unknown> = { member: userId };
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await rpcAll("member_day_strip", params);
   return data.map((r: any) => ({
     date: String(r.date),
     slot: r.slot,

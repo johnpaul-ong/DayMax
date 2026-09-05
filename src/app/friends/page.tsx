@@ -12,7 +12,6 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import {
   addTrackMember,
   createInvite,
-  createTrack,
   deleteInvite,
   deleteTrack,
   fetchCompareDay,
@@ -29,11 +28,9 @@ import {
   type Invite,
   type ShareRule,
   type Track,
-  type TrackKind,
   type TrackMember,
 } from "@/lib/friends";
 import { createClient } from "@/lib/supabase/client";
-import { AddFriendCard, PeopleSection } from "./social";
 import { weekStart } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 
@@ -50,10 +47,9 @@ const RULE_INFO: Record<ShareRule, string> = {
 
 export default function FriendsPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [friends, setFriends] = useState<Friendship[]>([]);
   const [me, setMe] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newKind, setNewKind] = useState<TrackKind>("day");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,6 +67,7 @@ export default function FriendsPage() {
         )
       )
       .finally(() => setLoading(false));
+    listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
   }
 
   useEffect(() => {
@@ -83,56 +80,51 @@ export default function FriendsPage() {
       <h1 className="mb-1 text-xl font-bold">Friends</h1>
       <p className="mb-4 text-sm text-muted">
         Invite-only tracks. Compare uses totals and focus score — never your labels, unless a member explicitly shares them.
+        Looking to add someone? Head to <Link href="/search" className="font-medium text-accent hover:underline">Search</Link>.
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
-      <PeopleSection />
-
-      <AddFriendCard tracks={tracks} me={me} onChanged={reload} />
-
-      <div className="mb-6 card flex flex-wrap items-end gap-2 p-4">
-        <label className="text-xs text-muted">
-          New track
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Long Torso Boys" className="mt-0.5 block w-48 rounded-lg border bg-surface px-2 py-2 text-sm text-ink" />
-        </label>
-        <select value={newKind} onChange={(e) => setNewKind(e.target.value as TrackKind)} className="rounded-lg border bg-surface px-2 py-2 text-sm">
-          <option value="day">Day (productivity ranking)</option>
-          <option value="lifts">Lifts (progression compare)</option>
-        </select>
-        <button
-          onClick={() => {
-            if (!newName.trim()) return;
-            createTrack(newName.trim(), newKind)
-              .then(() => {
-                setNewName("");
-                reload();
-              })
-              .catch((e) => setError(String(e.message ?? e)));
-          }}
-          className="btn-primary"
-        >
-          Create
-        </button>
-      </div>
+      {friends.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-1.5 text-sm font-semibold text-muted">Your friends</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1">
+            {friends.map((f) => (
+              <Link
+                key={f.friendshipId}
+                href={`/friends/${f.memberId}`}
+                className="flex shrink-0 flex-col items-center gap-1 rounded-xl border bg-surface px-3 py-2 transition hover:-translate-y-0.5 hover:text-accent"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent-soft text-sm font-bold text-accent">
+                  {f.displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="max-w-[6rem] truncate text-xs font-medium">{f.displayName}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : tracks.length === 0 && !error ? (
-        <p className="card p-4 text-sm text-faint">No tracks yet. Create one and send your friends the invite link.</p>
+        <p className="card p-4 text-sm text-faint">No tracks yet — add a friend from Search and a track is set up for you automatically.</p>
       ) : (
-        <div className="space-y-4">
-          {tracks.map((t) => (
-            <div key={t.id} className="card p-4">
-              <button onClick={() => setOpen(open === t.id ? null : t.id)} className="flex w-full items-center justify-between">
-                <span className="font-semibold">
-                  {t.name} <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-normal text-muted">{t.kind}</span>
-                  {t.isDemo && <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">demo</span>}
-                </span>
-                <span className="text-sm text-faint">{open === t.id ? "▲" : "▼"}</span>
-              </button>
-              {open === t.id && me && <TrackDetail track={t} me={me} onDeleted={reload} />}
-            </div>
-          ))}
+        <div>
+          <h2 className="mb-1.5 text-sm font-semibold text-muted">Tracks</h2>
+          <div className="space-y-4">
+            {tracks.map((t) => (
+              <div key={t.id} className="card p-4">
+                <button onClick={() => setOpen(open === t.id ? null : t.id)} className="flex w-full items-center justify-between">
+                  <span className="font-semibold">
+                    {t.name} <span className="ml-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-normal text-muted">{t.kind}</span>
+                    {t.isDemo && <span className="ml-1 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">demo</span>}
+                  </span>
+                  <span className="text-sm text-faint">{open === t.id ? "▲" : "▼"}</span>
+                </button>
+                {open === t.id && me && <TrackDetail track={t} me={me} onDeleted={reload} />}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -309,7 +301,8 @@ function DayCompare({ trackId }: { trackId: string }) {
         week: agg(m.rows.filter((r) => r.date >= ws && r.date <= todayISO)),
         all: agg(m.rows),
       }))
-      .sort((a, b) => (b.week.score ?? -1) - (a.week.score ?? -1));
+      .sort((a, b) => (b.week.score ?? -1) - (a.week.score ?? -1))
+      .slice(0, 5);
   }, [rows, todayISO, ws]);
 
   const chart = useMemo(() => {
@@ -328,7 +321,7 @@ function DayCompare({ trackId }: { trackId: string }) {
 
   return (
     <div>
-      <h3 className="mb-1 text-sm font-semibold">Leaderboard (ranked by this week&apos;s focus score)</h3>
+      <h3 className="mb-1 text-sm font-semibold">Top 5 (ranked by this week&apos;s focus score)</h3>
       <p className="mb-1 text-xs text-faint">Focus score = productive ÷ (productive + brainrot) × 100. Someone with little brainrot scores high even on a light day — hours are shown next to it for honesty.</p>
       <div className="mb-3 overflow-x-auto card">
         <table className="w-full text-sm">
@@ -412,6 +405,18 @@ function LiftsCompare({ trackId }: { trackId: string }) {
     return { data: [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1)), names: [...names] };
   }, [rows, exercise]);
 
+  const board = useMemo(() => {
+    const byMember = new Map<string, { name: string; best: number; latest: number }>();
+    for (const r of rows) {
+      if (r.exercise !== exercise || r.weightKg == null) continue;
+      const cur = byMember.get(r.memberId) ?? { name: r.displayName, best: 0, latest: r.weightKg };
+      cur.best = Math.max(cur.best, r.weightKg);
+      cur.latest = r.weightKg;
+      byMember.set(r.memberId, cur);
+    }
+    return [...byMember.values()].sort((a, b) => b.best - a.best).slice(0, 5);
+  }, [rows, exercise]);
+
   if (rows.length === 0) return <p className="text-sm text-faint">No shared lifts yet.</p>;
 
   return (
@@ -438,6 +443,30 @@ function LiftsCompare({ trackId }: { trackId: string }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
+      {board.length > 0 && (
+        <div className="mt-3 overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead className="bg-surface-2 text-left text-xs text-muted">
+              <tr>
+                <th className="px-3 py-1.5">#</th>
+                <th className="px-3 py-1.5">Member</th>
+                <th className="px-3 py-1.5">Best</th>
+                <th className="px-3 py-1.5">Latest</th>
+              </tr>
+            </thead>
+            <tbody>
+              {board.map((m, i) => (
+                <tr key={m.name} className="border-b last:border-0">
+                  <td className="px-3 py-1.5 font-semibold text-faint">{i + 1}</td>
+                  <td className="px-3 py-1.5 font-medium">{m.name}</td>
+                  <td className="px-3 py-1.5 tabular-nums">{m.best}kg</td>
+                  <td className="px-3 py-1.5 tabular-nums">{m.latest}kg</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   type DayStripRow,
   type MemberDayMetricsRow,
   type ProfileSection,
+  type TrackMember,
 } from "@/lib/friends";
 import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
@@ -62,16 +63,13 @@ export default function ProfileView({ userId }: { userId: string }) {
         fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
         fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
         fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
-        // find a shared track to pull data through
+        // find a shared track to pull data through — check them all at once
+        // instead of awaiting one at a time (that waterfall was slow with
+        // more than a couple of tracks).
         const tracks = await fetchTracks();
-        let shared: string | null = null;
-        for (const t of tracks) {
-          const members = await fetchMembers(t.id);
-          if (members.some((m) => m.userId === userId)) {
-            shared = t.id;
-            break;
-          }
-        }
+        const memberLists = await Promise.all(tracks.map((t) => fetchMembers(t.id).catch(() => [] as TrackMember[])));
+        const sharedIdx = memberLists.findIndex((members) => members.some((m) => m.userId === userId));
+        const shared = sharedIdx >= 0 ? tracks[sharedIdx].id : null;
         if (!shared) return;
         const [d, l] = await Promise.all([
           fetchCompareDay(shared).catch(() => [] as CompareDayRow[]),
