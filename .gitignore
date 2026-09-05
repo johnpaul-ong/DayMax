@@ -1,0 +1,20 @@
+# dependencies / build
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# env & secrets — NEVER commit
+.env
+.env.local
+.env*.local
+
+# private data — real diary/spreadsheets NEVER go in git
+private/
+*.xlsx
+!fixtures/*.xlsx
+
+# misc
+.DS_Store
+npm-debug.log*
+coverage/

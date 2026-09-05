@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Day grid: keep cells tight and Excel-ish */
+.daygrid td,
+.daygrid th {
+  @apply select-none border border-slate-200 p-0 text-[11px] leading-none;
+}

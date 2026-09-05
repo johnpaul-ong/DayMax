@@ -1,0 +1,87 @@
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+export default function SignInPage() {
+  const supabase = createClient();
+  const [mode, setMode] = useState<"password" | "magic" | "signup">("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      if (mode === "magic") {
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+        });
+        setMsg(error ? error.message : "Check your email for the sign-in link. (Check spam too.)");
+      } else if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password });
+        setMsg(error ? error.message : "Account created. Check your email to confirm, then sign in.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) setMsg(error.message);
+        else location.href = "/";
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto mt-16 max-w-sm rounded-xl border bg-white p-6 shadow-sm">
+      <h1 className="mb-1 text-2xl font-bold">
+        Day<span className="text-blue-600">Max</span>
+      </h1>
+      <p className="mb-4 text-sm text-slate-500">Private. Invite-only. Your data stays yours.</p>
+
+      <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+        {(["password", "magic", "signup"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`flex-1 rounded-md px-2 py-1 ${mode === m ? "bg-white font-semibold shadow-sm" : "text-slate-500"}`}
+          >
+            {m === "password" ? "Password" : m === "magic" ? "Magic link" : "Sign up"}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          type="email"
+          required
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full rounded-md border px-3 py-2 text-sm"
+        />
+        {mode !== "magic" && (
+          <input
+            type="password"
+            required
+            minLength={8}
+            placeholder="Password (min 8 chars)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-md border px-3 py-2 text-sm"
+          />
+        )}
+        <button
+          disabled={busy}
+          className="w-full rounded-md bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {busy ? "…" : mode === "magic" ? "Send magic link" : mode === "signup" ? "Create account" : "Sign in"}
+        </button>
+      </form>
+      {msg && <p className="mt-3 text-sm text-slate-600">{msg}</p>}
+    </div>
+  );
+}
