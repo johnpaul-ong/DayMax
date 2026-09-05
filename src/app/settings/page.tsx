@@ -267,11 +267,87 @@ function ProfileVisibilitySection() {
             className="mt-0.5"
           />
           <span>
-            <b>Discoverable</b> — let people find you in friend search. Off by default. Under-18 accounts never
-            appear in search regardless of this setting; they can still add friends themselves.
+            <b>Discoverable</b> — let people find you in friend search by name or @handle. On by default; turn it
+            off to go unlisted. Under-18 accounts never appear in search regardless of this setting; they can still
+            add friends themselves.
           </span>
         </label>
       )}
+      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+    </div>
+  );
+}
+
+/** Change your @handle. Availability is checked as you type. */
+function UsernameSection() {
+  const [handle, setHandle] = useState("");
+  const [original, setOriginal] = useState("");
+  const [state, setState] = useState<"idle" | "checking" | "free" | "taken" | "invalid">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    import("@/lib/friends")
+      .then((f) => f.fetchMyUsername())
+      .then((me) => {
+        setHandle(me.username ?? "");
+        setOriginal(me.username ?? "");
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!handle || handle === original) return void setState("idle");
+    if (!/^[a-z0-9_]{3,20}$/.test(handle)) return void setState("invalid");
+    setState("checking");
+    const t = setTimeout(() => {
+      import("@/lib/friends")
+        .then((f) => f.isUsernameAvailable(handle))
+        .then((free) => setState(free ? "free" : "taken"))
+        .catch(() => setState("idle"));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [handle, original]);
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Username</h2>
+      <p className="mb-3 text-sm text-muted">How friends find you in search. 3–20 characters: letters, numbers, underscores.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-lg border bg-surface px-3">
+          <span className="text-muted">@</span>
+          <input
+            value={handle}
+            onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+            maxLength={20}
+            className="w-44 bg-transparent py-2 text-sm outline-none"
+          />
+        </div>
+        <button
+          onClick={() => {
+            setBusy(true);
+            import("@/lib/friends")
+              .then((f) => f.setUsername(handle))
+              .then(() => {
+                setOriginal(handle);
+                setState("idle");
+                setMsg("Saved.");
+              })
+              .catch((e) => setMsg(String(e.message ?? e)))
+              .finally(() => setBusy(false));
+          }}
+          disabled={busy || state !== "free"}
+          className="btn-primary"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <span className="text-xs">
+          {state === "checking" && <span className="text-faint">checking…</span>}
+          {state === "free" && <span className="text-ok">free ✓</span>}
+          {state === "taken" && <span className="text-danger">taken</span>}
+          {state === "invalid" && <span className="text-warn">3–20 chars, a–z 0–9 _</span>}
+        </span>
+      </div>
       {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
     </div>
   );
@@ -394,6 +470,7 @@ export default function SettingsPage() {
         </button>
       </div>
       <ProfileSection />
+      <UsernameSection />
       <ProfileVisibilitySection />
       <AppearanceSection />
       <NavigationSection />

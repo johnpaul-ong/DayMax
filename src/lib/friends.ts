@@ -443,6 +443,39 @@ export async function addTrackMember(trackId: string, memberId: string): Promise
   if (error) throw error;
 }
 
+// --- usernames ----------------------------------------------------------------
+
+export interface MyHandle {
+  username: string | null;
+  chosen: boolean;
+}
+
+/** Your own handle, and whether you've actually picked it yet. */
+export async function fetchMyUsername(): Promise<MyHandle> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("username, username_chosen")
+    .eq("id", user_id)
+    .single();
+  if (error) throw error;
+  return { username: data?.username ?? null, chosen: !!data?.username_chosen };
+}
+
+export async function isUsernameAvailable(u: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("username_available", { u });
+  if (error) throw error;
+  return !!data;
+}
+
+export async function setUsername(u: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.rpc("set_username", { u });
+  if (error) throw error;
+}
+
 export async function fetchDiscoverable(): Promise<boolean> {
   const supabase = createClient();
   const user_id = await uid();

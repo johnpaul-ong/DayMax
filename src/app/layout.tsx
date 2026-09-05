@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import NavLinks from "./nav-links";
 import ThemeSync from "./theme-switcher";
+import WelcomeGate from "./welcome-gate";
 
 export const metadata: Metadata = {
   title: "DayMax",
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <ThemeSync />
           </div>
         </nav>
+        <WelcomeGate />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </body>
     </html>
