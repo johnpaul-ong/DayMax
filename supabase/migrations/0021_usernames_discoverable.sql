@@ -46,7 +46,9 @@ begin
       n := n + 1;
       candidate := left(base, 20 - length(n::text)) || n::text;
     end loop;
-    update public.profiles set username = candidate where id = rec.id;
+    -- existing accounts are marked as already-chosen: the /welcome step is for
+    -- NEW signups only, not an interruption for people already using the app
+    update public.profiles set username = candidate, username_chosen = true where id = rec.id;
   end loop;
 end $$;
 
@@ -181,6 +183,14 @@ begin
 
   if k is null then raise exception 'No such pursuit'; end if;
   if not can_see then raise exception 'You cannot see this pursuit'; end if;
+
+  -- LIFE HAS NO ROSTER. Every account on the platform is auto-joined to Life,
+  -- so listing its members would turn it into a directory of every user —
+  -- exactly what the consent-first model is meant to prevent. Life is for
+  -- absolutely everyone, and precisely because of that, nobody is listed.
+  if k = 'life' then
+    return;
+  end if;
 
   return query
   select m.user_id,

@@ -104,7 +104,7 @@ export default function PursuitPage() {
       })
       .catch(() => {});
     listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
-    fetchPursuitMembers(id).then(setMembers).catch(() => {});
+    fetchPursuitMembers(id).then(setMembers).catch(() => setMembers([]));
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -247,7 +247,8 @@ export default function PursuitPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
-      <MembersSection members={members} total={pursuit.memberCount} />
+      {/* Life is everyone, so it has no roster — see pursuit_member_list */}
+      {pursuit.kind !== "life" && <MembersSection members={members} total={pursuit.memberCount} />}
 
       {pursuit.kind === "life" && <LifeCommunity memberCount={pursuit.memberCount} />}
       {pursuit.kind === "lifts" && <LiftsCommunity />}

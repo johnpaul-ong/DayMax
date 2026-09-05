@@ -19,12 +19,19 @@ export default function WelcomeGate() {
 
   useEffect(() => {
     if (EXEMPT.some((p) => pathname === p || pathname.startsWith(p + "/"))) return;
-    // only ask once per browser; clearing it just means we ask again
-    if (sessionStorage.getItem("daymax-welcomed") === "1") return;
+    // Ask once, ever. localStorage (not sessionStorage) so a new tab or a
+    // restarted browser doesn't re-prompt someone who already picked a handle.
+    try {
+      if (localStorage.getItem("daymax-welcomed") === "1") return;
+    } catch {
+      return; // storage blocked — better to never nag than to nag forever
+    }
     fetchMyUsername()
       .then((me) => {
         if (me.chosen) {
-          sessionStorage.setItem("daymax-welcomed", "1");
+          try {
+            localStorage.setItem("daymax-welcomed", "1");
+          } catch {}
         } else {
           router.replace("/welcome");
         }
