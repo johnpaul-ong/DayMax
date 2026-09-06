@@ -81,7 +81,7 @@ function Board({
   );
 }
 
-/** Light vs Dark vs Cottage, across everyone — WorkMax averaged per member. */
+/** Light vs Midnight vs Cottage, across everyone — WorkMax averaged per member. */
 function TeamBoard() {
   const [rows, setRows] = useState<TeamTotal[]>([]);
   const [mine, setMine] = useState<string | null>(null);

@@ -42,9 +42,14 @@ import {
   deleteStat,
   fetchDirectory,
   fetchMyEntries,
+  fetchPursuitActivity,
   fetchPursuitMembers,
   fetchStatData,
+  fetchStatSpread,
+  fetchStatSummary,
+  fetchStatTop,
   fetchStats,
+  joinPursuit,
   leavePursuit,
   logEntry,
   pursuitLogHref,
@@ -52,11 +57,15 @@ import {
   setShowOnProfile,
   updatePursuitDescription,
   updateStat,
+  type ActivityWeek,
   type MyEntry,
   type Pursuit,
   type PursuitMember,
   type PursuitStat,
+  type SpreadBucket,
   type StatEntry,
+  type StatSummary,
+  type StatTop,
 } from "@/lib/pursuits";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { localToday } from "@/lib/dates";
@@ -254,6 +263,8 @@ export default function PursuitPage() {
         account). Other Life-kind pursuits — like the Avengers one — do, and
         the server returns an empty list for the one that shouldn't.
       */}
+      <PursuitPreview pursuit={pursuit} onJoined={reload} />
+
       <TeamStandings pursuitId={id} />
 
       <MembersSection members={members} total={pursuit.memberCount} />
@@ -306,7 +317,193 @@ export default function PursuitPage() {
 }
 
 /**
- * Light vs Dark vs Cottage, for this pursuit. Ranked on a PER-MEMBER average
+ * What a pursuit looks like BEFORE you join.
+ *
+ * Everything below is an aggregate — counts, averages, spread, top few — so it
+ * can be shown to strangers without leaking anyone's individual entries. This
+ * exists because the page used to be blank for non-members: the leaderboard
+ * and charts were behind membership, so there was nothing to be curious about
+ * and no reason to join.
+ */
+function PursuitPreview({ pursuit, onJoined }: { pursuit: Pursuit; onJoined: () => void }) {
+  const [stats, setStats] = useState<StatSummary[]>([]);
+  const [activity, setActivity] = useState<ActivityWeek[]>([]);
+  const [joining, setJoining] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchStatSummary(pursuit.id).then(setStats).catch(() => {});
+    fetchPursuitActivity(pursuit.id).then(setActivity).catch(() => {});
+  }, [pursuit.id]);
+
+  const live = useMemo(() => {
+    const recent = activity.slice(-4);
+    return {
+      entries: recent.reduce((s, w) => s + w.entries, 0),
+      people: Math.max(0, ...recent.map((w) => w.activeMembers)),
+    };
+  }, [activity]);
+
+  if (stats.length === 0 && activity.length === 0) return null;
+  const totalEntries = stats.reduce((s, x) => s + x.entries, 0);
+
+  return (
+    <section className="space-y-4">
+      {!pursuit.isMember && (
+        <div className="card border-2 border-accent-soft p-5">
+          <h2 className="text-lg font-semibold">Join {pursuit.name}</h2>
+          <p className="mt-1 text-sm text-muted">
+            {stats.length > 0 ? (
+              <>
+                You&apos;d be tracking <b>{stats.map((s) => s.name).join(", ")}</b> alongside{" "}
+                {pursuit.memberCount} {pursuit.memberCount === 1 ? "person" : "people"} who&apos;ve logged{" "}
+                {totalEntries.toLocaleString()} entries between them.
+              </>
+            ) : (
+              <>Nobody has logged anything yet — join and you&apos;re the first on the board.</>
+            )}
+          </p>
+          <button
+            onClick={() => {
+              setJoining(true);
+              joinPursuit(pursuit.id)
+                .then(onJoined)
+                .catch((e) => setErr(String(e.message ?? e)))
+                .finally(() => setJoining(false));
+            }}
+            disabled={joining}
+            className="btn-primary mt-3"
+          >
+            {joining ? "Joining…" : `Join ${pursuit.name}`}
+          </button>
+          {err && <p className="mt-2 text-sm text-danger">{err}</p>}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Members</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{pursuit.memberCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Entries logged</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{totalEntries.toLocaleString()}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Active (4wk)</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{live.people}</p>
+          <p className="mt-0.5 text-xs text-muted">{live.entries.toLocaleString()} entries</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium uppercase tracking-wider text-faint">Tracking</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{stats.length}</p>
+          <p className="mt-0.5 truncate text-xs text-muted">{stats.map((s) => s.name).join(" · ") || "nothing yet"}</p>
+        </div>
+      </div>
+
+      {activity.length > 1 && (
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Activity</h3>
+          <div className="h-40 card p-2">
+            <ResponsiveContainer>
+              <BarChart data={activity}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="weekStart" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip labelFormatter={(d) => `Week of ${d}`} />
+                <Legend />
+                <Bar dataKey="entries" name="entries" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="activeMembers" name="people" fill="#16a34a" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {stats.map((s) => (
+        <StatPreview key={s.statId} stat={s} />
+      ))}
+    </section>
+  );
+}
+
+/** Headline numbers, the spread of everyone's averages, and the top five. */
+function StatPreview({ stat }: { stat: StatSummary }) {
+  const [spread, setSpread] = useState<SpreadBucket[]>([]);
+  const [top, setTop] = useState<StatTop[]>([]);
+
+  useEffect(() => {
+    fetchStatSpread(stat.statId).then(setSpread).catch(() => {});
+    fetchStatTop(stat.statId).then(setTop).catch(() => {});
+  }, [stat.statId]);
+
+  if (stat.entries === 0) return null;
+
+  return (
+    <div className="card p-4">
+      <div className="mb-3 flex flex-wrap items-baseline gap-2">
+        <h3 className="font-semibold">{stat.name}</h3>
+        <span className="text-xs text-faint">
+          {stat.participants} {stat.participants === 1 ? "person" : "people"} · {stat.entries.toLocaleString()} entries
+          {stat.lastLogged && ` · last logged ${stat.lastLogged}`}
+        </span>
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-6">
+        <div>
+          <p className="text-2xl font-bold tabular-nums">{stat.avgValue ?? "—"}</p>
+          <p className="text-xs text-muted">average {stat.unit}</p>
+        </div>
+        <div>
+          <p className="text-2xl font-bold tabular-nums">{stat.bestValue ?? "—"}</p>
+          <p className="text-xs text-muted">{stat.direction === "less" ? "lowest" : "best"} {stat.unit}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {spread.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Where people land</p>
+            <div className="h-32">
+              <ResponsiveContainer>
+                <BarChart data={spread.map((b) => ({ range: `${b.low}–${b.high}`, members: b.members }))}>
+                  <XAxis dataKey="range" tick={{ fontSize: 8 }} interval={0} angle={-25} textAnchor="end" height={38} />
+                  <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                  <Tooltip formatter={(v: number) => [`${v} member${v === 1 ? "" : "s"}`, "in range"]} />
+                  <Bar dataKey="members" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-xs text-faint">Each member&apos;s average, bucketed — see whether you&apos;d fit in.</p>
+          </div>
+        )}
+
+        {top.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Leading</p>
+            <ol className="space-y-1">
+              {top.map((t, i) => (
+                <li key={t.memberId} className="flex items-center gap-2 text-sm">
+                  <span className="w-4 text-center font-semibold text-faint">{i + 1}</span>
+                  <Link href={`/friends/${t.memberId}`} className="truncate font-medium hover:text-accent hover:underline">
+                    {t.displayName}
+                  </Link>
+                  <span className="ml-auto shrink-0 tabular-nums">
+                    {t.score}
+                    <span className="ml-1 text-xs text-faint">{stat.unit}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Light vs Midnight vs Cottage, for this pursuit. Ranked on a PER-MEMBER average
  * so the biggest team doesn't win automatically — a team of three can beat a
  * team of thirty by being better, which is the only way this stays interesting.
  */
@@ -326,8 +523,7 @@ function TeamStandings({ pursuitId }: { pursuitId: string }) {
     <section>
       <h2 className="mb-1 font-semibold">Team standings</h2>
       <p className="mb-2 text-sm text-muted">
-        Averaged per member, so a bigger team doesn&apos;t win by turning up. Your team is whichever theme you
-        picked — change it in Settings and you switch sides.
+        Averaged per member, so a bigger team doesn&apos;t win by turning up.
       </p>
       <div className="card divide-y">
         {rows.map((r, i) => {

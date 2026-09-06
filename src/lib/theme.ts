@@ -5,7 +5,7 @@
 export type ThemeName = "light" | "dark" | "cottage";
 export const THEMES: Array<{ name: ThemeName; label: string; icon: string }> = [
   { name: "light", label: "Light", icon: "☀️" },
-  { name: "dark", label: "Dark", icon: "🌙" },
+  { name: "dark", label: "Midnight", icon: "🌙" },
   { name: "cottage", label: "Cottage", icon: "🍃" },
 ];
 

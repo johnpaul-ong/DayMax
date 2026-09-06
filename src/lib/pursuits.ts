@@ -221,6 +221,86 @@ export async function logEntry(statId: string, date: string, value: number, note
   if (error) throw error;
 }
 
+// --- public preview: what a non-member sees before joining ---------------------
+
+export interface StatSummary {
+  statId: string;
+  name: string;
+  unit: string;
+  cadence: "daily" | "whenever";
+  direction: "more" | "less";
+  participants: number;
+  entries: number;
+  avgValue: number | null;
+  bestValue: number | null;
+  lastLogged: string | null;
+}
+
+export async function fetchStatSummary(pursuitId: string): Promise<StatSummary[]> {
+  const data = await rpcAll("pursuit_stat_summary", { p: pursuitId });
+  return data.map((r: any) => ({
+    statId: r.stat_id,
+    name: r.name,
+    unit: r.unit,
+    cadence: r.cadence,
+    direction: r.direction,
+    participants: Number(r.participants),
+    entries: Number(r.entries),
+    avgValue: r.avg_value == null ? null : Number(r.avg_value),
+    bestValue: r.best_value == null ? null : Number(r.best_value),
+    lastLogged: r.last_logged ? String(r.last_logged) : null,
+  }));
+}
+
+export interface ActivityWeek {
+  weekStart: string;
+  entries: number;
+  activeMembers: number;
+}
+
+export async function fetchPursuitActivity(pursuitId: string, weeks = 12): Promise<ActivityWeek[]> {
+  const data = await rpcAll("pursuit_activity", { p: pursuitId, weeks });
+  return data.map((r: any) => ({
+    weekStart: String(r.week_start),
+    entries: Number(r.entries),
+    activeMembers: Number(r.active_members),
+  }));
+}
+
+export interface SpreadBucket {
+  low: number;
+  high: number;
+  members: number;
+}
+
+export async function fetchStatSpread(statId: string): Promise<SpreadBucket[]> {
+  const data = await rpcAll("pursuit_stat_spread", { s: statId });
+  return data.map((r: any) => ({
+    low: Number(r.bucket_low),
+    high: Number(r.bucket_high),
+    members: Number(r.members),
+  }));
+}
+
+export interface StatTop {
+  memberId: string;
+  displayName: string;
+  username: string | null;
+  score: number;
+  entries: number;
+}
+
+export async function fetchStatTop(statId: string, n = 5): Promise<StatTop[]> {
+  const data = await rpcAll("pursuit_stat_top", { s: statId, n });
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    username: r.username,
+    score: Number(r.score),
+    entries: Number(r.entries),
+  }));
+}
+
 export interface PursuitMember {
   memberId: string;
   displayName: string;

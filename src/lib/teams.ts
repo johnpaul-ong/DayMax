@@ -13,7 +13,7 @@ export type Team = ThemeName;
 
 export const TEAMS: Array<{ key: Team; label: string; icon: string; color: string }> = [
   { key: "light", label: "Light", icon: "☀️", color: "#f59e0b" },
-  { key: "dark", label: "Dark", icon: "🌙", color: "#6366f1" },
+  { key: "dark", label: "Midnight", icon: "🌙", color: "#6366f1" },
   { key: "cottage", label: "Cottage", icon: "🍃", color: "#16a34a" },
 ];
 
