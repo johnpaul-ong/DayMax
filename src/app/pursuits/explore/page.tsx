@@ -25,7 +25,11 @@ export default function ExplorePage() {
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">Explore pursuits</h1>
-      <p className="mb-4 text-sm text-muted">Join one and you can log its stats and appear on its leaderboard.</p>
+      <p className="mb-4 text-sm text-muted">
+        Join one and you can log its stats and appear on its leaderboard. Only <b>public</b> pursuits are listed —
+        if a friend&apos;s pursuit isn&apos;t here, they made it invite-only and need to hit &ldquo;Make public&rdquo; on
+        its page, or add you directly.
+      </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>

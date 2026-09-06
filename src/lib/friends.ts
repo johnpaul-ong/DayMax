@@ -217,6 +217,9 @@ export const PROFILE_SECTIONS: Array<{ key: ProfileSection; label: string; hint:
   { key: "days", label: "Your days", hint: "The 15-minute grid and year heatmap — colours only, never your written labels" },
 ];
 
+/** The default: a profile shows everything unless its owner trims it. */
+export const ALL_SECTIONS: ProfileSection[] = ["ranking", "hours", "lifts", "metrics", "days"];
+
 export type FriendStatus = "self" | "friends" | "pending_out" | "pending_in" | "none";
 
 export interface MemberProfile {
@@ -235,7 +238,7 @@ export async function fetchMemberProfile(userId: string): Promise<MemberProfile>
   const row = Array.isArray(data) ? data[0] : data;
   const sections: ProfileSection[] = Array.isArray(row?.sections)
     ? (row.sections as ProfileSection[])
-    : ["ranking", "hours", "lifts"];
+    : ALL_SECTIONS;
   return {
     displayName: row?.display_name ?? "anonymous",
     username: row?.username ?? null,
@@ -298,7 +301,7 @@ export async function fetchMyVisibility(): Promise<MyVisibility> {
     .eq("id", user_id)
     .single();
   if (error) throw error;
-  const fallback: ProfileSection[] = ["ranking", "hours", "lifts"];
+  const fallback: ProfileSection[] = ALL_SECTIONS;
   return {
     isPublic: data?.is_public ?? true,
     friendSections: Array.isArray(data?.profile_sections) ? data.profile_sections : fallback,
@@ -322,7 +325,7 @@ export async function fetchMyProfileSections(): Promise<ProfileSection[]> {
   const user_id = await uid();
   const { data, error } = await supabase.from("profiles").select("profile_sections").eq("id", user_id).single();
   if (error) throw error;
-  return Array.isArray(data?.profile_sections) ? data.profile_sections : ["ranking", "hours", "lifts"];
+  return Array.isArray(data?.profile_sections) ? data.profile_sections : ALL_SECTIONS;
 }
 
 export async function saveMyProfileSections(sections: ProfileSection[]): Promise<void> {

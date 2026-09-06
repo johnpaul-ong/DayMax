@@ -33,7 +33,9 @@ export default function PursuitsPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
-  const [isPublic, setIsPublic] = useState(false);
+  // public by default — an invite-only pursuit is invisible to everyone else,
+  // which is how a friend's new pursuit ends up impossible to find
+  const [isPublic, setIsPublic] = useState(true);
 
   function reload() {
     fetchDirectory()
@@ -147,7 +149,7 @@ export default function PursuitsPage() {
                 .then(() => {
                   setName("");
                   setDesc("");
-                  setIsPublic(false);
+                  setIsPublic(true);
                   reload();
                 })
                 .catch((e) => setError(String(e.message ?? e)));
@@ -158,7 +160,10 @@ export default function PursuitsPage() {
             Create
           </button>
         </div>
-        <p className="mt-1 text-xs text-faint">Invite-only by default. Public pursuits appear in Explore and need a unique name.</p>
+        <p className="mt-1 text-xs text-faint">
+          Public by default: it appears in Explore so people can find and join it, and needs a unique name. Untick to
+          make it invite-only — nobody else will see it exists.
+        </p>
       </div>
     </div>
   );

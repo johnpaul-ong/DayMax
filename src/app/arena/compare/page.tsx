@@ -24,6 +24,10 @@ import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { localToday } from "@/lib/dates";
 
+// One slot = 6px, so a whole day is 576px. Shared by the column and the
+// hour ruler next to it so they cannot drift apart.
+const SLOT_PX = 6;
+
 type Scope = "day" | "week" | "month";
 
 interface PersonDays {
@@ -269,9 +273,9 @@ export default function ArenaComparePage() {
           ) : (
             <div className="card overflow-x-auto p-4">
               <div className="flex gap-6">
-                <div className="relative w-10 shrink-0" style={{ height: 576 }}>
+                <div className="relative w-10 shrink-0" style={{ height: SLOT_PX * SLOTS_PER_DAY }}>
                   {[0, 6, 12, 18, 24].map((h) => (
-                    <span key={h} className="absolute right-0 -translate-y-1/2 font-mono text-[10px] text-faint" style={{ top: (h / 24) * 576 }}>
+                    <span key={h} className="absolute right-0 -translate-y-1/2 font-mono text-[10px] text-faint" style={{ top: (h / 24) * SLOT_PX * SLOTS_PER_DAY }}>
                       {String(h).padStart(2, "0")}:00
                     </span>
                   ))}
@@ -281,18 +285,34 @@ export default function ArenaComparePage() {
                     <Link href={`/friends/${p.id}`} className="mb-2 max-w-full truncate text-sm font-semibold hover:text-accent hover:underline">
                       {p.name}
                     </Link>
-                    <div className="flex w-full flex-col overflow-hidden rounded-lg border" style={{ height: 576 }}>
+                    {/*
+                      Fixed 6px rows, not flex-1. A flex child in a column
+                      defaults to min-height:auto, so the 8px label text was
+                      forcing rows taller than their share of 576px — the
+                      column overflowed and the bars stopped lining up with
+                      the hour ruler beside them.
+                    */}
+                    <div className="w-full overflow-hidden rounded-lg border" style={{ height: SLOT_PX * SLOTS_PER_DAY }}>
                       {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
                         const c = p.day?.get(s);
                         return (
                           <div
                             key={s}
                             title={`${p.name} — ${slotToTime(s)}${c ? `: ${categoryName(c.category)}${c.label ? ` (${c.label})` : ""}` : ""}`}
-                            className="w-full flex-1 overflow-hidden whitespace-nowrap"
-                            style={{ background: c ? categoryColor(c.category) : "var(--surface-2)" }}
+                            className="w-full overflow-hidden whitespace-nowrap"
+                            style={{
+                              height: SLOT_PX,
+                              minHeight: 0,
+                              background: c ? categoryColor(c.category) : "var(--surface-2)",
+                            }}
                           >
                             {c?.label && s % 4 === 0 ? (
-                              <span className="block truncate px-1 text-[8px] font-medium leading-[6px] text-white/90">{c.label}</span>
+                              <span
+                                className="block truncate px-1 text-[8px] font-medium text-white/90"
+                                style={{ lineHeight: `${SLOT_PX}px` }}
+                              >
+                                {c.label}
+                              </span>
                             ) : null}
                           </div>
                         );
