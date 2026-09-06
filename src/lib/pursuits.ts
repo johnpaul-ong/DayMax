@@ -309,6 +309,7 @@ export interface PursuitMember {
   isDemo: boolean;
   /** Can you open their profile? Names only link through when true. */
   isVisible: boolean;
+  team: string;
 }
 
 /** Who else is in this pursuit. */
@@ -321,6 +322,7 @@ export async function fetchPursuitMembers(pursuitId: string): Promise<PursuitMem
     role: r.role,
     isDemo: !!r.is_demo,
     isVisible: !!r.is_visible,
+    team: r.team ?? "light",
   }));
 }
 

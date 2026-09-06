@@ -572,14 +572,17 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
         <h2 className="font-semibold">Members</h2>
         <span className="text-sm text-faint">
           {total} in this pursuit
-          {hidden > 0 && ` · ${hidden} you're not connected to`}
+          {hidden > 0 && ` · ${hidden} not shown`}
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
         {shown.map((m) => {
           const inner = (
             <>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold"
+                style={{ background: `${teamMeta(m.team).color}1f`, color: teamMeta(m.team).color }}
+              >
                 {m.displayName.slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0">

@@ -10,24 +10,27 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { fetchLeaderboard, type LeaderboardRow } from "@/lib/friends";
+import { fetchArena, fetchTracks, type ArenaScope, type LeaderboardRow, type Track } from "@/lib/friends";
+import { TeamName } from "../team-name";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, loadTheme, type BucketColors } from "@/lib/theme";
 import { fetchTeamTotals, teamMeta, type TeamTotal } from "@/lib/teams";
 import { localToday } from "@/lib/dates";
 
-type Scope = "avengers" | "friends" | "everyone";
-const SCOPES: Array<{ key: Scope; label: string }> = [
-  { key: "avengers", label: `You vs "Avengers Assemble"` },
-  { key: "friends", label: "You vs Friends" },
-  { key: "everyone", label: "Everyone" },
+// The three standard scopes, always shown. Anything else (a track) is picked
+// from the dropdown beside them.
+const SCOPES: Array<{ key: ArenaScope; label: string; hint: string }> = [
+  { key: "demo", label: `You vs "Avengers Assemble"`, hint: "You and the six legends" },
+  { key: "friends", label: "You vs Friends", hint: "Accepted friends only — no legends, no strangers" },
+  { key: "everyone", label: "Everyone", hint: "Every public profile on DayMax" },
 ];
 
 interface Contender {
   id: string;
   name: string;
   isDemo: boolean;
+  team: string;
   todayP: number;
   weekP: number;
   weekB: number;
@@ -68,9 +71,7 @@ function Board({
           {rows.map((c, i) => (
             <li key={c.id} className="flex items-center gap-2 text-sm">
               <span className="w-6 text-center font-semibold text-faint">{i + 1}</span>
-              <Link href={`/friends/${c.id}`} className="font-medium hover:text-accent hover:underline">
-                {c.name}
-              </Link>
+              <TeamName name={c.name} team={c.team} href={`/friends/${c.id}`} className="font-medium" />
               {c.isDemo && <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-faint">legend</span>}
               <span className="ml-auto tabular-nums text-muted">{value(c)}</span>
             </li>
@@ -82,14 +83,14 @@ function Board({
 }
 
 /** Light vs Midnight vs Cottage, across everyone — WorkMax averaged per member. */
-function TeamBoard() {
+function TeamBoard({ scope, trackId }: { scope: ArenaScope; trackId: string | null }) {
   const [rows, setRows] = useState<TeamTotal[]>([]);
   const [mine, setMine] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTeamTotals().then(setRows).catch(() => {});
+    fetchTeamTotals(undefined, undefined, scope, trackId).then(setRows).catch(() => {});
     setMine(loadTheme().theme);
-  }, []);
+  }, [scope, trackId]);
 
   if (rows.length === 0) return null;
   const max = Math.max(...rows.map((r) => r.workMax), 1);
@@ -135,23 +136,33 @@ export default function ArenaPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
-  const [scope, setScope] = useState<Scope>("avengers");
+  const [scope, setScope] = useState<ArenaScope>("demo");
+  const [trackId, setTrackId] = useState<string | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [me, setMe] = useState<string | null>(null);
 
   useEffect(() => {
     setColors(loadBucketColors());
     createClient().auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
-    fetchLeaderboard()
+    fetchTracks().then(setTracks).catch(() => {});
+  }, []);
+
+  // The server does the scoping now, so switching scope refetches rather than
+  // filtering a fixed set client-side — that's what made "Everyone" quietly
+  // mean "everyone I already knew".
+  useEffect(() => {
+    setLoading(true);
+    fetchArena(scope, trackId)
       .then(setRows)
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
-            ? "The Arena needs migration 0007 (and the demo seed) — run them in the Supabase SQL Editor."
+            ? "The Arena needs migration 0031 — run it in the Supabase SQL Editor."
             : String(e.message ?? e)
         )
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [scope, trackId]);
 
   const contenders = useMemo<Contender[]>(() => {
     const prevWs = (() => {
@@ -159,9 +170,9 @@ export default function ArenaPage() {
       d.setDate(d.getDate() - 7);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     })();
-    const byId = new Map<string, { name: string; isDemo: boolean; rows: LeaderboardRow[] }>();
+    const byId = new Map<string, { name: string; isDemo: boolean; team: string; rows: LeaderboardRow[] }>();
     for (const r of rows) {
-      if (!byId.has(r.memberId)) byId.set(r.memberId, { name: r.displayName, isDemo: r.isDemo, rows: [] });
+      if (!byId.has(r.memberId)) byId.set(r.memberId, { name: r.displayName, isDemo: r.isDemo, team: r.team, rows: [] });
       byId.get(r.memberId)!.rows.push(r);
     }
     const score = (list: LeaderboardRow[]) => {
@@ -182,6 +193,7 @@ export default function ArenaPage() {
         id,
         name: m.name,
         isDemo: m.isDemo,
+        team: m.team,
         todayP: m.rows.filter((r) => r.date === todayISO).reduce((s, r) => s + r.productive, 0),
         weekP,
         weekB,
@@ -197,11 +209,8 @@ export default function ArenaPage() {
     });
   }, [rows, todayISO, ws]);
 
-  const scoped = useMemo(() => {
-    if (scope === "everyone") return contenders;
-    if (scope === "avengers") return contenders.filter((c) => c.isDemo || c.id === me);
-    return contenders.filter((c) => !c.isDemo); // you + human friends
-  }, [contenders, scope, me]);
+  // no client-side re-filtering: the scope is already applied server-side
+  const scoped = contenders;
 
   const top = (sel: (c: Contender) => number | null, n = 5, asc = false) =>
     scoped
@@ -215,28 +224,54 @@ export default function ArenaPage() {
     <div className="mx-auto max-w-4xl">
       <h1 className="mb-1 text-2xl font-bold">The Arena</h1>
       <p className="mb-5 text-sm text-muted">
-        Everyone you can see — the resident legends plus friends from your tracks. Click a name for their profile, a
+        Pick who you&apos;re up against. Click a name for their profile, a
         board title to see <Link href="/arena/compare" className="font-medium text-accent hover:underline">everyone&apos;s day side by side</Link>.
         Get on the boards by logging your day.
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
-      <div className="mb-4 flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+      <div className="mb-2 flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
         {SCOPES.map((s) => (
           <button
             key={s.key}
-            onClick={() => setScope(s.key)}
-            className={`flex-1 rounded-lg px-3 py-1.5 ${scope === s.key ? "bg-surface font-semibold" : "text-muted"}`}
+            onClick={() => {
+              setScope(s.key);
+              setTrackId(null);
+            }}
+            title={s.hint}
+            className={`flex-1 rounded-lg px-3 py-1.5 ${scope === s.key && !trackId ? "bg-surface font-semibold" : "text-muted"}`}
           >
             {s.label}
           </button>
         ))}
       </div>
+      {tracks.filter((t) => !t.isDemo).length > 0 && (
+        <div className="mb-4 flex items-center gap-2 text-sm">
+          <span className="text-xs text-faint">or a track:</span>
+          <select
+            value={trackId ?? ""}
+            onChange={(e) => {
+              const v = e.target.value || null;
+              setTrackId(v);
+              setScope(v ? "track" : "everyone");
+            }}
+            className="rounded-lg border bg-surface px-2 py-1 text-sm"
+          >
+            <option value="">—</option>
+            {tracks.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {scope === "friends" && scoped.length <= 1 && (
-        <p className="mb-3 text-sm text-faint">No human friends sharing data yet — invite some from the Friends tab. For now it&apos;s you against the legends.</p>
+        <p className="mb-3 text-sm text-faint">
+          No friends sharing data yet — add some from <Link href="/search" className="font-medium text-accent hover:underline">Search</Link>.
+          This board is friends only, so the legends don&apos;t appear here.
+        </p>
       )}
 
-      <TeamBoard />
+      <TeamBoard scope={scope} trackId={trackId} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Board

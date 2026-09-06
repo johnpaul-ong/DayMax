@@ -21,6 +21,16 @@ export function teamMeta(key: string) {
   return TEAMS.find((t) => t.key === key) ?? { key: key as Team, label: key, icon: "•", color: "#94a3b8" };
 }
 
+/**
+ * A name with its team colour on it. Deliberately understated — a 2px left
+ * border and a faint tint, not a coloured pill. You should be able to read a
+ * leaderboard without the teams shouting over the numbers.
+ */
+export function teamTint(team: string): { borderLeft: string; background: string } {
+  const c = teamMeta(team).color;
+  return { borderLeft: `2px solid ${c}`, background: `${c}14` };  // 14 = ~8% alpha
+}
+
 export interface TeamStanding {
   team: Team;
   members: number;
@@ -52,9 +62,15 @@ export interface TeamTotal {
   brainrot: number;
 }
 
-export async function fetchTeamTotals(from?: string, to?: string): Promise<TeamTotal[]> {
+export async function fetchTeamTotals(
+  from?: string,
+  to?: string,
+  scope: "demo" | "friends" | "everyone" | "track" = "everyone",
+  trackId?: string | null
+): Promise<TeamTotal[]> {
   const supabase = createClient();
-  const params: Record<string, unknown> = {};
+  const params: Record<string, unknown> = { scope };
+  if (trackId) params.t = trackId;
   if (from) params.from_date = from;
   if (to) params.to_date = to;
   const { data, error } = await supabase.rpc("team_totals", params);

@@ -13,8 +13,11 @@ import {
   acceptFriendRequest,
   fetchMemberDayMetrics,
   fetchMemberDayStrip,
+  fetchMemberBodyweight,
   fetchMemberDayTotals,
+  fetchMemberExercises,
   fetchMemberLifts,
+  setDefaultExercise,
   fetchMemberProfile,
   sendFriendRequest,
   type CompareLiftRow,
@@ -28,6 +31,8 @@ import { CATEGORIES, categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } fr
 import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { teamMeta } from "@/lib/teams";
+import { TeamDot } from "./team-name";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
 
@@ -53,6 +58,10 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [period, setPeriod] = useState<"day" | "week" | "month">("day");
   const [exercise, setExercise] = useState("");
   const [busy, setBusy] = useState(false);
+  const [team, setTeam] = useState("light");
+  const [bodyweight, setBodyweight] = useState<Array<{ date: string; weightKg: number }>>([]);
+  const [exercises, setExercises] = useState<Array<{ exercise: string; sessions: number; best: number }>>([]);
+  const [defaultEx, setDefaultEx] = useState<string | null>(null);
 
   function load() {
     fetchMemberProfile(userId)
@@ -62,6 +71,8 @@ export default function ProfileView({ userId }: { userId: string }) {
         setSections(profile.sections);
         setFriendStatus(profile.friendStatus);
         setIsSelf(profile.isSelf);
+        setTeam(profile.team);
+        setDefaultEx(profile.defaultExercise);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }
@@ -77,17 +88,25 @@ export default function ProfileView({ userId }: { userId: string }) {
     fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
     fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
     fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
+    fetchMemberBodyweight(userId).then(setBodyweight).catch(() => {});
+    fetchMemberExercises(userId).then(setExercises).catch(() => {});
     fetchMemberLifts(userId)
       .then((lifts) => {
         setLiftRows(lifts);
         if (lifts.length) {
           const counts = new Map<string, number>();
           for (const r of lifts) counts.set(r.exercise, (counts.get(r.exercise) ?? 0) + 1);
-          setExercise([...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
+          // the owner's chosen default wins; otherwise their most-logged lift
+          setExercise((prev) => prev || [...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
         }
       })
       .catch(() => {});
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // the profile owner's chosen default lift takes precedence over "most logged"
+  useEffect(() => {
+    if (defaultEx) setExercise(defaultEx);
+  }, [defaultEx]);
 
   const agg = (list: MemberDayTotal[]) => {
     const p = list.reduce((s, r) => s + r.productive, 0);
@@ -129,7 +148,12 @@ export default function ProfileView({ userId }: { userId: string }) {
       .map(([k, v]) => ({ label: period === "month" ? k : k.slice(5), ...v }));
   }, [dayRows, period]);
 
-  const exercises = useMemo(() => [...new Set(liftRows.map((r) => r.exercise))].sort(), [liftRows]);
+  // union of what they've logged and what the server reports, so the picker
+  // still works if one of the two calls fails
+  const exerciseNames = useMemo(
+    () => [...new Set([...liftRows.map((r) => r.exercise), ...exercises.map((e) => e.exercise)])].sort(),
+    [liftRows, exercises]
+  );
   const liftChart = useMemo(
     () =>
       liftRows
@@ -177,12 +201,21 @@ export default function ProfileView({ userId }: { userId: string }) {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-lg font-bold text-accent">
+        <span
+          className="flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold"
+          style={{ background: `${teamMeta(team).color}1f`, color: teamMeta(team).color }}
+        >
           {name.slice(0, 1).toUpperCase()}
         </span>
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold">{name}</h1>
-          {username && <p className="text-sm text-faint">@{username}</p>}
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            {name}
+            <TeamDot team={team} className="h-2 w-2" />
+          </h1>
+          <p className="text-sm text-faint">
+            {username && <>@{username} · </>}
+            <span style={{ color: teamMeta(team).color }}>{teamMeta(team).label}</span>
+          </p>
         </div>
 
         {!isSelf && (
@@ -283,13 +316,22 @@ export default function ProfileView({ userId }: { userId: string }) {
 
       {show("lifts") && liftRows.length > 0 && (
         <section>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <h2 className="font-semibold">Lifts</h2>
             <select value={exercise} onChange={(e) => setExercise(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
-              {exercises.map((x) => (
+              {exerciseNames.map((x) => (
                 <option key={x} value={x}>{x}</option>
               ))}
             </select>
+            {isSelf && exercise && exercise !== defaultEx && (
+              <button
+                onClick={() => void setDefaultExercise(exercise).then(() => setDefaultEx(exercise))}
+                className="text-xs font-medium text-accent hover:underline"
+              >
+                make this my default
+              </button>
+            )}
+            {isSelf && exercise && exercise === defaultEx && <span className="text-xs text-faint">your default</span>}
           </div>
           <div className="h-56 card p-2">
             <ResponsiveContainer>
@@ -299,6 +341,24 @@ export default function ProfileView({ userId }: { userId: string }) {
                 <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
                 <Tooltip labelFormatter={(d) => String(d)} />
                 <Line type="monotone" strokeWidth={2.5} dataKey="weight" stroke={LINE_COLORS[0]} dot={{ r: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      {show("lifts") && bodyweight.length > 1 && (
+        <section>
+          <h2 className="mb-1 font-semibold">Bodyweight</h2>
+          <p className="mb-2 text-sm text-muted">Standard on every profile — the one number every lifter has in common.</p>
+          <div className="h-52 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={bodyweight}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
+                <Tooltip labelFormatter={(d) => String(d)} formatter={(v: number) => [`${v} kg`, "bodyweight"]} />
+                <Line type="monotone" strokeWidth={2.5} dataKey="weightKg" stroke={teamMeta(team).color} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

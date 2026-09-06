@@ -335,6 +335,59 @@ function ProfileVisibilitySection() {
   );
 }
 
+/** Which lift leads your profile. Falls back to your most-logged one. */
+function DefaultLiftSection() {
+  const [exercises, setExercises] = useState<Array<{ exercise: string; sessions: number }>>([]);
+  const [current, setCurrent] = useState<string>("");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    import("@/lib/supabase/client").then(async ({ createClient }) => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return;
+      const f = await import("@/lib/friends");
+      f.fetchMemberExercises(auth.user.id).then(setExercises).catch(() => {});
+      const { data } = await supabase.from("profiles").select("default_exercise").eq("id", auth.user.id).single();
+      setCurrent(data?.default_exercise ?? "");
+    });
+  }, []);
+
+  if (exercises.length === 0) return null;
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Default lift</h2>
+      <p className="mb-3 text-sm text-muted">
+        The exercise your profile opens on. Bodyweight is shown on every profile as standard, so this is for the lift
+        you actually care about.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={current}
+          onChange={(e) => {
+            const v = e.target.value;
+            setCurrent(v);
+            import("@/lib/friends")
+              .then((f) => f.setDefaultExercise(v || null))
+              .then(() => setMsg("Saved."))
+              .catch((ex) => setMsg(String(ex.message ?? ex)));
+          }}
+          className="rounded-lg border bg-surface px-2 py-2 text-sm"
+        >
+          <option value="">Most-logged (automatic)</option>
+          {exercises.map((x) => (
+            <option key={x.exercise} value={x.exercise}>
+              {x.exercise} ({x.sessions} session{x.sessions === 1 ? "" : "s"})
+            </option>
+          ))}
+        </select>
+        {msg && <span className="text-sm text-muted">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
 /** Change your @handle. Availability is checked as you type. */
 function UsernameSection() {
   const [handle, setHandle] = useState("");
@@ -528,6 +581,7 @@ export default function SettingsPage() {
       </div>
       <ProfileSection />
       <UsernameSection />
+      <DefaultLiftSection />
       <ProfileVisibilitySection />
       <AppearanceSection />
       <NavigationSection />

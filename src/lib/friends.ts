@@ -229,6 +229,8 @@ export interface MemberProfile {
   isPublic: boolean;
   isSelf: boolean;
   friendStatus: FriendStatus;
+  team: string;
+  defaultExercise: string | null;
 }
 
 export async function fetchMemberProfile(userId: string): Promise<MemberProfile> {
@@ -246,7 +248,28 @@ export async function fetchMemberProfile(userId: string): Promise<MemberProfile>
     isPublic: !!row?.is_public,
     isSelf: !!row?.is_self,
     friendStatus: (row?.friend_status ?? "none") as FriendStatus,
+    team: row?.team ?? "light",
+    defaultExercise: row?.default_exercise ?? null,
   };
+}
+
+/** Bodyweight over time — standard on every profile that shows Lifts. */
+export async function fetchMemberBodyweight(userId: string): Promise<Array<{ date: string; weightKg: number }>> {
+  const data = await cachedRpcAll("member_bodyweight", { member: userId });
+  return data.map((r: any) => ({ date: String(r.date), weightKg: Number(r.weight_kg) }));
+}
+
+/** Which exercises someone logs, most-used first — powers the default picker. */
+export async function fetchMemberExercises(userId: string): Promise<Array<{ exercise: string; sessions: number; best: number }>> {
+  const data = await cachedRpcAll("member_exercises", { member: userId });
+  return data.map((r: any) => ({ exercise: r.exercise, sessions: Number(r.sessions), best: Number(r.best) }));
+}
+
+export async function setDefaultExercise(exercise: string | null): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase.from("profiles").update({ default_exercise: exercise }).eq("id", user_id);
+  if (error) throw error;
 }
 
 /** Day totals for a profile — gated on visibility, not on sharing a track. */
@@ -353,6 +376,7 @@ export interface LeaderboardRow {
   memberId: string;
   displayName: string;
   isDemo: boolean;
+  team: string;
   date: string;
   productive: number;
   brainrot: number;
@@ -385,6 +409,37 @@ export function invalidateCommunityCache(): void {
   rpcCache.clear();
 }
 
+export type ArenaScope = "demo" | "friends" | "everyone" | "track";
+
+/**
+ * Arena rows for one scope. Unlike fetchLeaderboard, the scopes here mean
+ * exactly what they say: "friends" is accepted friendships only (no legends,
+ * no track-mates you never friended), and "everyone" is every public profile.
+ */
+export async function fetchArena(
+  scope: ArenaScope,
+  trackId?: string | null,
+  from?: string,
+  to?: string
+): Promise<LeaderboardRow[]> {
+  const params: Record<string, unknown> = { scope };
+  if (trackId) params.t = trackId;
+  if (from) params.from_date = from;
+  if (to) params.to_date = to;
+  const data = await cachedRpcAll("arena_day_totals", params);
+  return data.map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    isDemo: !!r.is_demo,
+    team: r.team ?? "light",
+    date: String(r.date),
+    productive: Number(r.productive),
+    brainrot: Number(r.brainrot),
+    social: Number(r.social ?? 0),
+    other: Number(r.other ?? 0),
+  }));
+}
+
 /**
  * Everyone's daily bucket totals. Pass a window when you only need one —
  * the Arena's all-time boards need everything, but a week view does not.
@@ -398,6 +453,7 @@ export async function fetchLeaderboard(from?: string, to?: string): Promise<Lead
     memberId: r.member_id,
     displayName: r.display_name,
     isDemo: !!r.is_demo,
+    team: r.team ?? "light",
     date: String(r.date),
     productive: Number(r.productive),
     brainrot: Number(r.brainrot),
@@ -416,6 +472,7 @@ export async function fetchPursuitDayTotals(pursuitId: string, from?: string, to
     memberId: r.member_id,
     displayName: r.display_name,
     isDemo: !!r.is_demo,
+    team: r.team ?? "light",
     date: String(r.date),
     productive: Number(r.productive),
     brainrot: Number(r.brainrot),
