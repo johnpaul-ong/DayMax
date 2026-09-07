@@ -24,8 +24,108 @@ import {
   type ThemeName,
 } from "@/lib/theme";
 import type { BucketSettings } from "@/lib/types";
+import { loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "@/lib/capture";
 
 const BUCKETS: Bucket[] = ["productive", "brainrot", "other"];
+
+/** Quick Capture: the every-15-minutes prompt. */
+function CaptureSection() {
+  const [s, setS] = useState<CaptureSettings | null>(null);
+  const [perm, setPerm] = useState<string>("default");
+
+  useEffect(() => {
+    setS(loadCaptureSettings());
+    if (typeof Notification !== "undefined") setPerm(Notification.permission);
+  }, []);
+  if (!s) return null;
+
+  function update(next: CaptureSettings) {
+    setS(next);
+    saveCaptureSettings(next);
+  }
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Quick Capture</h2>
+      <p className="mb-3 text-sm text-muted">
+        A small box asks what you&apos;re doing as each 15-minute slot closes. Type a few words, press Enter. Press
+        <b> ⌘/Ctrl+J</b> anywhere to open it on demand. Step away for an hour and it queues the missed slots so you
+        clear them in four keystrokes.
+      </p>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" checked={s.enabled} onChange={(e) => update({ ...s, enabled: e.target.checked })} className="mt-0.5" />
+        <span><b>Enabled</b> — show the capture box</span>
+      </label>
+
+      {s.enabled && (
+        <div className="mt-3 space-y-3 border-t pt-3">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="text-xs text-muted">
+              Catch up on the last
+              <select
+                value={s.lookbackMin}
+                onChange={(e) => update({ ...s, lookbackMin: Number(e.target.value) })}
+                className="ml-1 rounded-lg border bg-surface px-2 py-1 text-sm text-ink"
+              >
+                {[30, 60, 120, 240, 480].map((m) => (
+                  <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} hours`}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-muted">
+              at most
+              <select
+                value={s.maxQueue}
+                onChange={(e) => update({ ...s, maxQueue: Number(e.target.value) })}
+                className="ml-1 rounded-lg border bg-surface px-2 py-1 text-sm text-ink"
+              >
+                {[4, 8, 12, 20].map((n) => (
+                  <option key={n} value={n}>{n} slots</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            Quiet hours
+            <select value={s.quietFrom} onChange={(e) => update({ ...s, quietFrom: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+            </select>
+            to
+            <select value={s.quietTo} onChange={(e) => update({ ...s, quietTo: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+            </select>
+            <span className="text-faint">— no prompts while you&apos;re asleep</span>
+          </div>
+
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={s.notify}
+              onChange={(e) => {
+                const on = e.target.checked;
+                if (on && typeof Notification !== "undefined" && Notification.permission === "default") {
+                  void Notification.requestPermission().then((p) => {
+                    setPerm(p);
+                    update({ ...s, notify: p === "granted" });
+                  });
+                } else {
+                  update({ ...s, notify: on });
+                }
+              }}
+              className="mt-0.5"
+            />
+            <span>
+              <b>Desktop notifications</b> — ping me when the tab isn&apos;t focused
+              {perm === "denied" && <span className="ml-1 text-warn">(blocked in your browser settings)</span>}
+            </span>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AppearanceSection() {
   const [theme, setTheme] = useState<ThemeName>("light");
@@ -583,6 +683,7 @@ export default function SettingsPage() {
       <UsernameSection />
       <DefaultLiftSection />
       <ProfileVisibilitySection />
+      <CaptureSection />
       <AppearanceSection />
       <NavigationSection />
       <LabelRenameSection />
