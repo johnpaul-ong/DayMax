@@ -28,6 +28,57 @@ import { loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "
 
 const BUCKETS: Bucket[] = ["productive", "brainrot", "other"];
 
+/** The way out. Typed confirmation, no undo, said plainly. */
+function DangerZone() {
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  return (
+    <div className="card mb-6 border-danger/40 p-4" style={{ borderWidth: 1 }}>
+      <h2 className="mb-1 font-semibold text-danger">Delete account</h2>
+      <p className="mb-3 text-sm text-muted">
+        Permanently removes your account and everything in it: every logged slot, your lifts, metrics, pursuits,
+        friendships and posts. This cannot be undone and there is no grace period. Pursuits you started that other
+        people use are handed over rather than deleted.{" "}
+        <b>Export your data first</b> if you want to keep it — Profile → Export.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="Type DELETE"
+          className="w-40 rounded-lg border bg-surface px-2 py-2 text-sm"
+        />
+        <button
+          onClick={async () => {
+            if (confirm !== "DELETE") return;
+            if (!window.confirm("Last check: this permanently deletes your account and all your data. Continue?")) return;
+            setBusy(true);
+            setErr(null);
+            try {
+              const { createClient } = await import("@/lib/supabase/client");
+              const supabase = createClient();
+              const { error } = await supabase.rpc("delete_my_account", { confirm: "DELETE" });
+              if (error) throw error;
+              await supabase.auth.signOut();
+              location.href = "/signin";
+            } catch (e: any) {
+              setErr(String(e.message ?? e));
+              setBusy(false);
+            }
+          }}
+          disabled={busy || confirm !== "DELETE"}
+          className="rounded-xl border border-danger px-4 py-2 text-sm font-semibold text-danger disabled:opacity-40"
+        >
+          {busy ? "Deleting…" : "Delete my account"}
+        </button>
+      </div>
+      {err && <p className="mt-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{err}</p>}
+    </div>
+  );
+}
+
 /** Quick Capture: the every-15-minutes prompt. */
 function CaptureSection() {
   const [s, setS] = useState<CaptureSettings | null>(null);
@@ -729,6 +780,7 @@ export default function SettingsPage() {
         Save
       </button>
       {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+      <DangerZone />
     </div>
   );
 }

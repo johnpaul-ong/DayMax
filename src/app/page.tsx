@@ -12,6 +12,9 @@ import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchProfile 
 import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, focusScore, hoursByCategory, weekStart, workMax } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import StreakCard from "./streak-card";
+import InstallPrompt from "./install-prompt";
+import ShareCard from "./share-card";
 import type { BucketSettings, DayEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
 
@@ -276,11 +279,18 @@ export default function HomePage() {
 
       </div>
 
+      {/* only pitch installing once they've actually logged something */}
+      <InstallPrompt canPrompt={weekEntries.length > 20} />
+
+      <StreakCard />
+
       {loading ? (
         <p className="text-sm text-muted">Loading your day…</p>
       ) : (
         layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
       )}
+
+      {weekEntries.length > 0 && <ShareCard />}
 
       {customizing && (
         <div className="card p-3">
