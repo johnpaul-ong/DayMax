@@ -25,6 +25,7 @@ import {
 } from "@/lib/theme";
 import type { BucketSettings } from "@/lib/types";
 import { loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "@/lib/capture";
+import { disablePush, enablePush, fetchPushPrefs, pushSupport, savePushPrefs, type PushPrefs } from "@/lib/push";
 
 const BUCKETS: Bucket[] = ["productive", "brainrot", "other"];
 
@@ -75,6 +76,93 @@ function DangerZone() {
         </button>
       </div>
       {err && <p className="mt-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{err}</p>}
+    </div>
+  );
+}
+
+/**
+ * Push notifications for Quick Capture. Separate from the in-app widget on
+ * purpose: the widget only works while the app is open, push is what reaches
+ * you when it isn't.
+ */
+function PushSection() {
+  const [prefs, setPrefs] = useState<PushPrefs | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [support, setSupport] = useState<ReturnType<typeof pushSupport> | null>(null);
+
+  useEffect(() => {
+    setSupport(pushSupport());
+    fetchPushPrefs().then(setPrefs).catch(() => {});
+  }, []);
+  if (!prefs) return null;
+
+  async function toggle(on: boolean) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      if (on) {
+        const r = await enablePush();
+        setMsg(r.message);
+        if (r.ok) setPrefs({ ...prefs!, enabled: true });
+      } else {
+        await disablePush();
+        setPrefs({ ...prefs!, enabled: false });
+        setMsg("Push is off.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function update(next: PushPrefs) {
+    setPrefs(next);
+    savePushPrefs(next).catch((e) => setMsg(String(e.message ?? e)));
+  }
+
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Notifications on your phone</h2>
+      <p className="mb-3 text-sm text-muted">
+        Quick Capture only prompts while the app is open. This is what reaches you when it isn&apos;t. You&apos;ll
+        only hear from us about a slot you <b>forgot</b> — log as you go and it stays quiet.
+      </p>
+
+      {support && !support.ok && support.reason === "needs-install" && (
+        <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+          On iPhone, Apple only allows notifications for an installed app. Tap <b>Share</b> → <b>Add to Home Screen</b>,
+          open DayMax from the icon, then come back here.
+        </p>
+      )}
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={prefs.enabled}
+          disabled={busy || (support ? !support.ok : false)}
+          onChange={(e) => void toggle(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span><b>Send me prompts</b>{busy && <span className="ml-1 text-faint">…</span>}</span>
+      </label>
+
+      {prefs.enabled && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-xs text-muted">
+          Quiet hours
+          <select value={prefs.quietFrom} onChange={(e) => update({ ...prefs, quietFrom: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+          </select>
+          to
+          <select value={prefs.quietTo} onChange={(e) => update({ ...prefs, quietTo: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+          </select>
+          · at most one every
+          <select value={prefs.minGapMin} onChange={(e) => update({ ...prefs, minGapMin: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+            {[15, 30, 60, 120, 240].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60}h`}</option>)}
+          </select>
+        </div>
+      )}
+      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
     </div>
   );
 }
@@ -735,6 +823,7 @@ export default function SettingsPage() {
       <DefaultLiftSection />
       <ProfileVisibilitySection />
       <CaptureSection />
+      <PushSection />
       <AppearanceSection />
       <NavigationSection />
       <LabelRenameSection />
