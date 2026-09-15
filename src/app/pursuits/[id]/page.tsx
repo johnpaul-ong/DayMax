@@ -98,6 +98,9 @@ export default function PursuitPage() {
   const [sDir, setSDir] = useState<"more" | "less">("more");
   const [sCadence, setSCadence] = useState<"daily" | "whenever">("daily");
   const [sTarget, setSTarget] = useState("");
+  // Community = everyone's view. Mine = your own data and the place to log it.
+  // Same page, two lenses, rather than two destinations to hunt for.
+  const [view, setView] = useState<"community" | "mine">("community");
 
   function reload() {
     fetchDirectory()
@@ -267,12 +270,30 @@ export default function PursuitPage() {
         account). Other Life-kind pursuits — like the Avengers one — do, and
         the server returns an empty list for the one that shouldn't.
       */}
-      <PursuitPreview pursuit={pursuit} onJoined={reload} />
+      {pursuit.isMember && (
+        <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+          {(["community", "mine"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`flex-1 rounded-lg px-3 py-2.5 ${view === v ? "bg-surface font-semibold" : "text-muted"}`}
+            >
+              {v === "community" ? "Community" : "Mine"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "community" && <PursuitPreview pursuit={pursuit} onJoined={reload} />}
 
       <TeamStandings pursuitId={id} />
 
       <MembersSection members={members} total={pursuit.memberCount} />
 
+      {view === "mine" ? (
+        <MineView pursuit={pursuit} stats={visibleStats} logHref={logHref} onChanged={reload} />
+      ) : (
+        <>
       {pursuit.kind === "life" && <LifeCommunity pursuitId={id} memberCount={pursuit.memberCount} />}
       {pursuit.kind === "lifts" && <LiftsCommunity pursuitId={id} />}
 
@@ -283,6 +304,8 @@ export default function PursuitPage() {
         <p className="card p-4 text-sm text-faint">
           No stats yet. {pursuit.isOwner ? "Add the first one below — e.g. “Games played” (daily) or “Blitz rating” (whenever)." : "The owner hasn't added any yet."}
         </p>
+      )}
+        </>
       )}
 
       {pursuit.isOwner && (
@@ -315,6 +338,52 @@ export default function PursuitPage() {
             </button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Your own side of a pursuit: where you log, and what you alone have done.
+ *
+ * Built-ins hand off to their dedicated pages (they have bespoke editors);
+ * custom pursuits get their stat sections, which already include the logging
+ * form and your private notes.
+ */
+function MineView({
+  pursuit,
+  stats,
+  logHref,
+  onChanged,
+}: {
+  pursuit: Pursuit;
+  stats: PursuitStat[];
+  logHref: string | null;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      {logHref && (
+        <div className="card border-2 border-accent-soft p-5">
+          <h2 className="font-semibold">Log your {pursuit.kind === "life" ? "day" : pursuit.kind === "lifts" ? "lifts" : "spending"}</h2>
+          <p className="mt-1 text-sm text-muted">
+            {pursuit.name} has its own editor — everything you enter there feeds the community board on the other tab.
+          </p>
+          <Link href={logHref} className="btn-primary mt-3 inline-block">
+            Open {pursuit.name} →
+          </Link>
+        </div>
+      )}
+
+      {stats.map((s) => (
+        <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={onChanged} />
+      ))}
+
+      {stats.length === 0 && !logHref && (
+        <p className="card p-4 text-sm text-faint">
+          Nothing to log here yet — this pursuit has no stats.
+          {pursuit.isOwner && " Add one from the Community tab."}
+        </p>
       )}
     </div>
   );

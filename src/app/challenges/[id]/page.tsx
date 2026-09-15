@@ -1,48 +1,83 @@
 "use client";
 
 /**
- * One challenge: live standings while it runs, a frozen result after.
+ * A challenge board that's worth opening twice a day.
  *
- * The privacy shape is the important bit. Percentages are shared by joining;
- * dollar amounts are opt-in and off by default. The table shows "—" rather than
- * a number for anyone who hasn't opted in, and says so, so nobody thinks the
- * app is broken.
+ * Ranked on the raw number people actually argue about — least non-essential
+ * spend — with percentage of income, category splits, daily pace and a race
+ * chart alongside. Rank on the number they care about; inform with the rest.
+ *
+ * Privacy shape: joining shares your position. Dollar amounts are opt-in and
+ * off by default, so the table shows "private" rather than a number for anyone
+ * who hasn't switched them on. They still rank.
  */
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { localToday } from "@/lib/dates";
 import {
+  fetchChallengeCategories,
+  fetchChallengeDaily,
   fetchChallenges,
+  fetchInvitableFriends,
   fetchStandings,
+  inviteFriend,
   joinChallenge,
   leaveChallenge,
   money,
+  setIncomeOverride,
   setShareAmounts,
   type Challenge,
+  type ChallengeCategory,
+  type ChallengeDay,
+  type InvitableFriend,
   type Standing,
 } from "@/lib/money";
 import { teamMeta } from "@/lib/teams";
 import { TeamDot } from "../../team-name";
 
+const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
+const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [rows, setRows] = useState<Standing[]>([]);
+  const [daily, setDaily] = useState<ChallengeDay[]>([]);
+  const [cats, setCats] = useState<ChallengeCategory[]>([]);
+  const [friends, setFriends] = useState<InvitableFriend[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const today = localToday();
 
   function reload() {
     fetchChallenges()
       .then((cs) => setChallenge(cs.find((c) => c.id === id) ?? null))
       .catch((e) => setError(String(e.message ?? e)));
-    fetchStandings(id)
-      .then(setRows)
-      .catch(() => setRows([])); // not a member yet: standings are hidden, not broken
+    fetchStandings(id).then(setRows).catch(() => setRows([]));
+    fetchChallengeDaily(id).then(setDaily).catch(() => setDaily([]));
+    fetchChallengeCategories(id).then(setCats).catch(() => setCats([]));
+    fetchInvitableFriends(id).then(setFriends).catch(() => setFriends([]));
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,11 +93,32 @@ export default function ChallengePage() {
     return Math.max(0, Math.min(1, (now - start) / Math.max(1, end - start)));
   }, [challenge, today]);
 
+  // pivot the daily rows into one series per person for the race chart
+  const raceData = useMemo(() => {
+    const byDate = new Map<string, Record<string, string | number>>();
+    for (const d of daily) {
+      if (!byDate.has(d.date)) byDate.set(d.date, { date: d.date });
+      byDate.get(d.date)![d.displayName] = d.running;
+    }
+    return [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1));
+  }, [daily]);
+  const names = useMemo(() => [...new Set(daily.map((d) => d.displayName))], [daily]);
+
+  const group = useMemo(() => {
+    const ne = cats.filter((c) => !c.essential).reduce((s, c) => s + c.total, 0);
+    const es = cats.filter((c) => c.essential).reduce((s, c) => s + c.total, 0);
+    return { ne, es, total: ne + es };
+  }, [cats]);
+
   if (error) return <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>;
   if (!challenge) return <p className="text-sm text-muted">Loading…</p>;
 
+  const leader = rows[0];
+  const biggest = [...rows].filter((r) => r.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
+      {/* header */}
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{challenge.name}</h1>
@@ -74,9 +130,7 @@ export default function ChallengePage() {
         <div className="mt-3">
           <div className="mb-1 flex justify-between text-xs text-faint">
             <span>{challenge.startsOn}</span>
-            <span>
-              {running ? `${challenge.daysLeft} days left` : finished ? "over" : "not started"}
-            </span>
+            <span>{running ? `${challenge.daysLeft} days left` : finished ? "over" : "not started"}</span>
             <span>{challenge.endsOn}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">
@@ -100,150 +154,347 @@ export default function ChallengePage() {
           {challenge.isMember && (
             <>
               <Link href="/money" className="btn-primary">Log spending →</Link>
-              <button
-                onClick={() => void leaveChallenge(id).then(reload)}
-                className="btn-ghost text-xs"
-              >
-                Leave
-              </button>
+              <button onClick={() => setShowInvite(!showInvite)} className="btn-ghost">Invite friends</button>
+              <button onClick={() => void leaveChallenge(id).then(reload)} className="btn-ghost text-xs">Leave</button>
             </>
           )}
-          <button
-            onClick={() => {
-              const url = `${location.origin}/challenges/${id}`;
-              navigator.clipboard.writeText(url).then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              });
-              if (navigator.share) navigator.share({ title: challenge.name, url }).catch(() => {});
-            }}
-            className="btn-ghost"
-          >
-            {copied ? "Link copied ✓" : "Invite someone"}
-          </button>
         </div>
-        <p className="mt-2 text-xs text-faint">
-          Anyone with the link can join — they don&apos;t need to be in the Money pursuit first; joining puts them there.
-        </p>
       </div>
+
+      {/* invite: friends first, link as the fallback */}
+      {showInvite && challenge.isMember && (
+        <div className="card p-4">
+          <h2 className="mb-1 font-semibold">Invite friends</h2>
+          <p className="mb-3 text-sm text-muted">
+            They get an invitation to accept — nobody is added to a money challenge without saying yes.
+          </p>
+          {friends.length === 0 ? (
+            <p className="text-sm text-faint">
+              No friends left to invite. <Link href="/search" className="font-medium text-accent hover:underline">Add some →</Link>
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {friends.map((f) => (
+                <button
+                  key={f.memberId}
+                  disabled={f.invited}
+                  onClick={() => void inviteFriend(id, f.memberId).then(reload)}
+                  className={`rounded-full border px-3 py-2 text-sm ${
+                    f.invited ? "bg-surface-2 text-faint" : "bg-surface hover:text-accent"
+                  }`}
+                >
+                  {f.invited ? "✓ " : "+ "}
+                  {f.displayName}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 border-t pt-3">
+            <button
+              onClick={() => {
+                const url = `${location.origin}/challenges/${id}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                });
+                if (navigator.share) navigator.share({ title: challenge.name, url }).catch(() => {});
+              }}
+              className="text-sm font-medium text-accent hover:underline"
+            >
+              {copied ? "Link copied ✓" : "Or copy a link for someone not on DayMax"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {!challenge.isMember && (
         <div className="card p-5">
           <h2 className="mb-1 font-semibold">What joining shares</h2>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
-            <li>Your <b>non-essential spending as a percentage of your income</b> becomes visible to other members. That&apos;s how you&apos;re ranked.</li>
-            <li>Dollar amounts stay <b>private unless you switch them on</b>.</li>
+            <li>Your <b>non-essential spending total</b> becomes visible to other members. That&apos;s the ranking.</li>
+            <li>Dollar breakdowns stay <b>private unless you switch them on</b>.</li>
+            <li>Individual purchases are never shared — only totals and category names.</li>
             <li>Nobody outside the challenge sees anything.</li>
-            <li>Individual purchases are never shared — only the totals.</li>
           </ul>
         </div>
       )}
 
+      {/* your own numbers, plus the income dial */}
       {challenge.isMember && me && (
+        <YouCard challengeId={id} me={me} onChanged={reload} />
+      )}
+
+      {/* the headline story */}
+      {rows.length > 1 && leader && (
         <div className="card p-4">
-          <h2 className="mb-2 font-semibold">You</h2>
-          <div className="flex flex-wrap gap-6">
-            <div>
-              <p className="text-3xl font-bold tabular-nums">{me.pct ?? "—"}%</p>
-              <p className="text-xs text-muted">of income, non-essential</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold tabular-nums">{money(me.nonEssential)}</p>
-              <p className="text-xs text-muted">non-essential</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold tabular-nums">{money(me.essential)}</p>
-              <p className="text-xs text-muted">essential</p>
-            </div>
-          </div>
-          {me.pct === null && (
-            <p className="mt-2 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-              Add your income on the <Link href="/money" className="font-medium underline">Money page</Link> — without it
-              you can&apos;t be ranked on percentage.
-            </p>
-          )}
-          <label className="mt-3 flex items-start gap-2 border-t pt-3 text-sm">
-            <input
-              type="checkbox"
-              checked={me.sharesAmounts}
-              onChange={(e) => void setShareAmounts(id, e.target.checked).then(reload)}
-              className="mt-0.5"
-            />
-            <span>
-              <b>Show my dollar amounts</b> to other members. Off by default — your percentage is shared either way.
-            </span>
-          </label>
+          <p className="text-sm">
+            <b>{leader.displayName}</b> is winning on {money(leader.score)} of non-essential spending
+            {biggest && biggest.userId !== leader.userId && (
+              <> — <b>{biggest.displayName}</b> has spent {money(biggest.score)}, {
+                leader.score && leader.score > 0 && biggest.score
+                  ? `${Math.round((biggest.score / leader.score - 1) * 100)}% more`
+                  : "rather more"
+              }</>
+            )}.
+          </p>
         </div>
       )}
 
       {rows.length > 0 && (
         <>
           <section>
-            <h2 className="mb-1 font-semibold">{finished ? "Final standings" : "Live standings"}</h2>
-            <p className="mb-2 text-sm text-muted">
-              Lowest share of income wins. Updates as people log.
-            </p>
-            <div className="card overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-2 text-left text-xs text-muted">
-                  <tr>
-                    <th className="px-3 py-2">#</th>
-                    <th className="px-3 py-2">Who</th>
-                    <th className="px-3 py-2 text-right">% of income</th>
-                    <th className="px-3 py-2 text-right">Non-essential</th>
-                    <th className="px-3 py-2 text-right">Logged</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={r.userId} className={`border-b last:border-0 ${r.isMe ? "bg-accent-soft/40" : ""}`}>
-                      <td className="px-3 py-2 font-bold text-faint">
-                        {i === 0 && !finished ? "👑" : i + 1}
-                      </td>
-                      <td className="px-3 py-2">
-                        <Link href={`/friends/${r.userId}`} className="inline-flex items-center gap-1.5 font-medium hover:text-accent hover:underline">
-                          {r.displayName}
-                          <TeamDot team={r.team} />
-                        </Link>
-                        {r.isMe && <span className="ml-1 text-xs text-accent">you</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                        {r.pct == null ? <span className="text-faint">no income set</span> : `${r.pct}%`}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {r.nonEssential == null ? <span className="text-faint" title="This person keeps their amounts private">private</span> : money(r.nonEssential)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-faint">{r.entries}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h2 className="mb-1 font-semibold">{finished ? "Final standings" : "Standings"}</h2>
+            <p className="mb-2 text-sm text-muted">Least non-essential spending wins. Updates as people log.</p>
+            <div className="card divide-y">
+              {rows.map((r, i) => (
+                <div key={r.userId} className={`px-3 py-3 ${r.isMe ? "bg-accent-soft/30" : ""}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 text-center text-lg font-bold text-faint">
+                      {i === 0 ? "👑" : i + 1}
+                    </span>
+                    <Link href={`/friends/${r.userId}`} className="inline-flex items-center gap-1.5 font-medium hover:text-accent hover:underline">
+                      {r.displayName}
+                      <TeamDot team={r.team} />
+                    </Link>
+                    {r.isMe && <span className="text-xs text-accent">you</span>}
+                    <span className="ml-auto text-lg font-bold tabular-nums">{money(r.score)}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 pl-8 text-xs text-faint">
+                    <span>{r.pct != null ? <>{r.pct}% of income</> : "no income set"}</span>
+                    <span>{money(r.perDay)}/day</span>
+                    {r.topCategory && <span>most on {r.topCategory}</span>}
+                    <span>{r.entries} logged</span>
+                    {!r.sharesAmounts && !r.isMe && <span className="italic">amounts private</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
 
-          <section>
-            <h2 className="mb-2 font-semibold">Side by side</h2>
-            <div className="h-64 card p-2">
-              <ResponsiveContainer>
-                <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 10 }} unit="%" />
-                  <Tooltip formatter={(v: number) => [`${v}% of income`, "non-essential"]} />
-                  <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          {/* the race */}
+          {raceData.length > 1 && (
+            <section>
+              <h2 className="mb-1 font-semibold">The race</h2>
+              <p className="mb-2 text-sm text-muted">Running total of non-essential spend. Flattest line wins.</p>
+              <div className="h-64 card p-2">
+                <ResponsiveContainer>
+                  <LineChart data={raceData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => money(Number(v))} labelFormatter={(d) => String(d)} />
+                    <Legend />
+                    {names.map((n, i) => (
+                      <Line key={n} type="monotone" dataKey={n} stroke={SERIES[i % SERIES.length]} strokeWidth={2.5} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {/* dollars vs percent, side by side — two honest views of the same thing */}
+          <section className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="mb-1 text-sm font-semibold">In dollars</h3>
+              <div className="h-56 card p-2">
+                <ResponsiveContainer>
+                  <BarChart data={rows.map((r) => ({ name: r.displayName, spent: r.score ?? 0 }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => money(Number(v))} />
+                    <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+                      {rows.map((r, i) => (
+                        <Cell key={r.userId} fill={i === 0 ? "#16a34a" : teamMeta(r.team).color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-1 text-sm font-semibold">As a share of income</h3>
+              <div className="h-56 card p-2">
+                <ResponsiveContainer>
+                  <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} unit="%" />
+                    <Tooltip formatter={(v: number) => `${v}% of income`} />
+                    <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="mt-1 text-xs text-faint">
+                Rankings use dollars, but this is the fairer comparison across different incomes.
+              </p>
             </div>
           </section>
+
+          {/* what the group is blowing it on */}
+          {cats.length > 0 && (
+            <section>
+              <h2 className="mb-1 font-semibold">What the group is spending on</h2>
+              <p className="mb-2 text-sm text-muted">
+                Everyone combined — {money(group.ne)} non-essential against {money(group.es)} essential.
+                Nobody&apos;s individual spending is shown here.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="h-60 card p-2">
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={cats.filter((c) => !c.essential).slice(0, 8)}
+                        dataKey="total"
+                        nameKey="name"
+                        label={(p: any) => p.name}
+                      >
+                        {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
+                          <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => money(Number(v))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="card divide-y">
+                  {cats.filter((c) => !c.essential).slice(0, 7).map((c) => (
+                    <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                      <span className="text-xs text-faint">{c.people} {c.people === 1 ? "person" : "people"}</span>
+                      <span className="tabular-nums font-semibold">{money(c.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* group pace over time */}
+          {raceData.length > 1 && (
+            <section>
+              <h2 className="mb-1 font-semibold">Daily damage, everyone combined</h2>
+              <div className="h-52 card p-2">
+                <ResponsiveContainer>
+                  <AreaChart
+                    data={(() => {
+                      const byDate = new Map<string, number>();
+                      for (const d of daily) byDate.set(d.date, (byDate.get(d.date) ?? 0) + d.spent);
+                      return [...byDate.entries()].sort().map(([date, spent]) => ({ date, spent }));
+                    })()}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v: number) => money(Number(v))} />
+                    <Area type="monotone" dataKey="spent" stroke="#dc2626" fill="#dc2626" fillOpacity={0.18} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
         </>
       )}
 
       {challenge.isMember && rows.length <= 1 && (
         <p className="card p-4 text-sm text-faint">
-          Nobody else has joined yet. Use <b>Invite someone</b> above — the link works for anyone, whether or not
-          they use the Money pursuit.
+          Nobody else has joined yet. Hit <b>Invite friends</b> above — the leaderboard gets a lot more interesting
+          with two people on it.
         </p>
       )}
+    </div>
+  );
+}
+
+/** Your own numbers, and the income baseline you can nudge. */
+function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Standing; onChanged: () => void }) {
+  const [income, setIncome] = useState(me.income != null ? String(me.income) : "");
+  const [saved, setSaved] = useState(false);
+
+  return (
+    <div className="card p-4">
+      <h2 className="mb-2 font-semibold">You</h2>
+      <div className="flex flex-wrap gap-6">
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{money(me.nonEssential)}</p>
+          <p className="text-xs text-muted">non-essential</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{me.pct ?? "—"}%</p>
+          <p className="text-xs text-muted">of income</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{money(me.perDay)}</p>
+          <p className="text-xs text-muted">a day</p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{money(me.essential)}</p>
+          <p className="text-xs text-muted">essential</p>
+        </div>
+      </div>
+
+      {me.topCategory && (
+        <p className="mt-2 text-sm text-muted">
+          Your biggest non-essential is <b>{me.topCategory}</b>
+          {me.topCategoryAmount != null && <> at {money(me.topCategoryAmount)}</>}.
+        </p>
+      )}
+
+      <div className="mt-3 border-t pt-3">
+        <label className="text-xs font-medium uppercase tracking-wider text-faint">Income for this challenge</label>
+        <p className="mb-2 text-xs text-muted">
+          Defaults to your last income entry before the challenge started — most people are paid monthly, so what
+          landed during these 30 days is usually the wrong number. Change it to whatever you&apos;re actually living on.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border bg-surface px-2">
+            <span className="text-muted">$</span>
+            <input
+              value={income}
+              onChange={(e) => setIncome(e.target.value.replace(/[^0-9.]/g, ""))}
+              inputMode="decimal"
+              placeholder="0.00"
+              className="w-28 bg-transparent py-2 text-sm tabular-nums outline-none"
+            />
+          </div>
+          <button
+            onClick={() => {
+              const v = income.trim() === "" ? null : Number(income);
+              void setIncomeOverride(challengeId, Number.isFinite(v as number) ? v : null).then(() => {
+                setSaved(true);
+                setTimeout(() => setSaved(false), 1800);
+                onChanged();
+              });
+            }}
+            className="btn-ghost py-2"
+          >
+            {saved ? "Saved ✓" : "Set"}
+          </button>
+          <button
+            onClick={() => {
+              setIncome("");
+              void setIncomeOverride(challengeId, null).then(onChanged);
+            }}
+            className="text-xs text-muted hover:text-accent"
+          >
+            reset to automatic
+          </button>
+        </div>
+      </div>
+
+      <label className="mt-3 flex items-start gap-2 border-t pt-3 text-sm">
+        <input
+          type="checkbox"
+          checked={me.sharesAmounts}
+          onChange={(e) => void setShareAmounts(challengeId, e.target.checked).then(onChanged)}
+          className="mt-0.5"
+        />
+        <span>
+          <b>Show my dollar breakdown</b> to other members. Your ranking total is shared either way — this is about
+          the detail behind it.
+        </span>
+      </label>
     </div>
   );
 }

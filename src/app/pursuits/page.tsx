@@ -78,7 +78,10 @@ export default function PursuitsPage() {
   }
   useEffect(reload, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // everything you're in, built-ins included — this page is the way in to all
+  // of them, which is why Lifts and Money are no longer separate nav items
   const mine = pursuits.filter((p) => p.isMember);
+  const notIn = pursuits.filter((p) => !p.isMember).slice(0, 4);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -130,6 +133,22 @@ export default function PursuitsPage() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {notIn.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-muted">Not in yet</h2>
+          <div className="flex flex-wrap gap-2">
+            {notIn.map((p) => (
+              <Link key={p.id} href={pursuitHref(p)} className="rounded-full border bg-surface px-3 py-2 text-sm hover:text-accent">
+                {p.name} <span className="text-xs text-faint">· {p.memberCount}</span>
+              </Link>
+            ))}
+            <Link href="/pursuits/explore" className="rounded-full border px-3 py-2 text-sm text-muted hover:text-accent">
+              Explore all →
+            </Link>
+          </div>
         </div>
       )}
 

@@ -273,11 +273,45 @@ export interface Standing {
   score: number | null;
   nonEssential: number | null;
   essential: number | null;
+  total: number | null;
   income: number | null;
   pct: number | null;
   entries: number;
+  perDay: number;
+  topCategory: string | null;
+  topCategoryAmount: number | null;
   sharesAmounts: boolean;
   isMe: boolean;
+}
+
+export interface ChallengeDay {
+  date: string;
+  userId: string;
+  displayName: string;
+  spent: number;
+  running: number;
+}
+
+export interface ChallengeCategory {
+  name: string;
+  essential: boolean;
+  total: number;
+  people: number;
+}
+
+export interface InvitableFriend {
+  memberId: string;
+  displayName: string;
+  username: string | null;
+  invited: boolean;
+}
+
+export interface PendingInvite {
+  challengeId: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  invitedByName: string;
 }
 
 export async function fetchChallenges(): Promise<Challenge[]> {
@@ -312,12 +346,95 @@ export async function fetchStandings(challengeId: string): Promise<Standing[]> {
     score: r.score == null ? null : Number(r.score),
     nonEssential: r.non_essential == null ? null : Number(r.non_essential),
     essential: r.essential == null ? null : Number(r.essential),
+    total: r.total == null ? null : Number(r.total),
     income: r.income == null ? null : Number(r.income),
     pct: r.pct == null ? null : Number(r.pct),
     entries: Number(r.entries ?? 0),
+    perDay: Number(r.per_day ?? 0),
+    topCategory: r.top_category ?? null,
+    topCategoryAmount: r.top_category_amount == null ? null : Number(r.top_category_amount),
     sharesAmounts: !!r.shares_amounts,
     isMe: !!r.is_me,
   }));
+}
+
+/** Cumulative non-essential spend per person, per day — the race chart. */
+export async function fetchChallengeDaily(challengeId: string): Promise<ChallengeDay[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("challenge_daily", { c: challengeId });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    date: String(r.date),
+    userId: r.user_id,
+    displayName: r.display_name,
+    spent: Number(r.spent),
+    running: Number(r.running),
+  }));
+}
+
+/** What the whole group is spending on. Aggregate — leaks no individual. */
+export async function fetchChallengeCategories(challengeId: string): Promise<ChallengeCategory[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("challenge_categories", { c: challengeId });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    name: r.name,
+    essential: !!r.essential,
+    total: Number(r.total),
+    people: Number(r.people),
+  }));
+}
+
+export async function fetchInvitableFriends(challengeId: string): Promise<InvitableFriend[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("challenge_invitable_friends", { c: challengeId });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    memberId: r.member_id,
+    displayName: r.display_name,
+    username: r.username,
+    invited: !!r.invited,
+  }));
+}
+
+export async function inviteFriend(challengeId: string, friendId: string): Promise<void> {
+  const supabase = createClient();
+  const invited_by = await uid();
+  const { error } = await supabase
+    .from("challenge_invites")
+    .insert({ challenge_id: challengeId, invited_user: friendId, invited_by });
+  if (error && !String(error.message).includes("duplicate")) throw error;
+}
+
+export async function fetchMyInvites(): Promise<PendingInvite[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("my_challenge_invites");
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    challengeId: r.challenge_id,
+    name: r.name,
+    startsOn: String(r.starts_on),
+    endsOn: String(r.ends_on),
+    invitedByName: r.invited_by_name,
+  }));
+}
+
+export async function dismissInvite(challengeId: string): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  await supabase.from("challenge_invites").delete().eq("challenge_id", challengeId).eq("invited_user", user_id);
+}
+
+/** Your income baseline for a challenge. null = let the app work it out. */
+export async function setIncomeOverride(challengeId: string, amount: number | null): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase
+    .from("challenge_members")
+    .update({ income_override: amount })
+    .eq("challenge_id", challengeId)
+    .eq("user_id", user_id);
+  if (error) throw error;
 }
 
 export async function joinChallenge(id: string): Promise<void> {

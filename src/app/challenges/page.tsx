@@ -5,15 +5,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { localToday } from "@/lib/dates";
-import { createChallenge, fetchChallenges, type Challenge } from "@/lib/money";
+import { createChallenge, dismissInvite, fetchChallenges, fetchMyInvites, joinChallenge, type Challenge, type PendingInvite } from "@/lib/money";
 
 export default function ChallengesPage() {
   const [list, setList] = useState<Challenge[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
 
   function reload() {
+    fetchMyInvites().then(setInvites).catch(() => {});
     fetchChallenges()
       .then(setList)
       .catch((e) =>
@@ -41,6 +43,30 @@ export default function ChallengesPage() {
       </p>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
       {loading && <p className="text-sm text-muted">Loading…</p>}
+
+      {invites.length > 0 && (
+        <section className="mb-6">
+          {invites.map((i) => (
+            <div key={i.challengeId} className="card mb-2 border-2 border-accent-soft p-4">
+              <p className="text-sm">
+                <b>{i.invitedByName}</b> invited you to <b>{i.name}</b>
+                <span className="text-faint"> · {i.startsOn} → {i.endsOn}</span>
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => void joinChallenge(i.challengeId).then(reload)}
+                  className="btn-primary py-1.5"
+                >
+                  Accept
+                </button>
+                <button onClick={() => void dismissInvite(i.challengeId).then(reload)} className="btn-ghost py-1.5 text-xs">
+                  No thanks
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <Section title="Running now" list={live} />
       <Section title="Starting soon" list={upcoming} />
@@ -99,7 +125,7 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
   const [desc, setDesc] = useState("");
   const [starts, setStarts] = useState(today);
   const [ends, setEnds] = useState(in30);
-  const [metric, setMetric] = useState<Challenge["metric"]>("lower_nonessential_pct");
+  const [metric, setMetric] = useState<Challenge["metric"]>("lower_nonessential");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -112,12 +138,13 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
           <input type="date" value={starts} onChange={(e) => setStarts(e.target.value)} className="rounded-lg border bg-surface px-2 py-2 text-sm" />
           <input type="date" value={ends} onChange={(e) => setEnds(e.target.value)} className="rounded-lg border bg-surface px-2 py-2 text-sm" />
           <select value={metric} onChange={(e) => setMetric(e.target.value as Challenge["metric"])} className="rounded-lg border bg-surface px-2 py-2 text-sm">
-            <option value="lower_nonessential_pct">Least non-essential, as % of income</option>
             <option value="lower_nonessential">Least non-essential, in dollars</option>
+            <option value="lower_nonessential_pct">Least non-essential, as % of income</option>
           </select>
         </div>
         <p className="text-xs text-faint">
-          Percentage of income is the fairer default — it lets people on very different incomes compete honestly.
+          Dollars is what people actually argue about, so it&apos;s the default — the percentage-of-income view is
+          shown on the board either way. Pick percent if your group&apos;s incomes are wildly different.
         </p>
         <button
           onClick={() => {

@@ -16,6 +16,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { CATEGORIES, categoryColor, categoryName, slotToTime } from "@/lib/categories";
 import { fetchDayEntries, upsertDayEntries } from "@/lib/data";
 import { localToday } from "@/lib/dates";
@@ -37,6 +39,8 @@ import {
 const EMPTY_MEMORY: LabelMemory = { category: new Map(), suggestions: [] };
 
 export default function CaptureWidget() {
+  const pathname = usePathname();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [settings, setSettings] = useState<CaptureSettings | null>(null);
   const [open, setOpen] = useState(false);
   const [queue, setQueue] = useState<number[]>([]);
@@ -51,7 +55,32 @@ export default function CaptureWidget() {
   const inputRef = useRef<HTMLInputElement>(null);
   const date = localToday();
 
-  // --- load settings, and react to Settings changing them ---------------------
+  // Refs mirror the state the ticker reads. Without these the interval effect
+  // depends on `filled`/`skipped`, so every single save tore down and rebuilt
+  // the timer — which is what made this feel laggy.
+  const filledRef = useRef(filled);
+  const skippedRef = useRef(skipped);
+  const settingsRef = useRef(settings);
+  useEffect(() => { filledRef.current = filled; }, [filled]);
+  useEffect(() => { skippedRef.current = skipped; }, [skipped]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // --- only ever run for a signed-in person -----------------------------------
+  // It was rendering on the sign-in page and before an account existed, which
+  // is both confusing and pointless — there's nowhere to save to.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setSignedIn(!!session?.user);
+      if (!session?.user) {
+        setQueue([]);
+        setOpen(false);
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     const read = () => setSettings(loadCaptureSettings());
     read();
@@ -59,7 +88,7 @@ export default function CaptureWidget() {
     return () => window.removeEventListener("daymax-capture-changed", read);
   }, []);
 
-  // --- today's entries: what's filled, and what you usually call things -------
+  // --- what's already logged today --------------------------------------------
   const refresh = useCallback(async () => {
     try {
       const today = await fetchDayEntries(date, date);
@@ -72,37 +101,63 @@ export default function CaptureWidget() {
   }, [date]);
 
   useEffect(() => {
-    if (!settings?.enabled) return;
+    if (!signedIn || !settings?.enabled) return;
     void refresh();
-    // 60 days of history is plenty to learn someone's vocabulary and stays small
     const from = new Date();
     from.setDate(from.getDate() - 60);
     fetchDayEntries(localToday(from), date)
       .then((es) => setMemory(learnLabels(es)))
       .catch(() => {});
-  }, [settings?.enabled, refresh, date]);
+  }, [signedIn, settings?.enabled, refresh, date]);
 
-  // --- the tick: recompute the queue every 30s --------------------------------
+  // Re-read today's slots whenever you come back to the app or navigate. This
+  // is the fix for "it asks about a slot I already filled": logging on /today
+  // or /day used to leave this component's idea of the day stale until reload.
   useEffect(() => {
-    if (!settings?.enabled) return;
-    const tick = () => {
+    if (!signedIn || !settings?.enabled) return;
+    void refresh();
+    const onVisible = () => document.visibilityState === "visible" && void refresh();
+    const onSaved = () => void refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onSaved);
+    window.addEventListener("daymax-day-saved", onSaved);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onSaved);
+      window.removeEventListener("daymax-day-saved", onSaved);
+    };
+  }, [signedIn, settings?.enabled, refresh, pathname]);
+
+  // --- the ticker. One stable interval, reading refs. --------------------------
+  useEffect(() => {
+    if (!signedIn || !settings?.enabled) return;
+
+    const tick = async () => {
+      const s = settingsRef.current;
+      if (!s?.enabled) return;
       const now = new Date();
-      if (inQuietHours(now.getHours(), settings.quietFrom, settings.quietTo)) return setQueue([]);
+      if (inQuietHours(now.getHours(), s.quietFrom, s.quietTo)) return setQueue([]);
       if (isSnoozed()) return setQueue([]);
+
+      // refetch before deciding, so a slot logged elsewhere never reappears
+      await refresh();
       const q = buildQueue({
-        filledSlots: filled,
+        filledSlots: filledRef.current,
         nowSlot: slotForTime(now),
-        lookbackSlots: Math.round(settings.lookbackMin / 15),
-        maxQueue: settings.maxQueue,
-        skipped,
+        lookbackSlots: Math.round(s.lookbackMin / 15),
+        maxQueue: s.maxQueue,
+        skipped: skippedRef.current,
       });
       setQueue(q);
       if (q.length > 0) setOpen(true);
     };
-    tick();
-    const id = setInterval(tick, 30_000);
+
+    void tick();
+    // 60s: a 15-minute slot doesn't need 30-second precision, and halving the
+    // wake-ups halves the background work on a phone
+    const id = setInterval(() => void tick(), 60_000);
     return () => clearInterval(id);
-  }, [settings, filled, skipped]);
+  }, [signedIn, settings?.enabled, refresh]);
 
   // --- desktop notification when the tab is in the background -----------------
   const notified = useRef<number | null>(null);
@@ -156,6 +211,7 @@ export default function CaptureWidget() {
       setLabel("");
       setCat(null);
       setLastEntry({ category: useCat, label: useLabel.trim() || null });
+      window.dispatchEvent(new Event("daymax-day-saved"));
     } catch {
       // leave it in the queue — better to retry than to silently lose it
     } finally {
@@ -180,7 +236,9 @@ export default function CaptureWidget() {
       .finally(() => setSaving(false));
   }
 
-  if (!settings?.enabled || !open || current === null) return null;
+  // never on the auth screens, and never before there's an account to save to
+  const onAuthScreen = ["/signin", "/welcome", "/auth"].some((p) => pathname.startsWith(p));
+  if (!signedIn || onAuthScreen || !settings?.enabled || !open || current === null) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:inset-x-auto sm:right-4 sm:w-[26rem]">

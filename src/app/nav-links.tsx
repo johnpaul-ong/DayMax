@@ -21,9 +21,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Pursuits",
     subs: [
+      // Deliberately only three. Lifts and Money are pursuits — you reach them
+      // through My pursuits, not as peers of it in the nav.
       { href: "/pursuits", label: "My pursuits" },
-      { href: "/lifts", label: "Lifts" },
-      { href: "/money", label: "Money" },
       { href: "/challenges", label: "Challenges" },
       { href: "/pursuits/explore", label: "Explore" },
     ],
