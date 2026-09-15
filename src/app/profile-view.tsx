@@ -11,7 +11,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   acceptFriendRequest,
-  fetchMemberDayMetrics,
   fetchMemberDayStrip,
   fetchMemberBodyweight,
   fetchMemberDayTotals,
@@ -23,7 +22,6 @@ import {
   type CompareLiftRow,
   type DayStripRow,
   type FriendStatus,
-  type MemberDayMetricsRow,
   type MemberDayTotal,
   type ProfileSection,
 } from "@/lib/friends";
@@ -51,7 +49,6 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [dayRows, setDayRows] = useState<MemberDayTotal[]>([]);
   const [liftRows, setLiftRows] = useState<CompareLiftRow[]>([]);
   const [strip, setStrip] = useState<DayStripRow[]>([]);
-  const [memberMetrics, setMemberMetrics] = useState<MemberDayMetricsRow[]>([]);
   const [pursuits, setPursuits] = useState<MemberPursuit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
@@ -95,7 +92,6 @@ export default function ProfileView({ userId }: { userId: string }) {
     // no more hunting for a shared track first.
     fetchMemberDayTotals(userId).then(setDayRows).catch(() => {});
     fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
-    fetchMemberDayMetrics(userId).then(setMemberMetrics).catch(() => {});
     fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
     fetchMemberBodyweight(userId).then(setBodyweight).catch(() => {});
     fetchMemberExercises(userId).then(setExercises).catch(() => {});
