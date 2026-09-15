@@ -50,6 +50,7 @@ export default function CaptureWidget() {
   const [label, setLabel] = useState("");
   const [cat, setCat] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<number | null>(null);
   const [lastEntry, setLastEntry] = useState<{ category: number; label: string | null } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -190,6 +191,25 @@ export default function CaptureWidget() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /**
+   * Take a slot off the queue NOW.
+   *
+   * THE BUG: save() added the slot to `filled` and stopped there. `queue` was
+   * only ever rebuilt by the 60-second ticker, so after pressing Save the same
+   * box sat on screen for up to a minute looking like the save had failed.
+   * Skip had the identical problem. The write was always fine; the widget just
+   * never advanced.
+   */
+  const advance = useCallback((slot: number) => {
+    setQueue((q) => q.filter((s) => s !== slot));
+  }, []);
+
+  // Nothing left to ask about — get out of the way. Also covers the ticker
+  // emptying the queue (quiet hours, snooze, everything filled elsewhere).
+  useEffect(() => {
+    if (queue.length === 0) setOpen(false);
+  }, [queue.length]);
+
   const current = queue[0] ?? null;
   const guessed = useMemo(() => guessCategory(label, memory), [label, memory]);
   const effectiveCat = cat ?? guessed ?? lastEntry?.category ?? null;
@@ -198,11 +218,19 @@ export default function CaptureWidget() {
   // focus whenever a new slot comes up, so a queue is pure typing
   useEffect(() => {
     if (open && current !== null) inputRef.current?.focus();
+    setError(null);
   }, [open, current]);
 
   async function save(useCat: number | null, useLabel: string) {
-    if (current === null || useCat === null) return;
+    if (current === null) return;
+    if (useCat === null) {
+      // A disabled Save button that silently does nothing is indistinguishable
+      // from a broken one. Say what's missing instead.
+      setError("Pick a category below first.");
+      return;
+    }
     setSaving(true);
+    setError(null);
     try {
       await upsertDayEntries([{ date, slot: current, category: useCat, label: useLabel.trim() || null }]);
       setFilled((prev) => new Set(prev).add(current));
@@ -211,9 +239,12 @@ export default function CaptureWidget() {
       setLabel("");
       setCat(null);
       setLastEntry({ category: useCat, label: useLabel.trim() || null });
+      advance(current);
       window.dispatchEvent(new Event("daymax-day-saved"));
-    } catch {
-      // leave it in the queue — better to retry than to silently lose it
+    } catch (e: any) {
+      // Keep it in the queue so nothing is lost, but SAY SO — swallowing this
+      // was the other way "I click save and it doesn't leave" could happen.
+      setError(String(e?.message ?? e) || "Could not save — still here so you can retry.");
     } finally {
       setSaving(false);
     }
@@ -224,15 +255,22 @@ export default function CaptureWidget() {
     setSkipped((prev) => new Set(prev).add(current));
     setLabel("");
     setCat(null);
+    setError(null);
+    advance(current);
   }
 
   function fillRestWithSame() {
     if (!lastEntry) return;
     const all = queue;
     setSaving(true);
+    setError(null);
     upsertDayEntries(all.map((s) => ({ date, slot: s, category: lastEntry.category, label: lastEntry.label })))
-      .then(() => setFilled((prev) => new Set([...prev, ...all])))
-      .catch(() => {})
+      .then(() => {
+        setFilled((prev) => new Set([...prev, ...all]));
+        setQueue([]);
+        window.dispatchEvent(new Event("daymax-day-saved"));
+      })
+      .catch((e: any) => setError(String(e?.message ?? e) || "Could not save those."))
       .finally(() => setSaving(false));
   }
 
@@ -267,7 +305,7 @@ export default function CaptureWidget() {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && effectiveCat !== null) {
+            if (e.key === "Enter") {
               e.preventDefault();
               void save(effectiveCat, label);
             } else if (e.key === "Escape") {
@@ -309,8 +347,8 @@ export default function CaptureWidget() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             onClick={() => void save(effectiveCat, label)}
-            disabled={saving || effectiveCat === null}
-            className="btn-primary py-1"
+            disabled={saving}
+            className={`btn-primary py-1 ${effectiveCat === null ? "opacity-60" : ""}`}
           >
             {saving ? "…" : "Save ⏎"}
           </button>
@@ -341,6 +379,8 @@ export default function CaptureWidget() {
             </button>
           </span>
         </div>
+
+        {error && <p className="mt-2 text-xs font-medium text-danger">{error}</p>}
 
         <p className="mt-2 text-[10px] text-faint">
           {justSaved !== null ? (
