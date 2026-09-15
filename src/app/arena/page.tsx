@@ -18,6 +18,7 @@ import { DEFAULT_BUCKET_COLORS, loadBucketColors, loadTheme, type BucketColors }
 import { fetchTeamTotals, teamMeta, type TeamTotal } from "@/lib/teams";
 import { localToday } from "@/lib/dates";
 import ArenaModes from "./modes";
+import ArenaCharts from "./charts";
 
 // The three standard scopes, always shown. Anything else (a track) is picked
 // from the dropdown beside them.
@@ -280,6 +281,8 @@ export default function ArenaPage() {
           This board is friends only, so the legends don&apos;t appear here.
         </p>
       )}
+
+      <ArenaCharts rows={rows} me={me} />
 
       <TeamBoard scope={scope} trackId={trackId} />
 
