@@ -65,18 +65,22 @@ export default function ChallengePage() {
   const [cats, setCats] = useState<ChallengeCategory[]>([]);
   const [friends, setFriends] = useState<InvitableFriend[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const today = localToday();
 
   function reload() {
+    setWarn(null);
     fetchChallenges()
       .then((cs) => setChallenge(cs.find((c) => c.id === id) ?? null))
       .catch((e) => setError(String(e.message ?? e)));
-    fetchStandings(id).then(setRows).catch(() => setRows([]));
-    fetchChallengeDaily(id).then(setDaily).catch(() => setDaily([]));
-    fetchChallengeCategories(id).then(setCats).catch(() => setCats([]));
+    fetchStandings(id).then(setRows).catch((e) => { setRows([]); setWarn(String(e.message ?? e)); });
+    // A missing migration used to fail silently here, which read as "no graphs
+    // were updated" rather than "this function does not exist yet".
+    fetchChallengeDaily(id).then(setDaily).catch((e) => { setDaily([]); setWarn(String(e.message ?? e)); });
+    fetchChallengeCategories(id).then(setCats).catch((e) => { setCats([]); setWarn(String(e.message ?? e)); });
     fetchInvitableFriends(id).then(setFriends).catch(() => setFriends([]));
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -118,6 +122,7 @@ export default function ChallengePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
+      {warn && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{warn}</p>}
       {/* header */}
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -411,6 +416,12 @@ export default function ChallengePage() {
 function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Standing; onChanged: () => void }) {
   const [income, setIncome] = useState(me.income != null ? String(me.income) : "");
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // the field was initialised once and then ignored whatever the server said,
+  // so a saved value never appeared and it looked like nothing had happened
+  useEffect(() => {
+    setIncome(me.income != null ? String(me.income) : "");
+  }, [me.income]);
 
   return (
     <div className="card p-4">
@@ -460,12 +471,16 @@ function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Stan
           </div>
           <button
             onClick={() => {
-              const v = income.trim() === "" ? null : Number(income);
-              void setIncomeOverride(challengeId, Number.isFinite(v as number) ? v : null).then(() => {
-                setSaved(true);
-                setTimeout(() => setSaved(false), 1800);
-                onChanged();
-              });
+              const n = income.trim() === "" ? null : Number(income);
+              const v = n != null && Number.isFinite(n) ? n : null;
+              setErr(null);
+              setIncomeOverride(challengeId, v)
+                .then(() => {
+                  setSaved(true);
+                  setTimeout(() => setSaved(false), 1800);
+                  onChanged();
+                })
+                .catch((e) => setErr(String(e.message ?? e)));
             }}
             className="btn-ghost py-2"
           >
@@ -474,13 +489,14 @@ function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Stan
           <button
             onClick={() => {
               setIncome("");
-              void setIncomeOverride(challengeId, null).then(onChanged);
+              setIncomeOverride(challengeId, null).then(onChanged).catch((e) => setErr(String(e.message ?? e)));
             }}
             className="text-xs text-muted hover:text-accent"
           >
             reset to automatic
           </button>
         </div>
+        {err && <p className="mt-2 text-sm text-danger">{err}</p>}
       </div>
 
       <label className="mt-3 flex items-start gap-2 border-t pt-3 text-sm">

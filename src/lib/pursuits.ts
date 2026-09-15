@@ -127,6 +127,20 @@ export async function addPursuitMember(pursuitId: string, memberId: string): Pro
   if (error) throw error;
 }
 
+/** My membership row for a pursuit — needed to show the profile toggle's state. */
+export async function fetchMyMembership(pursuitId: string): Promise<{ showOnProfile: boolean } | null> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase
+    .from("pursuit_members")
+    .select("show_on_profile")
+    .eq("pursuit_id", pursuitId)
+    .eq("user_id", user_id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { showOnProfile: !!data.show_on_profile } : null;
+}
+
 export async function setShowOnProfile(pursuitId: string, show: boolean): Promise<void> {
   const supabase = createClient();
   const user_id = await uid();

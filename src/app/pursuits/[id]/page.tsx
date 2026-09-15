@@ -48,6 +48,7 @@ import {
   fetchStatSpread,
   fetchStatSummary,
   fetchStatTop,
+  fetchMyMembership,
   fetchStats,
   joinPursuit,
   leavePursuit,
@@ -101,6 +102,7 @@ export default function PursuitPage() {
   // Community = everyone's view. Mine = your own data and the place to log it.
   // Same page, two lenses, rather than two destinations to hunt for.
   const [view, setView] = useState<"community" | "mine">("community");
+  const [showOnProfile, setShowOnProfileState] = useState(false);
 
   function reload() {
     fetchDirectory()
@@ -119,6 +121,7 @@ export default function PursuitPage() {
       .catch(() => {});
     listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
     fetchPursuitMembers(id).then(setMembers).catch(() => setMembers([]));
+    fetchMyMembership(id).then((m) => setShowOnProfileState(!!m?.showOnProfile)).catch(() => {});
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -232,8 +235,21 @@ export default function PursuitPage() {
           )}
           {pursuit.isMember && (
             <>
-              <button onClick={() => void setShowOnProfile(id, true).then(() => setMsg("Shown on your profile."))} className="btn-ghost py-1">Show on my profile</button>
-              <button onClick={() => void setShowOnProfile(id, false).then(() => setMsg("Hidden from your profile."))} className="btn-ghost py-1">Hide from my profile</button>
+              <button
+                onClick={() => {
+                  const next = !showOnProfile;
+                  setShowOnProfile(id, next)
+                    .then(() => {
+                      setShowOnProfileState(next);
+                      setMsg(next ? "Now shown on your profile." : "Hidden from your profile.");
+                      setTimeout(() => setMsg(null), 2500);
+                    })
+                    .catch((e) => setMsg(String(e.message ?? e)));
+                }}
+                className={`py-1 ${showOnProfile ? "btn-primary" : "btn-ghost"}`}
+              >
+                {showOnProfile ? "✓ On my profile" : "Show on my profile"}
+              </button>
             </>
           )}
           {pursuit.isOwner && (
@@ -284,16 +300,16 @@ export default function PursuitPage() {
         </div>
       )}
 
-      {view === "community" && <PursuitPreview pursuit={pursuit} onJoined={reload} />}
+      {view === "mine" ? (
+        <MineView pursuit={pursuit} stats={visibleStats} logHref={logHref} onChanged={reload} />
+      ) : (
+        <>
+      <PursuitPreview pursuit={pursuit} onJoined={reload} />
 
       <TeamStandings pursuitId={id} />
 
       <MembersSection members={members} total={pursuit.memberCount} />
 
-      {view === "mine" ? (
-        <MineView pursuit={pursuit} stats={visibleStats} logHref={logHref} onChanged={reload} />
-      ) : (
-        <>
       {pursuit.kind === "life" && <LifeCommunity pursuitId={id} memberCount={pursuit.memberCount} />}
       {pursuit.kind === "lifts" && <LiftsCommunity pursuitId={id} />}
 
@@ -363,20 +379,19 @@ function MineView({
 }) {
   return (
     <div className="space-y-6">
+      {/* Real numbers first. A bare "go and log" link was a dead end. */}
+      {pursuit.kind === "life" && <MyLife />}
+      {pursuit.kind === "lifts" && <MyLifts />}
+      {logHref === "/money" && <MyMoney />}
+
       {logHref && (
-        <div className="card border-2 border-accent-soft p-5">
-          <h2 className="font-semibold">Log your {pursuit.kind === "life" ? "day" : pursuit.kind === "lifts" ? "lifts" : "spending"}</h2>
-          <p className="mt-1 text-sm text-muted">
-            {pursuit.name} has its own editor — everything you enter there feeds the community board on the other tab.
-          </p>
-          <Link href={logHref} className="btn-primary mt-3 inline-block">
-            Open {pursuit.name} →
-          </Link>
-        </div>
+        <Link href={logHref} className="btn-primary inline-block">
+          {pursuit.kind === "life" ? "Log your day →" : pursuit.kind === "lifts" ? "Log a lift →" : "Log spending →"}
+        </Link>
       )}
 
       {stats.map((s) => (
-        <StatSection key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={onChanged} />
+        <MyStat key={s.id} stat={s} isOwner={pursuit.isOwner} isMember={pursuit.isMember} onChanged={onChanged} />
       ))}
 
       {stats.length === 0 && !logHref && (
@@ -386,6 +401,225 @@ function MineView({
         </p>
       )}
     </div>
+  );
+}
+
+/** Your last 30 days of Life, as numbers rather than a promise of numbers. */
+function MyLife() {
+  const [rows, setRows] = useState<Array<{ date: string; productive: number; brainrot: number }>>([]);
+  useEffect(() => {
+    (async () => {
+      const { fetchDayEntries } = await import("@/lib/data");
+      const { defaultBuckets, HOURS_PER_SLOT } = await import("@/lib/categories");
+      const from = new Date();
+      from.setDate(from.getDate() - 29);
+      const es = await fetchDayEntries(localToday(from), localToday()).catch(() => []);
+      const b = defaultBuckets();
+      const byDate = new Map<string, { productive: number; brainrot: number }>();
+      for (const e of es) {
+        const cur = byDate.get(e.date) ?? { productive: 0, brainrot: 0 };
+        const bucket = b[e.category];
+        if (bucket === "productive") cur.productive += HOURS_PER_SLOT;
+        else if (bucket === "brainrot") cur.brainrot += HOURS_PER_SLOT;
+        byDate.set(e.date, cur);
+      }
+      setRows([...byDate.entries()].sort().map(([date, v]) => ({ date, ...v })));
+    })();
+  }, []);
+  if (rows.length === 0) return <p className="card p-4 text-sm text-faint">Nothing logged in the last 30 days.</p>;
+
+  const p = rows.reduce((s, r) => s + r.productive, 0);
+  const br = rows.reduce((s, r) => s + r.brainrot, 0);
+  const wm = workMaxFrom(p, br);
+  return (
+    <section>
+      <h2 className="mb-2 font-semibold">Your last 30 days</h2>
+      <div className="mb-3 grid gap-3 sm:grid-cols-4">
+        <Metric label="Productive" value={`${p.toFixed(0)}h`} />
+        <Metric label="Brainrot" value={`${br.toFixed(0)}h`} />
+        <Metric label="WorkMax" value={`${wm ?? "—"}`} />
+        <Metric label="Days logged" value={String(rows.length)} />
+      </div>
+      <div className="h-56 card p-2">
+        <ResponsiveContainer>
+          <BarChart data={rows}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+            <YAxis tick={{ fontSize: 10 }} unit="h" />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="productive" stackId="a" fill="#16a34a" />
+            <Bar dataKey="brainrot" stackId="a" fill="#dc2626" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  );
+}
+
+/** Your own lifting history, per exercise. */
+function MyLifts() {
+  const [rows, setRows] = useState<Array<{ date: string; exercise: string; weightKg: number | null }>>([]);
+  const [ex, setEx] = useState("");
+  useEffect(() => {
+    import("@/lib/data").then(({ fetchLifts }) =>
+      fetchLifts()
+        .then((ls) => {
+          setRows(ls);
+          if (ls.length) {
+            const counts = new Map<string, number>();
+            for (const l of ls) counts.set(l.exercise, (counts.get(l.exercise) ?? 0) + 1);
+            setEx([...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
+          }
+        })
+        .catch(() => {})
+    );
+  }, []);
+  const exercises = useMemo(() => [...new Set(rows.map((r) => r.exercise))].sort(), [rows]);
+  const series = useMemo(
+    () =>
+      rows
+        .filter((r) => r.exercise === ex && r.weightKg != null)
+        .sort((a, b) => (a.date < b.date ? -1 : 1))
+        .map((r) => ({ date: r.date, weight: r.weightKg })),
+    [rows, ex]
+  );
+  if (rows.length === 0) return <p className="card p-4 text-sm text-faint">No lifts logged yet.</p>;
+
+  const best = Math.max(...series.map((s) => Number(s.weight ?? 0)), 0);
+  return (
+    <section>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="font-semibold">Your lifts</h2>
+        <select value={ex} onChange={(e) => setEx(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
+          {exercises.map((x) => <option key={x} value={x}>{x}</option>)}
+        </select>
+      </div>
+      <div className="mb-3 grid gap-3 sm:grid-cols-3">
+        <Metric label="Sessions" value={String(series.length)} />
+        <Metric label="Best" value={`${best}kg`} />
+        <Metric label="Exercises" value={String(exercises.length)} />
+      </div>
+      {series.length > 1 && (
+        <div className="h-56 card p-2">
+          <ResponsiveContainer>
+            <LineChart data={series}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+              <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
+              <Tooltip />
+              <Line type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 2 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Your spending this month, without leaving the pursuit. */
+function MyMoney() {
+  const [sum, setSum] = useState<{ total: number; essential: number; nonEssential: number; income: number; nonEssentialPct: number | null } | null>(null);
+  const [daily, setDaily] = useState<Array<{ date: string; essential: number; nonEssential: number }>>([]);
+  useEffect(() => {
+    (async () => {
+      const m = await import("@/lib/money");
+      const month = localToday().slice(0, 7);
+      const [y, mo] = month.split("-").map(Number);
+      const from = `${month}-01`;
+      const to = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+      m.fetchSummary(from, to).then(setSum).catch(() => {});
+      m.fetchDaily(from, to).then(setDaily).catch(() => {});
+    })();
+  }, []);
+  if (!sum) return null;
+  return (
+    <section>
+      <h2 className="mb-2 font-semibold">Your month</h2>
+      <div className="mb-3 grid gap-3 sm:grid-cols-4">
+        <Metric label="Spent" value={`$${sum.total.toFixed(0)}`} />
+        <Metric label="Essential" value={`$${sum.essential.toFixed(0)}`} />
+        <Metric label="Non-essential" value={`$${sum.nonEssential.toFixed(0)}`} />
+        <Metric label="% of income" value={sum.nonEssentialPct != null ? `${sum.nonEssentialPct}%` : "—"} />
+      </div>
+      {daily.length > 1 && (
+        <div className="h-56 card p-2">
+          <ResponsiveContainer>
+            <BarChart data={daily}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(d) => String(d).slice(8)} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="essential" stackId="a" name="essential" fill="#16a34a" />
+              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill="#dc2626" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-faint">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+/** A custom stat, from YOUR side: your own series, your totals, and the form. */
+function MyStat({
+  stat,
+  isOwner,
+  isMember,
+  onChanged,
+}: {
+  stat: PursuitStat;
+  isOwner: boolean;
+  isMember: boolean;
+  onChanged: () => void;
+}) {
+  const [mine, setMine] = useState<MyEntry[]>([]);
+  useEffect(() => {
+    fetchMyEntries(stat.id).then(setMine).catch(() => {});
+  }, [stat.id]);
+
+  const series = useMemo(
+    () => [...mine].sort((a, b) => (a.date < b.date ? -1 : 1)).map((e) => ({ date: e.date, value: e.value })),
+    [mine]
+  );
+  const total = mine.reduce((s, e) => s + e.value, 0);
+  const best = mine.length ? (stat.direction === "less" ? Math.min(...mine.map((m) => m.value)) : Math.max(...mine.map((m) => m.value))) : null;
+
+  return (
+    <section>
+      <h2 className="mb-2 font-semibold">{stat.name} — yours</h2>
+      <div className="mb-3 grid gap-3 sm:grid-cols-3">
+        <Metric label="Entries" value={String(mine.length)} />
+        <Metric label={stat.cadence === "daily" ? "Total" : "Latest"} value={
+          stat.cadence === "daily" ? Math.round(total).toLocaleString() : String(series[series.length - 1]?.value ?? "—")
+        } />
+        <Metric label={stat.direction === "less" ? "Lowest" : "Best"} value={best == null ? "—" : String(best)} />
+      </div>
+      {series.length > 1 && (
+        <div className="mb-3 h-52 card p-2">
+          <ResponsiveContainer>
+            <LineChart data={series}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+              <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              {stat.target != null && <ReferenceLine y={stat.target} strokeDasharray="6 3" stroke="var(--accent)" />}
+              <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2.5} dot={{ r: 2 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <StatSection stat={stat} isOwner={isOwner} isMember={isMember} onChanged={onChanged} mineOnly />
+    </section>
   );
 }
 
@@ -1027,7 +1261,7 @@ function LeaderCard({
   );
 }
 
-function StatSection({ stat, isOwner, isMember, onChanged }: { stat: PursuitStat; isOwner: boolean; isMember: boolean; onChanged: () => void }) {
+function StatSection({ stat, isOwner, isMember, onChanged, mineOnly }: { stat: PursuitStat; isOwner: boolean; isMember: boolean; onChanged: () => void; mineOnly?: boolean }) {
   const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [all, setAll] = useState<StatEntry[]>([]);
@@ -1132,7 +1366,7 @@ function StatSection({ stat, isOwner, isMember, onChanged }: { stat: PursuitStat
       )}
       {err && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{err}</p>}
 
-      {all.length > 0 && (
+      {!mineOnly && all.length > 0 && (
         <div className="mb-3 h-52">
           <ResponsiveContainer>
             {stat.chart === "pie" ? (
@@ -1176,7 +1410,7 @@ function StatSection({ stat, isOwner, isMember, onChanged }: { stat: PursuitStat
         </div>
       )}
 
-      {board.length > 0 && (
+      {!mineOnly && board.length > 0 && (
         <div className="mb-3 overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-surface-2 text-left text-xs text-muted">

@@ -359,10 +359,13 @@ export async function fetchStandings(challengeId: string): Promise<Standing[]> {
 }
 
 /** Cumulative non-essential spend per person, per day — the race chart. */
+const MIGRATION_0036 =
+  "These charts need migration 0036 — run supabase/apply_0036.sql in the Supabase SQL editor.";
+
 export async function fetchChallengeDaily(challengeId: string): Promise<ChallengeDay[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("challenge_daily", { c: challengeId });
-  if (error) throw error;
+  if (error) throw new Error(MIGRATION_0036);
   return (data ?? []).map((r: any) => ({
     date: String(r.date),
     userId: r.user_id,
@@ -376,7 +379,7 @@ export async function fetchChallengeDaily(challengeId: string): Promise<Challeng
 export async function fetchChallengeCategories(challengeId: string): Promise<ChallengeCategory[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("challenge_categories", { c: challengeId });
-  if (error) throw error;
+  if (error) throw new Error(MIGRATION_0036);
   return (data ?? []).map((r: any) => ({
     name: r.name,
     essential: !!r.essential,
@@ -429,12 +432,26 @@ export async function dismissInvite(challengeId: string): Promise<void> {
 export async function setIncomeOverride(challengeId: string, amount: number | null): Promise<void> {
   const supabase = createClient();
   const user_id = await uid();
-  const { error } = await supabase
+  // .select() matters: without it PostgREST reports success for an UPDATE that
+  // matched zero rows, so setting your income on a challenge you had not yet
+  // joined looked like it worked and changed nothing.
+  const { data, error } = await supabase
     .from("challenge_members")
     .update({ income_override: amount })
     .eq("challenge_id", challengeId)
-    .eq("user_id", user_id);
-  if (error) throw error;
+    .eq("user_id", user_id)
+    .select("user_id");
+  if (error) {
+    if (String(error.message).includes("income_override"))
+      throw new Error("Income overrides need migration 0036 — run supabase/apply_0036.sql in the SQL editor.");
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    const { error: insErr } = await supabase
+      .from("challenge_members")
+      .insert({ challenge_id: challengeId, user_id, income_override: amount });
+    if (insErr) throw new Error("Join the challenge first, then set your income.");
+  }
 }
 
 export async function joinChallenge(id: string): Promise<void> {
