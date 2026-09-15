@@ -38,6 +38,7 @@ import { allPairCorrelations, bucketsByPeriod, buildDayPoints, CORRELATION_FIELD
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry, DayMetrics, LiftEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
+import PursuitSummary from "./pursuit-summary";
 
 // ---------- configurable sections ----------
 
@@ -252,11 +253,15 @@ export default function OverviewPage() {
   return (
     <div className="space-y-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Overview</h1>
+        <h1 className="text-xl font-bold">Analytics</h1>
         <button onClick={() => setCustomizing((v) => !v)} className="btn-ghost py-1.5">
           {customizing ? "Done" : "Customize"}
         </button>
       </div>
+      {/* The page used to open on Life charts and never mention the other
+          pursuits. This answers "how am I doing at everything" first. */}
+      <PursuitSummary />
+
       {customizing && (
         <div className="card -mt-6 flex flex-wrap gap-2 p-3">
           {SECTIONS.map((s) => (
@@ -273,7 +278,11 @@ export default function OverviewPage() {
 
       {sections.ranking && (
         <section>
-          <h2 className="mb-3 font-semibold">Productivity ranking</h2>
+          <h2 className="mb-1 font-semibold">Productivity ranking</h2>
+          <p className="mb-3 text-sm text-muted">
+            WorkMax is your focus score times the hours you were actually productive — high focus over a short day
+            scores less than the same focus over a long one.
+          </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {ranking.map((rk) => (
               <div key={rk.period} className="card p-4">
@@ -326,7 +335,10 @@ export default function OverviewPage() {
 
       {sections.daymetrics && dayMetricData.length > 0 && (
         <section>
-          <h2 className="mb-2 font-semibold">Day metrics</h2>
+          <h2 className="mb-1 font-semibold">Day metrics</h2>
+          <p className="mb-2 text-sm text-muted">
+            What you recorded about yourself each day, not what you did. Flat lines mean you stopped filling these in.
+          </p>
           <div className="h-64 card p-2">
             <ResponsiveContainer>
               <LineChart data={dayMetricData}>
@@ -404,7 +416,11 @@ export default function OverviewPage() {
       {sections.correlations && (
         <section>
           <h2 className="mb-1 font-semibold">Correlations</h2>
-          <p className="mb-2 text-sm text-muted">Each dot is one day. Pick two things and see if they move together.</p>
+          <p className="mb-2 text-sm text-muted">
+            Each dot is one day. Pick two things and see whether they move together — r near 0 means they do not,
+            which is a real finding and usually the more useful one. Correlation is not cause: a bad night and a bad
+            day may both be caused by something else entirely.
+          </p>
           <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
             <select value={xField} onChange={(e) => setXField(e.target.value)} className="rounded-lg border bg-surface px-2 py-1.5">
               {CORRELATION_FIELDS.map((f) => (
