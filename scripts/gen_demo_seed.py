@@ -38,8 +38,148 @@ def q(p, t1, t2, cat):
     for s in range(max(0, a), min(b, 96)):
         p[s] = str(cat)
 
+
+# ---------------------------------------------------------------------------
+# TEXTURE
+#
+# The day scripts below paint 7-12 clean blocks. Real logged days have ~21
+# blocks averaging 68 minutes, because people are interrupted: you get a
+# coffee, you check your phone, someone stops at your desk. Without that the
+# demo cast look like timetables, and — worse — they all look like EACH OTHER,
+# because they share the same wake/work/eat/sleep skeleton.
+#
+# texturise() breaks long runs with short, plausible interruptions, and every
+# character gets a different fragmentation signature so the Arena is six
+# distinguishable people rather than six copies with the labels swapped.
+# ---------------------------------------------------------------------------
+
+# what plausibly interrupts what. host category -> (interrupting category, weight)
+INTERJECT = {
+    "0": [("6", 4), ("5", 1)],                                    # can't sleep, bathroom
+    "1": [("6", 5), ("5", 4), ("7", 3), ("3", 3), ("4", 1)],      # scroll, coffee, snack, someone talks
+    "2": [("5", 3), ("7", 2), ("6", 1)],
+    "3": [("7", 3), ("5", 2), ("4", 2), ("6", 1)],
+    "4": [("5", 2), ("7", 2), ("6", 2), ("3", 1)],
+    "5": [("7", 2), ("6", 2), ("4", 1)],
+    "6": [("5", 2), ("7", 2), ("3", 1)],
+    "7": [("3", 2), ("5", 1), ("6", 1)],
+    "8": [("7", 2), ("5", 1), ("6", 1), ("9", 1)],
+    "9": [("7", 3), ("6", 3), ("5", 2), ("3", 1)],
+}
+
+# rate      : chance a long run gets interrupted at all
+# min_run   : runs shorter than this are left alone
+# n / length: how many interruptions, and how long each (in slots)
+# sleep     : separate, much lower rate for sleep blocks
+TEXTURE = {
+    # can't sit still; the most fragmented day in the cast
+    "tony":    dict(rate=0.96, min_run=4,  n=(2, 4), length=(1, 2), sleep=0.40),
+    # unpredictable, but purposeful — fewer, longer interruptions than Tony
+    "natasha": dict(rate=0.86, min_run=5,  n=(1, 3), length=(1, 3), sleep=0.16),
+    # deliberately calm, and the interruptions are him managing himself
+    "bruce":   dict(rate=0.88, min_run=5,  n=(1, 3), length=(1, 3), sleep=0.22),
+    # ordinary office fragmentation: coffee, email, someone at the desk
+    "john":    dict(rate=0.90, min_run=5,  n=(1, 3), length=(1, 2), sleep=0.10),
+    # disciplined. Fewest interruptions of anyone, on purpose.
+    "steve":   dict(rate=0.62, min_run=7,  n=(1, 2), length=(1, 2), sleep=0.04),
+    # does everything in enormous chunks, but the chunks differ wildly by day
+    "thor":    dict(rate=0.55, min_run=8,  n=(1, 2), length=(2, 5), sleep=0.10),
+}
+
+
+GAP = "."   # "nobody painted this", as distinct from "0" = asleep
+
+
+# earliest each of them plausibly turns in (hour float). Without this, any
+# script whose evening runs out at 20:00 has its subject asleep from 20:00,
+# which is most of why the cast averaged 9-11 h of sleep.
+BEDTIME = {"steve": 21.5, "bruce": 22.0, "john": 22.5, "natasha": 23.0, "thor": 23.25, "tony": 24.0}
+
+
+def resolve(p, bed=None):
+    """Turn unpainted slots into something real.
+
+    Every day script starts from a blank day and paints ranges over it. The
+    blank used to be "0" — Sleep — so any hour a script forgot to cover became
+    sleep by accident. Thor's quest day paints travel to 15:00 and fighting
+    from 17:00, and those two missing hours read as a nap. Across the cast that
+    inflated sleep to 9-11 h/day.
+
+    Leading and trailing gaps ARE the night and become sleep. A gap in the
+    middle of the day is a painting mistake: extend whatever came before it.
+    """
+    if all(c == GAP for c in p):
+        return ["0"] * 96
+    first = next(i for i, c in enumerate(p) if c != GAP)
+    last = max(i for i, c in enumerate(p) if c != GAP)
+    for i in range(first):
+        p[i] = "0"
+    tail = last + 1
+    if bed is not None:
+        want = int(round(bed * 4))
+        if tail < want:                       # evening ran out early: stay up
+            for i in range(tail, min(want, 96)):
+                p[i] = p[tail - 1]
+            tail = min(want, 96)
+    for i in range(tail, 96):
+        p[i] = "0"
+    for i in range(first, last + 1):
+        if p[i] == GAP:
+            p[i] = p[i - 1]
+    return p
+
+
+def _runs(p):
+    out, st = [], 0
+    for i in range(1, 96):
+        if p[i] != p[i - 1]:
+            out.append((st, i - 1, p[st]))
+            st = i
+    out.append((st, 95, p[st]))
+    return out
+
+
+def texturise(p, r, key, monolithic=False):
+    """Interrupt long blocks. Returns p, mutated in place."""
+    p = resolve(p, BEDTIME.get(key))
+    if monolithic:                      # a Hulk-out does not stop for coffee
+        return p
+    prof = TEXTURE[key]
+    for a, b, cat in _runs(p):
+        n = b - a + 1
+        if n < prof["min_run"]:
+            continue
+        rate = prof["sleep"] if cat == "0" else prof["rate"]
+        if r.random() > rate:
+            continue
+        opts = INTERJECT.get(cat)
+        if not opts:
+            continue
+        for _ in range(r.randint(*prof["n"])):
+            ln = r.randint(*prof["length"])
+            if n - ln < 4:              # always leave real block either side
+                break
+            start = r.randint(a + 2, b - ln - 1)
+            pick = r.choices([c for c, _ in opts], weights=[w for _, w in opts])[0]
+            for s in range(start, start + ln):
+                p[s] = pick
+    return p
+
+
 def john_day(r, d):
-    p = ["0"] * 96
+    p = [GAP] * 96
+    if d.weekday() < 5 and r.random() < 0.10:
+        # sick, leave, or working from the couch — an office worker's year is
+        # not 250 identical Tuesdays, and John at 72% adjacent similarity was
+        # the most repetitive person in the cast
+        wake = 7.5 + r.uniform(0, 2.5)
+        q(p, 0, wake, 0); q(p, wake, wake + 1, 7)
+        t = wake + 1
+        for cat, dur in r.sample([(9, 3), (6, 2.5), (5, 1.5), (1, 2), (4, 1), (3, 1.5)], 4):
+            seg = dur * r.uniform(0.6, 1.4)
+            q(p, t, min(22, t + seg), cat); t = min(22, t + seg)
+        q(p, t, 24, 0)
+        return p
     if d.weekday() >= 5:  # weekend: chores, groceries, TV
         wake = 8.5 + r.uniform(0, 1.5)
         q(p, 0, wake, 0); q(p, wake, wake + 0.75, 7)
@@ -51,35 +191,58 @@ def john_day(r, d):
             q(p, 14, 18, 9)
         q(p, 18, 19, 7); q(p, 19, 22.5, 9); q(p, 22.5, 23.25, 6); q(p, 23.25, 24, 0)
         return p
-    wake = 6.75 + r.uniform(0, 0.5)
+    wake = 6.5 + r.uniform(0, 1.25)
     q(p, 0, wake, 0); q(p, wake, wake + 0.5, 5); q(p, wake + 0.5, wake + 0.75, 7)
     q(p, wake + 0.75, wake + 1.5, 4)
-    q(p, wake + 1.5, 12.5, 1); q(p, 12.5, 13, 7); q(p, 13, 17 + r.uniform(0, 0.5), 1)
+    lunch = 12 + r.uniform(0, 1.5)
+    q(p, wake + 1.5, lunch, 1); q(p, lunch, lunch + 0.5, 7); q(p, lunch + 0.5, 16.5 + r.uniform(0, 2.5), 1)
     q(p, 17.25, 18, 4)
     if d.weekday() in (1, 3) and r.random() < 0.55:
         q(p, 18, 18.75, 2)
     q(p, 19, 19.5, 7); q(p, 19.5, 22.25, 9); q(p, 22.25, 23, 6); q(p, 23, 24, 0)
     return p
 
-def fight_day():
-    # the battle: identical slots for every Avenger
-    p = ["0"] * 96
-    q(p, 0, 6, 0); q(p, 6, 6.5, 7)
-    q(p, 6.5, 7, 1)      # ASSEMBLE call
-    q(p, 7, 8, 4)        # quinjet
-    q(p, 8, 18, 1)       # the battle
-    q(p, 18, 19.5, 7)    # shawarma
-    q(p, 19.5, 22, 3)    # debrief
-    q(p, 22, 24, 0)
+def fight_day(r=None, key=None):
+    """The battle. Everyone fights 08:00-18:00 and eats afterwards — that part
+    is shared because it genuinely happened to all of them. Everything either
+    side is theirs: who was already awake, who took the long way, who went
+    straight to bed. It used to be byte-identical for all five, which made the
+    one memorable day of the year the least convincing."""
+    r = r or random.Random(0)
+    p = [GAP] * 96
+    wake = {"steve": 4.75, "thor": 7.0, "tony": 2.5, "natasha": 5.0, "bruce": 6.25}.get(key, 6.0)
+    q(p, 0, wake, 0)
+    if key == "tony":
+        q(p, wake, 6.5, 1)                      # already in the lab when the call came
+    elif key == "steve":
+        q(p, wake, 6.0, 2); q(p, 6.0, 6.5, 7)   # run first, obviously
+    elif key == "thor":
+        q(p, wake, 6.5, 7)                      # breakfast, at scale
+    else:
+        q(p, wake, 6.5, 7)
+    q(p, 6.5, 7, 1)                             # ASSEMBLE
+    q(p, 7, 8, 4)                               # quinjet
+    q(p, 8, 18, 1)                              # the battle
+    q(p, 18, 19.5, 7)                           # shawarma
+    if key == "bruce":
+        q(p, 19.5, 21, 4); q(p, 21, 24, 0)      # woke up somewhere else, went home early
+    elif key == "thor":
+        q(p, 19.5, 23.5, 3); q(p, 23.5, 24, 0)  # the debrief becomes a feast
+    elif key == "tony":
+        q(p, 19.5, 22, 3); q(p, 22, 23.5, 1); q(p, 23.5, 24, 0)   # back to the lab after
+    elif key == "natasha":
+        q(p, 19.5, 21, 3); q(p, 21, 22, 1); q(p, 22, 24, 0)
+    else:
+        q(p, 19.5, 22, 3); q(p, 22, 24, 0)
     return p
 
 def xmas_day(r):
-    p = ["0"] * 96
+    p = [GAP] * 96
     q(p, 0, 8, 0); q(p, 8, 10, 7); q(p, 10, 21, 8); q(p, 21, 22, 7); q(p, 22, 24, 0)
     return p
 
-def bruce_day(r, hulk, posthulk):
-    p = ["0"] * 96
+def bruce_day(r, hulk, posthulk, wknd=False):
+    p = [GAP] * 96
     if hulk:
         calm_until = 6 + r.uniform(0, 4)
         q(p, 0, 6, 0); q(p, 6, calm_until, 1)
@@ -90,9 +253,21 @@ def bruce_day(r, hulk, posthulk):
         q(p, 0, wake, 0); q(p, wake, wake + 1, 7); q(p, wake + 1, 18 + r.uniform(-1, 1), 9)
         q(p, 18, 20, 5); q(p, 20, 24, 0)
         return p
-    wake = 6.5 + r.uniform(0, 1.5)
-    lunch = 12.5 + r.uniform(0, 1)
-    workend = 17 + r.uniform(0, 2.5)
+    if wknd:
+        # he does not go to the lab at weekends. He reads, walks, cooks.
+        wake = 7.5 + r.uniform(0, 2.5)
+        q(p, 0, wake, 0); q(p, wake, wake + 0.75, 7)
+        t = wake + 0.75
+        for cat, lo, hi in r.sample([(9, 1.5, 3.5), (5, 1, 2.5), (4, 0.75, 2), (3, 1, 3), (2, 0.75, 1.5)], 4):
+            seg = lo + r.uniform(0, hi - lo)
+            q(p, t, min(21.5, t + seg), cat); t = min(21.5, t + seg)
+        q(p, t, t + 0.75, 7)
+        q(p, t + 0.75, 22 + r.uniform(0, 1.5), 9)
+        q(p, 22 + r.uniform(0, 1.5), 24, 0)
+        return p
+    wake = 6.0 + r.uniform(0, 2.5)
+    lunch = 12.0 + r.uniform(0, 2)
+    workend = 16.5 + r.uniform(0, 3.5)
     q(p, 0, wake, 0); q(p, wake, wake + 0.5, 5); q(p, wake + 0.5, wake + 1, 7)
     q(p, wake + 1, lunch, 1); q(p, lunch, lunch + 0.5, 7); q(p, lunch + 0.5, workend, 1)
     t = workend
@@ -100,24 +275,24 @@ def bruce_day(r, hulk, posthulk):
         q(p, t, t + 1 + r.uniform(0, 0.75), 2); t += 1 + r.uniform(0, 0.75)
     q(p, t, t + 0.5, 7); t += 0.5
     q(p, t, t + 1 + r.uniform(0, 1.5), 9)
-    bed = 21.5 + r.uniform(0, 1.5)
+    bed = 22.25 + r.uniform(0, 1.5)
     q(p, bed, 24, 0)
     return p
 
 def tony_day(r):
-    p = ["0"] * 96
+    p = [GAP] * 96
     if r.random() < 0.08:  # all-nighter
         q(p, 0, 3, 1); q(p, 3, 8, 0); q(p, 8, 8.5, 7)
         q(p, 8.5, 13, 1); q(p, 13, 13.5, 7); q(p, 13.5, 19 + r.uniform(0, 2), 1)
         q(p, 21, 24, 3)
         return p
-    sleep_until = 5 + r.uniform(0, 2.5)
+    sleep_until = 4 + r.uniform(0, 4.5)
     q(p, 0, sleep_until, 0)
     q(p, sleep_until, sleep_until + 0.5, 7)
     lunch = 12 + r.uniform(0, 1.5)
     q(p, sleep_until + 0.5, lunch, 1)
     q(p, lunch, lunch + 0.5, 7)
-    workend = 17.5 + r.uniform(0, 2.5)
+    workend = 16.5 + r.uniform(0, 4.5)
     q(p, lunch + 0.5, workend, 1)
     roll = r.random()
     if roll < 0.26:
@@ -135,8 +310,8 @@ def tony_day(r):
     return p
 
 def thor_day(r, lokiweek):
-    p = ["0"] * 96
-    wake = 7.5 + r.uniform(0, 1.5)
+    p = [GAP] * 96
+    wake = 6.5 + r.uniform(0, 4)
     q(p, 0, wake, 0)
     if lokiweek:
         q(p, wake, wake + 2, 7)
@@ -165,15 +340,32 @@ def thor_day(r, lokiweek):
         q(p, 15, 19, 6); q(p, 19, 21, 7); q(p, 21, 24, 9)
     return p
 
-def steve_day(r):
-    p = ["0"] * 96
-    wake = 4.75 + r.uniform(0, 0.5)
-    run = 1.5 + r.uniform(0, 1)
+def steve_day(r, wknd=False):
+    p = [GAP] * 96
+    if wknd:
+        # still up early. Long run, then actual life: the pictures, a ball
+        # game, someone's kitchen. No shield duty.
+        wake = 5.25 + r.uniform(0, 1)
+        run = 2 + r.uniform(0, 1.5)
+        q(p, 0, wake, 0); q(p, wake, wake + run, 2)
+        t = wake + run
+        q(p, t, t + 0.75, 7); t += 0.75
+        plan = r.choice([[(4, 1), (3, 4), (7, 1), (9, 2.5)],
+                         [(5, 1.5), (8, 5), (7, 1), (3, 2)],
+                         [(9, 2), (2, 1.5), (7, 1), (3, 3.5), (9, 1.5)],
+                         [(4, 0.75), (2, 2), (7, 0.75), (9, 3), (3, 2)]])
+        for cat, dur in plan:
+            seg = dur * r.uniform(0.7, 1.3)
+            q(p, t, min(22.5, t + seg), cat); t = min(22.5, t + seg)
+        q(p, t, 24, 0)
+        return p
+    wake = 4.75 + r.uniform(0, 1.25)
+    run = 1.25 + r.uniform(0, 1.75)
     q(p, 0, wake, 0); q(p, wake, wake + run, 2)
     q(p, wake + run, wake + run + 0.5, 7)
-    lunch = 12 + r.uniform(0, 0.5)
+    lunch = 11.75 + r.uniform(0, 1.25)
     q(p, wake + run + 0.5, lunch, 1); q(p, lunch, lunch + 0.5, 7)
-    workend = 16.5 + r.uniform(0, 1.5)
+    workend = 16 + r.uniform(0, 3)
     q(p, lunch + 0.5, workend, 1)
     q(p, workend, workend + 1 + r.uniform(0, 0.75), 2)
     t = workend + 2
@@ -187,23 +379,32 @@ def steve_day(r):
     return p
 
 def nat_day(r):
-    p = ["0"] * 96
-    wake = 5.5 + r.uniform(0, 1.5)
+    p = [GAP] * 96
+    wake = 5.0 + r.uniform(0, 3)
     q(p, 0, wake, 0)
     if r.random() < 0.18:  # mission day
         q(p, wake, wake + 0.5, 7); q(p, wake + 0.5, wake + 3 + r.uniform(0, 2), 4)
         q(p, wake + 4, 20 + r.uniform(0, 2), 1); q(p, 22, 24, 0)
         return p
-    spar = 1.5 + r.uniform(0, 1)
+    if r.random() < 0.22:
+        # surveillance: awake at odd hours, nothing resembling a schedule
+        q(p, wake, wake + 0.5, 7)
+        q(p, wake + 0.5, 11 + r.uniform(0, 3), 4)
+        q(p, 11, 15 + r.uniform(0, 3), 1)
+        q(p, 16, 17, 7); q(p, 17, 23 + r.uniform(0, 1), 1)
+        q(p, 23.5, 24, 0)
+        return p
+    spar = 1 + r.uniform(0, 2)
     q(p, wake, wake + spar, 2); q(p, wake + spar, wake + spar + 0.5, 7)
-    lunch = 13 + r.uniform(0, 0.5)
+    lunch = 12.25 + r.uniform(0, 1.75)
     q(p, wake + spar + 0.5, lunch, 1); q(p, lunch, lunch + 0.5, 7)
-    workend = 17 + r.uniform(0, 2)
+    workend = 15.5 + r.uniform(0, 4)
     q(p, lunch + 0.5, workend, 1)
-    if r.random() < 0.3:
-        q(p, workend, workend + 1.5, 3)
-    q(p, workend + 1.5, workend + 2.5, 9)
-    q(p, 21.5 + r.uniform(0, 1), 24, 0)
+    t = workend
+    for cat, dur in r.sample([(3, 2.5), (9, 2), (2, 1.25), (5, 1), (4, 1.25)], r.randint(2, 3)):
+        seg = dur * r.uniform(0.6, 1.4)
+        q(p, t, min(23, t + seg), cat); t = min(23, t + seg)
+    q(p, max(t, 21 + r.uniform(0, 2.5)), 24, 0)
     return p
 
 hulk_days = set()
@@ -238,7 +439,7 @@ for key, (uid_, email, name) in USERS.items():
         r = random.Random(f"{key}{d}")
         iso = d.isocalendar()
         if d == FIGHT and key != "john":
-            p = fight_day()
+            p = texturise(fight_day(r, key), r, key)
             emo, note = {
                 "bruce": (0, "The other guy did most of it. Woke up in a shawarma shop."),
                 "tony": (9, "Saved the world before dinner. You are welcome, Earth."),
@@ -254,7 +455,7 @@ for key, (uid_, email, name) in USERS.items():
             d += datetime.timedelta(days=1)
             continue
         if d == XMAS:
-            p = xmas_day(r)
+            p = texturise(xmas_day(r), r, key)
             note = {"bruce": "Quiet Christmas. Green sweater, obviously.", "tony": "Bought everyone a tower. A small one.",
                     "thor": "MIDGARDIAN YULE FEAST!", "steve": "Merry Christmas, everyone.",
                     "natasha": "Family. Weird. Nice.", "john": "Christmas at the in-laws. The turkey was dry."}[key]
@@ -263,7 +464,7 @@ for key, (uid_, email, name) in USERS.items():
             d += datetime.timedelta(days=1)
             continue
         if key == "john":
-            p = john_day(r, d)
+            p = texturise(john_day(r, d), r, 'john')
             emo = round(r.uniform(5.5, 7.5) * 2) / 2
             tired = round(r.uniform(4, 7))
             note = r.choice(NOTES["john"]) if r.random() < 0.3 else None
@@ -272,22 +473,22 @@ for key, (uid_, email, name) in USERS.items():
             weight = round(r.uniform(81, 84), 1)
         elif key == "bruce":
             hulk, post = d in hulk_days, d in posthulk_days
-            p = bruce_day(r, hulk, post)
+            p = texturise(bruce_day(r, hulk, post, d.weekday() >= 5), r, 'bruce', monolithic=hulk)
             emo = 0 if hulk else (4 if post else round(r.uniform(6, 8) * 2) / 2)
             tired = 9 if post else round(r.uniform(3, 6))
             note = r.choice(NOTES["bruce_hulk"]) if hulk else (r.choice(NOTES["bruce_post"]) if post else (r.choice(NOTES["bruce_norm"]) if r.random() < 0.3 else None))
             weight = 640 if hulk else round(r.uniform(69, 72), 1)
         elif key == "tony":
-            p = tony_day(r); emo = round(r.uniform(7, 9.5) * 2) / 2; tired = round(r.uniform(4, 8))
+            p = texturise(tony_day(r), r, 'tony'); emo = round(r.uniform(7, 9.5) * 2) / 2; tired = round(r.uniform(4, 8))
             note = r.choice(NOTES["tony"]) if r.random() < 0.25 else None
             weight = round(r.uniform(77, 79), 1)
         elif key == "thor":
             loki = (iso[0], iso[1]) in loki_weeks
-            p = thor_day(r, loki); emo = 2.5 if loki else round(r.uniform(8, 10) * 2) / 2; tired = 2
+            p = texturise(thor_day(r, loki), r, 'thor'); emo = 2.5 if loki else round(r.uniform(8, 10) * 2) / 2; tired = 2
             note = (r.choice(NOTES["thor_loki"]) if loki else r.choice(NOTES["thor"])) if r.random() < 0.35 else None
             weight = round(r.uniform(288, 292), 1)
         elif key == "steve":
-            p = steve_day(r)
+            p = texturise(steve_day(r, d.weekday() >= 5), r, 'steve')
             if r.random() < 0.05:
                 emo = 5.5
                 note = "Thought about Peggy."
@@ -297,7 +498,7 @@ for key, (uid_, email, name) in USERS.items():
             tired = round(r.uniform(2, 5))
             weight = round(r.uniform(108, 110), 1)
         else:
-            p = nat_day(r); emo = round(r.uniform(6, 8) * 2) / 2; tired = round(r.uniform(3, 6))
+            p = texturise(nat_day(r), r, 'natasha'); emo = round(r.uniform(6, 8) * 2) / 2; tired = round(r.uniform(3, 6))
             note = r.choice(NOTES["nat"]) if r.random() < 0.2 else None
             weight = round(r.uniform(59, 61), 1)
         if key != "steve" and r.random() < 0.06:
@@ -454,6 +655,7 @@ for k, (uid_, email, name) in USERS.items():
         out.append(f"insert into public.track_members (track_id, user_id, role, share_rule) values ('{TRACK_ID}','{uid_}','member','raw_labels');")
 out.append("")
 out.append("-- day entries: each statement carries its own pattern rows (self-contained)")
+day_entry_stmts = []
 CHUNK = 150
 prows = [f"('{u}','{d}','{p}')" for u, d, p in patterns]
 for i in range(0, len(prows), CHUNK):
@@ -464,6 +666,7 @@ for i in range(0, len(prows), CHUNK):
     out.append("select p.user_id::uuid, p.date::date, s.slot::smallint, substr(p.pattern, s.slot + 1, 1)::smallint,")
     out.append(LABEL_CASE)
     out.append("from p cross join (select generate_series(0, 95) as slot) s;")
+    day_entry_stmts.append("\n".join(out[-8:]))
     out.append("")
 def emit_values(table_cols, rows, chunk=300):
     for i in range(0, len(rows), chunk):
@@ -495,3 +698,22 @@ code = "\n".join(l for l in sql.splitlines() if not l.strip().startswith("--"))
 assert code.count("(") == code.count(")"), "paren mismatch"
 assert code.count("'") % 2 == 0, "quote mismatch"
 print("SQL sanity OK")
+
+# A surgical refresh: day_entries for the demo cast ONLY.
+#
+# Do NOT re-run demo_marvel.sql to update the day patterns. Its first
+# statements delete auth.users and then set profiles.is_demo, and since
+# migration 0030 a trigger rejects any write to is_demo — so the whole file
+# now fails partway through, after it has already deleted the cast.
+refresh = ["-- GENERATED by scripts/gen_demo_seed.py - do not hand-edit",
+           "-- Refreshes ONLY the day_entries of the demo cast. Safe to re-run.",
+           "-- Run as postgres / service role: RLS on day_entries is own-rows-only.",
+           "begin;",
+           "delete from public.day_entries where user_id in "
+           "(select id from public.profiles where is_demo);"]
+refresh += day_entry_stmts
+refresh.append("commit;")
+pathlib.Path(__file__).resolve().parent.parent.joinpath(
+    "supabase/seed/refresh_demo_days.sql"
+).write_text("\n".join(refresh) + "\n")
+print(f"refresh_demo_days.sql: {len(day_entry_stmts)} insert chunks")
