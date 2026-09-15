@@ -349,8 +349,11 @@ export function pursuitHref(p: Pick<Pursuit, "id" | "kind">): string {
 }
 
 /** Where YOU log this pursuit: built-ins have dedicated personal pages. */
+const MONEY_PURSUIT_ID = "33333333-3333-4333-8333-333333333305";
+
 export function pursuitLogHref(p: Pick<Pursuit, "id" | "kind">): string | null {
   if (p.kind === "life") return "/day";
   if (p.kind === "lifts") return "/lifts";
+  if (p.id === MONEY_PURSUIT_ID) return "/money";
   return null;
 }

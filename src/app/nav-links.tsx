@@ -22,6 +22,8 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Pursuits",
     subs: [
       { href: "/pursuits", label: "My pursuits" },
+      { href: "/money", label: "Money" },
+      { href: "/challenges", label: "Challenges" },
       { href: "/pursuits/explore", label: "Explore" },
     ],
   },
@@ -68,7 +70,7 @@ export function saveHiddenTabs(hidden: string[]) {
 
 function groupFor(pathname: string): NavGroup | null {
   if (pathname === "/lifts") return NAV_GROUPS[1]; // Lifts pursuit lives under Pursuits
-  if (pathname.startsWith("/pursuits")) return NAV_GROUPS[1];
+  if (pathname.startsWith("/pursuits") || pathname.startsWith("/money") || pathname.startsWith("/challenges")) return NAV_GROUPS[1];
   if (pathname.startsWith("/friends") || pathname.startsWith("/arena") || pathname.startsWith("/join") || pathname.startsWith("/search")) return NAV_GROUPS[2];
   for (const g of NAV_GROUPS) {
     if (g.subs.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))) return g;

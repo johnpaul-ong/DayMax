@@ -5,6 +5,7 @@ import NavLinks from "./nav-links";
 import ThemeSync from "./theme-switcher";
 import WelcomeGate from "./welcome-gate";
 import CaptureWidget from "./capture-widget";
+import MobileNav from "./mobile-nav";
 
 export const metadata: Metadata = {
   title: { default: "DayMax", template: "%s · DayMax" },
@@ -60,8 +61,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </nav>
         <WelcomeGate />
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:pb-8">{children}</main>
         <CaptureWidget />
+        <MobileNav />
       </body>
     </html>
   );
