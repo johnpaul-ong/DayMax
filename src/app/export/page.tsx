@@ -5,6 +5,7 @@
  * spreadsheet. This is the backup path and the "I still love Excel" path.
  */
 
+import Link from "next/link";
 import { useState } from "react";
 import { fetchDayEntries, fetchDayMetrics } from "@/lib/data";
 import { buildMonthGridXlsx } from "@/lib/xlsxIO";
@@ -57,6 +58,12 @@ export default function ExportPage() {
       </div>
 
       <EverythingExport />
+
+      <p className="mt-4 text-sm text-muted">
+        Chasing unlogged hours instead?{" "}
+        <Link href="/gaps" className="font-medium text-accent hover:underline">Missing time</Link> builds a workbook of
+        only the days that aren&apos;t finished.
+      </p>
     </div>
   );
 }

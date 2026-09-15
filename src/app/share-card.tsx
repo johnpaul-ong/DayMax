@@ -98,24 +98,32 @@ export default function ShareCard({ displayName }: { displayName?: string | null
         }
       });
 
-      // hours per category, biggest first — drives both the legend and the table
+      // Hours per category, biggest first — drives both the legend and the table.
+      //
+      // Plus an "Unlogged" row, which is the whole reason the card used to say
+      // 23.1h a day instead of 24: a day with 90 of its 96 slots filled really
+      // does only account for 22.5 hours. The missing time is real, so it gets
+      // a row rather than being quietly left out of the sum.
       const catHours = hoursByCategory(mine);
-      const ranked = Object.entries(catHours)
-        .map(([code, hours]) => ({ code: Number(code), hours }))
+      const logged = Object.values(catHours).reduce((sum, h) => sum + h, 0);
+      const unlogged = Math.max(0, days.length * 24 - logged);
+      const rows: Array<{ name: string; color: string; hours: number }> = Object.entries(catHours)
+        .map(([code, hours]) => ({ name: categoryName(Number(code)), color: categoryColor(Number(code)), hours }))
         .filter((c) => c.hours > 0)
         .sort((a, b) => b.hours - a.hours);
-      const totalHours = ranked.reduce((sum, c) => sum + c.hours, 0);
+      if (unlogged >= 0.25) rows.push({ name: "Unlogged", color: "rgba(128,128,128,0.35)", hours: unlogged });
+      const totalHours = logged + unlogged;
       const perDay = (h: number) => (days.length ? h / days.length : 0);
 
       // legend, down the right-hand side of the grid
       const legendX = PAD + GRID_W + GRID_GAP;
       ctx.font = "600 22px ui-sans-serif, system-ui, sans-serif";
-      ranked.slice(0, 11).forEach((c, i) => {
-        const y = GRID_TOP + 16 + i * 32;
-        ctx.fillStyle = categoryColor(c.code);
+      rows.slice(0, 12).forEach((c, i) => {
+        const y = GRID_TOP + 16 + i * 30;
+        ctx.fillStyle = c.color;
         ctx.fillRect(legendX, y - 13, 16, 16);
         ctx.fillStyle = ink;
-        ctx.fillText(fit(categoryName(c.code), LEGEND_W - 26), legendX + 26, y);
+        ctx.fillText(fit(c.name, LEGEND_W - 26), legendX + 26, y);
       });
 
       // the headline numbers
@@ -165,15 +173,19 @@ export default function ShareCard({ displayName }: { displayName?: string | null
       });
       ctx.textAlign = "left";
 
-      const perCol = Math.ceil(Math.min(ranked.length, 10) / 2) || 1;
-      ranked.slice(0, 10).forEach((c, i) => {
+      // 28px rows, not 32: the Unlogged row makes eleven, which at the old
+      // spacing pushed the total line into the footer.
+      const ROW_H = 28;
+      const shown = rows.slice(0, 12);
+      const perCol = Math.ceil(shown.length / 2) || 1;
+      shown.forEach((c, i) => {
         const cx = COL_X[Math.floor(i / perCol)];
-        const y = tableTop + 34 + (i % perCol) * 32;
-        ctx.fillStyle = categoryColor(c.code);
+        const y = tableTop + 34 + (i % perCol) * ROW_H;
+        ctx.fillStyle = c.color;
         ctx.fillRect(cx, y - 12, 14, 14);
         ctx.fillStyle = ink;
         ctx.font = "400 22px ui-sans-serif, system-ui, sans-serif";
-        ctx.fillText(fit(categoryName(c.code), NUM_X - 24 - 90), cx + 24, y);
+        ctx.fillText(fit(c.name, NUM_X - 24 - 90), cx + 24, y);
         ctx.textAlign = "right";
         ctx.font = "600 22px ui-sans-serif, system-ui, sans-serif";
         ctx.fillText(`${Math.round(c.hours).toLocaleString()}h`, cx + NUM_X, y);
@@ -183,7 +195,7 @@ export default function ShareCard({ displayName }: { displayName?: string | null
       });
 
       // the line that adds it all up, directly above the footer
-      const sumY = tableTop + 34 + perCol * 32 + 30;
+      const sumY = tableTop + 34 + perCol * ROW_H + 30;
       ctx.strokeStyle = "rgba(128,128,128,0.35)";
       ctx.beginPath();
       ctx.moveTo(PAD, sumY - 26);
@@ -192,7 +204,7 @@ export default function ShareCard({ displayName }: { displayName?: string | null
 
       ctx.fillStyle = ink;
       ctx.font = "700 28px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillText("All categories", PAD, sumY);
+      ctx.fillText("Every hour", PAD, sumY);
       ctx.textAlign = "right";
       ctx.fillText(`${Math.round(totalHours).toLocaleString()}h`, COL_X[1] + NUM_X, sumY);
       ctx.fillText(`${perDay(totalHours).toFixed(1)}h`, COL_X[1] + AVG_X, sumY);

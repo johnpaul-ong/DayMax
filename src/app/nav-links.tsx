@@ -93,7 +93,7 @@ function groupFor(pathname: string): NavGroup | null {
   if (startsWithAny("/today", "/day", "/year")) return NAV_GROUPS[0];
   if (startsWithAny("/pursuits", "/money", "/challenges", "/lifts", "/habits")) return NAV_GROUPS[1];
   if (startsWithAny("/friends", "/arena", "/join", "/search")) return NAV_GROUPS[2];
-  if (startsWithAny("/profile", "/overview", "/settings", "/metrics", "/import", "/export")) return NAV_GROUPS[3];
+  if (startsWithAny("/profile", "/overview", "/settings", "/metrics", "/import", "/export", "/gaps")) return NAV_GROUPS[3];
   for (const g of NAV_GROUPS) {
     if (g.subs.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))) return g;
   }

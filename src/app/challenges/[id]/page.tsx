@@ -457,6 +457,10 @@ function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Stan
         <p className="mb-2 text-xs text-muted">
           Defaults to your last income entry before the challenge started — most people are paid monthly, so what
           landed during these 30 days is usually the wrong number. Change it to whatever you&apos;re actually living on.
+          <br />
+          <b>This only moves the percentages.</b> Budget Baddies ranks on dollars spent, so the standings, the race
+          chart and the daily chart stay exactly where they were — income changes &ldquo;% of income&rdquo; and the
+          percentage view of the board, nothing else.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border bg-surface px-2">

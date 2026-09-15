@@ -85,15 +85,14 @@ export function parsePastedGrid(tsv: string): GridParseResult {
   return parseMonthGrid(matrix, "pasted");
 }
 
-/** Build a month-grid .xlsx that looks like the original spreadsheet. */
-export function buildMonthGridXlsx(
-  ym: string,
-  entries: DayEntry[],
-  metrics: DayMetrics[]
-): Blob {
-  const [y, mo] = ym.split("-").map(Number);
-  const daysInMonth = new Date(y, mo, 0).getDate();
-  const dates = Array.from({ length: daysInMonth }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
+/**
+ * The month-grid sheet body, for an arbitrary set of dates.
+ *
+ * Split out of buildMonthGridXlsx so the gap-filling workbook can reuse the
+ * exact layout for a hand-picked subset of days — same shape in, same parser
+ * out, so a file this app produces is always a file this app can read back.
+ */
+function gridAoa(dates: string[], entries: DayEntry[], metrics: DayMetrics[]): (string | number | null)[][] {
   const byKey = new Map(entries.map((e) => [`${e.date}|${e.slot}`, e]));
   const metByDate = new Map(metrics.map((m) => [m.date, m]));
 
@@ -137,10 +136,64 @@ export function buildMonthGridXlsx(
   for (const [label, get] of metricRows) {
     aoa.push([null, label, null, ...dates.map((d) => (metByDate.has(d) ? get(metByDate.get(d)!) : null))]);
   }
+  return aoa;
+}
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, ym);
+function toBlob(wb: XLSX.WorkBook): Blob {
   const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
   return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+/** Build a month-grid .xlsx that looks like the original spreadsheet. */
+export function buildMonthGridXlsx(ym: string, entries: DayEntry[], metrics: DayMetrics[]): Blob {
+  const [y, mo] = ym.split("-").map(Number);
+  const daysInMonth = new Date(y, mo, 0).getDate();
+  const dates = Array.from({ length: daysInMonth }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gridAoa(dates, entries, metrics)), ym);
+  return toBlob(wb);
+}
+
+/**
+ * A workbook of just the days that aren't finished, one sheet per month.
+ *
+ * Whatever is already logged is filled in, so only the blanks need typing.
+ * Feed the saved file straight back into the Import page: import upserts and
+ * never deletes, so anything left blank stays exactly as it was.
+ */
+export function buildGapsXlsx(
+  dates: string[],
+  entries: DayEntry[],
+  metrics: DayMetrics[]
+): Blob {
+  const wb = XLSX.utils.book_new();
+
+  // How-to first, so it's the sheet that opens. Deliberately not shaped like a
+  // grid or a lift sheet, so re-importing skips it instead of misreading it.
+  const help: (string | number | null)[][] = [
+    ["How to fill this in"],
+    [],
+    ["Each sheet below is one month. One column per unfinished day, one row per 15 minutes."],
+    ["Cells already filled are what you logged. Type into the blank ones only."],
+    ["Format: the category number, then optionally a space and your own label."],
+    ['Example: "1 deep work on the pitch"  or just  "0"'],
+    [],
+    ["Code", "Category"],
+    ...CATEGORIES.map((c) => [c.code, c.name] as (string | number)[]),
+    [],
+    ["When you're done, save and drop this file on the Import page."],
+    ["Import only adds and updates — blanks you leave are never deleted."],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(help), "How to fill");
+
+  const byMonth = new Map<string, string[]>();
+  for (const d of [...dates].sort()) {
+    const ym = d.slice(0, 7);
+    if (!byMonth.has(ym)) byMonth.set(ym, []);
+    byMonth.get(ym)!.push(d);
+  }
+  for (const [ym, ds] of byMonth) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gridAoa(ds, entries, metrics)), ym);
+  }
+  return toBlob(wb);
 }

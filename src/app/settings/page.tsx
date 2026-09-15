@@ -375,6 +375,7 @@ function BucketColorRows() {
  */
 function DataSection() {
   const links = [
+    { href: "/gaps", label: "Missing time", hint: "Which days aren't finished, and a spreadsheet of just those days to fill in." },
     { href: "/metrics", label: "Day metrics", hint: "Emotion, tiredness, deep time, weight and notes — every day in one editable table." },
     { href: "/import", label: "Import", hint: "Bring in a spreadsheet of days, slots or lifts." },
     { href: "/export", label: "Export", hint: "Take everything with you as CSV." },
