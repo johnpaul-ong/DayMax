@@ -17,6 +17,7 @@ import InstallPrompt from "./install-prompt";
 import ShareCard from "./share-card";
 import type { BucketSettings, DayEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
+import Recap from "./recap";
 
 // ---------- customizable layout ----------
 
@@ -349,6 +350,8 @@ export default function HomePage() {
       ) : (
         layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
       )}
+
+      <Recap />
 
       {/* A poster of your year is a lovely thing to have and a terrible thing
           to be shown every single visit — the home page was six stacked

@@ -5,16 +5,22 @@
  * spreadsheet with a scoreboard font. The data was already there; nothing
  * drew it.
  *
+ * A Nemesis banner sits above them all — a leaderboard tells you your rank,
+ * not who to care about, and the person one place off you is the better story.
+ *
  * Six views, each answering a question a table cannot:
  *   Race         — who overtook whom, and when
  *   Spread       — is 4th place just behind, or nowhere near
  *   Day shape    — what these people's days actually look like next to mine
  *   Records      — who holds what, so everyone holds something
  *   Form         — metronome or chaos merchant: the same average, lived very differently
- *   Head to head — one rival, the all-time record, and the last fortnight
+ *   Head to head — one rival: all-time record, last fortnight, who shows up,
+ *                  and the clock overlay (the only view that uses the 96-slot
+ *                  detail rather than daily totals, which is why it is for two
+ *                  people and not for a board of forty)
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -29,7 +35,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { LeaderboardRow } from "@/lib/friends";
+import { fetchMemberDayStrip, type DayStripRow, type LeaderboardRow } from "@/lib/friends";
+import { defaultBuckets, SLOTS_PER_DAY, slotToTime } from "@/lib/categories";
+import { localToday } from "@/lib/dates";
 import { workMaxFrom } from "@/lib/ranking";
 import { teamMeta } from "@/lib/teams";
 
@@ -85,6 +93,7 @@ export default function ArenaCharts({ rows, me }: { rows: LeaderboardRow[]; me: 
 
   return (
     <section className="mb-6">
+      <Nemesis people={people} me={me} />
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h2 className="font-semibold">The picture</h2>
         <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
@@ -398,7 +407,70 @@ function HeadToHead({ rows, people, me }: { rows: LeaderboardRow[]; people: Pers
           />
         ))}
       </div>
+
+      <StreakDuel rows={rows} meId={mine.id} rivalId={rival.id} rivalName={rival.name} rivalTeam={rival.team} />
+
+      <Clock
+        meId={mine.id}
+        meName="You"
+        rivalId={rival.id}
+        rivalName={rival.name}
+        rivalTeam={rival.team}
+      />
     </>
+  );
+}
+
+/** Who has actually turned up more consistently. Nothing to do with hours. */
+function StreakDuel({ rows, meId, rivalId, rivalName, rivalTeam }: {
+  rows: LeaderboardRow[]; meId: string; rivalId: string; rivalName: string; rivalTeam: string;
+}) {
+  const s = useMemo(() => {
+    const run = (id: string) => {
+      const dates = [...new Set(rows.filter((r) => r.memberId === id).map((r) => r.date))].sort();
+      if (dates.length === 0) return { current: 0, best: 0, total: 0 };
+      let best = 1, cur = 1;
+      for (let i = 1; i < dates.length; i++) {
+        const prev = new Date(dates[i - 1] + "T00:00:00");
+        prev.setDate(prev.getDate() + 1);
+        const consecutive = localToday(prev) === dates[i];
+        cur = consecutive ? cur + 1 : 1;
+        if (cur > best) best = cur;
+      }
+      // the run is only "current" if it reaches the last day anyone logged
+      const last = [...new Set(rows.map((r) => r.date))].sort().slice(-1)[0];
+      const current = dates[dates.length - 1] === last ? cur : 0;
+      return { current, best, total: dates.length };
+    };
+    return { me: run(meId), rival: run(rivalId) };
+  }, [rows, meId, rivalId]);
+
+  const rowFor = (label: string, a: number, b: number, unit = "") => {
+    const total = a + b || 1;
+    return (
+      <div key={label} className="mb-2 last:mb-0">
+        <div className="mb-0.5 flex justify-between text-xs">
+          <span className={`tabular-nums font-semibold ${a >= b ? "text-accent" : "text-muted"}`}>{a}{unit}</span>
+          <span className="text-faint">{label}</span>
+          <span className={`tabular-nums font-semibold ${b >= a ? "text-accent" : "text-muted"}`}>{b}{unit}</span>
+        </div>
+        <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
+          <div style={{ width: `${(a / total) * 100}%`, background: "var(--accent)" }} />
+          <div style={{ width: `${(b / total) * 100}%`, background: teamMeta(rivalTeam).color }} />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="card mt-3 p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-faint">
+        Showing up — you vs {rivalName}
+      </p>
+      {rowFor("current streak", s.me.current, s.rival.current, "d")}
+      {rowFor("longest streak", s.me.best, s.rival.best, "d")}
+      {rowFor("days logged", s.me.total, s.rival.total)}
+    </div>
   );
 }
 
@@ -514,6 +586,125 @@ function Form({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
             </Bar>
             <Bar dataKey="sd" name="swing" fill="var(--surface-2)" radius={[0, 3, 3, 0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Nemesis.
+ *
+ * A leaderboard tells you your rank. It does not tell you who to care about.
+ * The person one place above you on a 40-person board is a far better story
+ * than the person at the top, and nothing was surfacing them.
+ */
+function Nemesis({ people, me }: { people: Person[]; me: string | null }) {
+  const found = useMemo(() => {
+    const active = people.filter((p) => p.days > 0).map((p) => ({ ...p, perDay: p.productive / p.days }));
+    const mine = active.find((p) => p.id === me);
+    if (!mine || active.length < 2) return null;
+    const rest = active.filter((p) => p.id !== me).sort((a, b) => Math.abs(a.perDay - mine.perDay) - Math.abs(b.perDay - mine.perDay));
+    const n = rest[0];
+    const gap = n.perDay - mine.perDay;
+    return { name: n.name, team: n.team, gap, ahead: gap > 0, perDay: n.perDay, minePerDay: mine.perDay };
+  }, [people, me]);
+
+  if (!found) return null;
+  const mins = Math.round(Math.abs(found.gap) * 60);
+  return (
+    <div className="card mb-3 flex flex-wrap items-center gap-3 border-2 border-accent-soft p-3">
+      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+        Nemesis
+      </span>
+      <p className="text-sm">
+        <b style={{ color: teamMeta(found.team).color }}>{found.name}</b>{" "}
+        {mins === 0 ? (
+          <>is dead level with you at {found.perDay.toFixed(1)}h a day.</>
+        ) : found.ahead ? (
+          <>is <b>{mins} minutes a day</b> ahead of you. That is the closest gap on the board.</>
+        ) : (
+          <>is <b>{mins} minutes a day</b> behind you — closer than anyone else. Mind your back.</>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * When, not how much.
+ *
+ * Two people can log the same six productive hours and share almost none of
+ * them. This is the only view that uses the 96-slot detail rather than daily
+ * totals — which is why it is here, for two people, and not on a board of
+ * forty.
+ */
+function Clock({ meId, meName, rivalId, rivalName, rivalTeam }: {
+  meId: string; meName: string; rivalId: string; rivalName: string; rivalTeam: string;
+}) {
+  const [mine, setMine] = useState<DayStripRow[] | null>(null);
+  const [theirs, setTheirs] = useState<DayStripRow[] | null>(null);
+
+  useEffect(() => {
+    const from = new Date();
+    from.setDate(from.getDate() - 59);
+    const a = localToday(from);
+    const b = localToday();
+    setMine(null); setTheirs(null);
+    fetchMemberDayStrip(meId, a, b).then(setMine).catch(() => setMine([]));
+    fetchMemberDayStrip(rivalId, a, b).then(setTheirs).catch(() => setTheirs([]));
+  }, [meId, rivalId]);
+
+  const data = useMemo(() => {
+    if (!mine || !theirs) return null;
+    const buckets = defaultBuckets();
+    const tally = (rows: DayStripRow[]) => {
+      const hit = new Array(SLOTS_PER_DAY).fill(0);
+      const seen = new Set<string>();
+      for (const r of rows) {
+        seen.add(r.date);
+        if (buckets[r.category] === "productive") hit[r.slot] += 1;
+      }
+      const days = Math.max(1, seen.size);
+      return hit.map((n) => Math.round((n / days) * 100));
+    };
+    const a = tally(mine);
+    const b = tally(theirs);
+    // hourly, not 15-minutely — 96 points of noise hides the shape
+    return Array.from({ length: 24 }, (_, h) => ({
+      hour: `${String(h).padStart(2, "0")}:00`,
+      [meName]: Math.round(a.slice(h * 4, h * 4 + 4).reduce((s, x) => s + x, 0) / 4),
+      [rivalName]: Math.round(b.slice(h * 4, h * 4 + 4).reduce((s, x) => s + x, 0) / 4),
+    }));
+  }, [mine, theirs, meName, rivalName]);
+
+  if (!data) return <p className="card p-4 text-sm text-faint">Reading both your days…</p>;
+
+  const peak = (key: string) => data.reduce((best, d) => ((d[key] as number) > (best[key] as number) ? d : best), data[0]);
+  const myPeak = peak(meName);
+  const theirPeak = peak(rivalName);
+  const overlap = Math.round(
+    data.reduce((s, d) => s + Math.min(d[meName] as number, d[rivalName] as number), 0) /
+      Math.max(1, data.reduce((s, d) => s + Math.max(d[meName] as number, d[rivalName] as number), 0)) * 100
+  );
+
+  return (
+    <>
+      <p className="mb-2 mt-4 text-sm text-muted">
+        Chance of being productive at each hour, last 60 days. You peak at <b>{myPeak.hour}</b>,
+        {" "}{rivalName} at <b>{theirPeak.hour}</b> — your productive hours overlap {overlap}%.
+      </p>
+      <div className="h-56 card p-2">
+        <ResponsiveContainer>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="hour" tick={{ fontSize: 9 }} interval={2} />
+            <YAxis tick={{ fontSize: 10 }} unit="%" />
+            <Tooltip formatter={(v: number) => [`${v}% of days`, "productive"]} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Line type="monotone" dataKey={meName} stroke="var(--accent)" strokeWidth={3} dot={false} />
+            <Line type="monotone" dataKey={rivalName} stroke={teamMeta(rivalTeam).color} strokeWidth={2} dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </>
