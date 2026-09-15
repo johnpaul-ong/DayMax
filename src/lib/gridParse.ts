@@ -70,7 +70,12 @@ export function parseGridCell(v: CellValue): { category: number; label: string |
  * Find the time column and the row index of the 00:00 cell by looking for a
  * column that contains a run of 96 increasing 15-minute times.
  */
-function findTimeColumn(matrix: SheetMatrix): { col: number; startRow: number } | null {
+/**
+ * Find the 00:00..23:45 column. Exported because parseWorkbook needs to decide
+ * "is this sheet a month grid?" and it MUST use this same test — see the note
+ * on looksLikeGrid in xlsxIO.ts.
+ */
+export function findTimeColumn(matrix: SheetMatrix): { col: number; startRow: number } | null {
   const maxScanCols = 8;
   const maxScanRows = Math.min(matrix.length, 30);
   for (let c = 0; c < maxScanCols; c++) {

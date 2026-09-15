@@ -7,7 +7,7 @@
 
 import * as XLSX from "xlsx";
 import { CATEGORIES, categoryName, slotToTime, SLOTS_PER_DAY } from "./categories";
-import { parseMonthGrid, type GridParseResult } from "./gridParse";
+import { findTimeColumn, parseMonthGrid, type GridParseResult } from "./gridParse";
 import { parseLiftSheet, type LiftParseResult } from "./liftParse";
 import { parseSheet2, type Sheet2ParseResult } from "./sheet2Parse";
 import type { DayEntry, DayMetrics, SheetMatrix } from "./types";
@@ -27,20 +27,20 @@ function sheetToMatrix(ws: XLSX.WorkSheet): SheetMatrix {
   }) as SheetMatrix;
 }
 
+/**
+ * Is this sheet a month grid?
+ *
+ * This used to be a second, hand-rolled time-column test, and it had drifted
+ * from the real one: it accepted the STRING "00:00" but then required the next
+ * cell to be a Date or a number, never a string. slotToTime() emits strings —
+ * so every workbook DayMax exported was skipped by DayMax's own importer. A
+ * silent, complete round-trip failure, reported as "Skipped sheets:".
+ *
+ * Now it delegates to the parser's own findTimeColumn(), so the gate and the
+ * parser cannot disagree about what a grid is.
+ */
 function looksLikeGrid(m: SheetMatrix): boolean {
-  // a column containing a 00:00 cell followed by 00:15
-  for (let c = 0; c < 8; c++) {
-    for (let r = 0; r < Math.min(m.length, 20); r++) {
-      const v = m[r]?.[c];
-      const isMidnight =
-        (v instanceof Date && v.getHours() === 0 && v.getMinutes() === 0) || v === 0;
-      if (!isMidnight && !(typeof v === "string" && /^0?0:00/.test(v))) continue;
-      const nx = m[r + 1]?.[c];
-      if (nx instanceof Date && nx.getHours() === 0 && nx.getMinutes() === 15) return true;
-      if (typeof nx === "number" && Math.round(nx * 24 * 60) === 15) return true;
-    }
-  }
-  return false;
+  return findTimeColumn(m) !== null;
 }
 
 function headerNames(m: SheetMatrix): string[] {
