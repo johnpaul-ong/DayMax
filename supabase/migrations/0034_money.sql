@@ -217,11 +217,21 @@ $$;
 -- It gets a pursuit so it shows up in the directory, on profiles, and in team
 -- standings alongside everything else. Its page is bespoke, like Life and Lifts.
 
-insert into public.pursuits (id, owner_id, name, description, kind, is_public) values
-  ('33333333-3333-4333-8333-333333333305', null, 'Money',
-   'What you spend, and what of it you actually needed. Categories are yours to bend.',
-   'custom', true)
-on conflict (id) do nothing;
+-- Guarded: if the pursuits table isn't here (fresh project, or migrations run
+-- out of order) Money still installs perfectly well — it just doesn't appear in
+-- the pursuit directory until 0013 has been run.
+do $$
+begin
+  if to_regclass('public.pursuits') is not null then
+    insert into public.pursuits (id, owner_id, name, description, kind, is_public) values
+      ('33333333-3333-4333-8333-333333333305', null, 'Money',
+       'What you spend, and what of it you actually needed. Categories are yours to bend.',
+       'custom', true)
+    on conflict (id) do nothing;
+  else
+    raise notice 'public.pursuits not found — skipping the Money pursuit row. Run migration 0013 first, then re-run this file.';
+  end if;
+end $$;
 
 -- 7. Currency ---------------------------------------------------------------------
 -- Money is meaningless without it, and a challenge that silently ranks dollars

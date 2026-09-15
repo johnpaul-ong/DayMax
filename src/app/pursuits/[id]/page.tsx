@@ -217,7 +217,11 @@ export default function PursuitPage() {
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           {logHref && (
             <Link href={logHref} className="btn-primary py-1">
-              Open your {pursuit.kind === "life" ? "day" : "lifts"} →
+              {pursuit.kind === "life"
+                ? "Log your day →"
+                : pursuit.kind === "lifts"
+                ? "Log a lift →"
+                : "Log your spending →"}
             </Link>
           )}
           {pursuit.isMember && !pursuit.isOwner && (

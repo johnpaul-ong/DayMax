@@ -16,7 +16,7 @@
 
 create table if not exists public.challenges (
   id uuid primary key default gen_random_uuid(),
-  pursuit_id uuid references public.pursuits (id) on delete set null,
+  pursuit_id uuid,   -- FK added conditionally below, see note
   owner_id uuid references auth.users (id) on delete set null,
   name text not null check (length(trim(name)) between 1 and 80),
   description text not null default '',
@@ -32,6 +32,19 @@ create table if not exists public.challenges (
   created_at timestamptz not null default now(),
   check (ends_on >= starts_on)
 );
+-- The FK only exists if the pursuits table does. Challenges are useful on their
+-- own; tying their creation to an unrelated table's existence is needless
+-- coupling — that's what made this fail on a database without 0013.
+do $$
+begin
+  if to_regclass('public.pursuits') is not null
+     and not exists (select 1 from pg_constraint where conname = 'challenges_pursuit_fk') then
+    alter table public.challenges
+      add constraint challenges_pursuit_fk
+      foreign key (pursuit_id) references public.pursuits (id) on delete set null;
+  end if;
+end $$;
+
 create index if not exists challenges_dates_idx on public.challenges (starts_on, ends_on);
 create unique index if not exists challenges_token_idx on public.challenges (invite_token);
 alter table public.challenges enable row level security;
@@ -193,7 +206,7 @@ begin
 
   -- Joining a money challenge puts you in the Money pursuit too, otherwise you
   -- have nowhere to log the spending the challenge is measuring.
-  if ch.pursuit_id is not null then
+  if ch.pursuit_id is not null and to_regclass('public.pursuit_members') is not null then
     insert into public.pursuit_members (pursuit_id, user_id, role)
     values (ch.pursuit_id, auth.uid(), 'member') on conflict do nothing;
   end if;
@@ -227,7 +240,8 @@ $$;
 insert into public.challenges (id, pursuit_id, owner_id, name, description, metric, starts_on, ends_on, is_public)
 values (
   '66666666-0000-4000-8000-000000000001',
-  '33333333-3333-4333-8333-333333333305',
+  -- null if the Money pursuit isn't present; join_challenge copes either way
+  (select id from public.pursuits where id = '33333333-3333-4333-8333-333333333305'),
   null,
   '30 Days, Less Spent',
   'Who can spend the least on non-essentials between 15 September and 15 October? Ranked by share of your own income, so it is a fair fight regardless of what you earn. Essentials — rent, groceries, bills, transport — do not count against you.',

@@ -22,6 +22,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Pursuits",
     subs: [
       { href: "/pursuits", label: "My pursuits" },
+      { href: "/lifts", label: "Lifts" },
       { href: "/money", label: "Money" },
       { href: "/challenges", label: "Challenges" },
       { href: "/pursuits/explore", label: "Explore" },
