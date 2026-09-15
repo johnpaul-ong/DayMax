@@ -54,8 +54,11 @@ const DEFAULT_SECTIONS: Record<SectionKey, boolean> = {
   ranking: true,
   hours: true,
   daymetrics: true,
-  trends: false,
-  correlations: false,
+  // These were off by default, so the page most people saw had three charts
+  // on it, not eleven — and the two that actually answer a question were the
+  // hidden ones.
+  trends: true,
+  correlations: true,
   lifts: true,
 };
 

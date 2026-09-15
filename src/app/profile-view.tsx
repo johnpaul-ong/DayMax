@@ -63,6 +63,15 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [exercises, setExercises] = useState<Array<{ exercise: string; sessions: number; best: number }>>([]);
   const [defaultEx, setDefaultEx] = useState<string | null>(null);
 
+  const [myChallenges, setMyChallenges] = useState<Array<{ id: string; name: string; daysLeft: number }>>([]);
+  useEffect(() => {
+    // only the ones this person is actually in; the board is public anyway
+    import("@/lib/money")
+      .then((m) => m.fetchChallenges())
+      .then((cs) => setMyChallenges(cs.filter((c) => c.isMember).map((c) => ({ id: c.id, name: c.name, daysLeft: c.daysLeft }))))
+      .catch(() => {});
+  }, [userId]);
+
   function load() {
     fetchMemberProfile(userId)
       .then((profile) => {
@@ -249,7 +258,7 @@ export default function ProfileView({ userId }: { userId: string }) {
         </p>
       )}
 
-      {pursuits.length > 0 && (
+      {(pursuits.length > 0 || myChallenges.length > 0) && (
         <section>
           <h2 className="mb-2 font-semibold">Pursuits</h2>
           <div className="flex flex-wrap gap-2">
@@ -263,8 +272,36 @@ export default function ProfileView({ userId }: { userId: string }) {
               </Link>
             ))}
           </div>
+          {myChallenges.length > 0 && (
+            <>
+              <h3 className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-faint">Challenges</h3>
+              <div className="flex flex-wrap gap-2">
+                {myChallenges.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={`/challenges/${c.id}`}
+                    className="rounded-full border bg-surface px-3 py-1.5 text-sm font-medium hover:text-accent"
+                  >
+                    {c.name}
+                    {c.daysLeft > 0 ? (
+                      <span className="ml-1 text-xs font-semibold text-accent">{c.daysLeft}d left</span>
+                    ) : (
+                      <span className="ml-1 text-xs text-faint">final</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       )}
+
+      {/* The signature picture of the app. Standard on every profile now,
+          directly under Pursuits, rather than buried four sections down and
+          hidden unless the owner had left the "days" section switched on. */}
+      {strip.length > 0 && <ProfileYearBars strip={strip} name={name} isSelf={isSelf} />}
+
+      {show("metrics") && memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
 
       {show("ranking") && hasDayData && (
         <section>
@@ -365,13 +402,9 @@ export default function ProfileView({ userId }: { userId: string }) {
         </section>
       )}
 
-      {show("days") && strip.length > 0 && <ProfileYearHeatmap strip={strip} />}
-
-      {show("days") && strip.length > 0 && <ProfileDayStrip name={name} strip={strip} />}
-
-      {show("days") && strip.length > 0 && <ProfileYearBars strip={strip} />}
-
-      {show("metrics") && memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
+      {/* "Their days, 15 minutes at a time" (a second month grid) and the
+          year heatmap were both saying what the year strip above already says,
+          three sections further down the page. Gone. */}
 
       {!hasDayData && liftRows.length === 0 && strip.length === 0 && (
         <p className="card p-4 text-sm text-faint">
@@ -385,7 +418,7 @@ export default function ProfileView({ userId }: { userId: string }) {
 }
 
 /** The whole year at a glance: every logged day as a slim vertical 96-slot bar. */
-function ProfileYearBars({ strip }: { strip: DayStripRow[] }) {
+function ProfileYearBars({ strip, name, isSelf }: { strip: DayStripRow[]; name: string; isSelf: boolean }) {
   const days = useMemo(() => {
     const byDate = new Map<string, { slots: (number | null)[]; labels: (string | null)[] }>();
     for (const r of strip) {
@@ -397,10 +430,22 @@ function ProfileYearBars({ strip }: { strip: DayStripRow[] }) {
     return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
   }, [strip]);
 
+  const year = days.length ? days[days.length - 1][0].slice(0, 4) : new Date().getFullYear();
+  const totals = useMemo(() => {
+    const h = new Map<number, number>();
+    for (const r of strip) h.set(r.category, (h.get(r.category) ?? 0) + 0.25);
+    return [...h.entries()].sort((a, b) => b[1] - a[1]);
+  }, [strip]);
+  const logged = totals.reduce((s, [, v]) => s + v, 0);
+
   return (
     <section>
-      <h2 className="mb-1 font-semibold">The whole year</h2>
-      <p className="mb-2 text-sm text-muted">{days.length.toLocaleString()} days side by side — scroll through their year, hover for detail.</p>
+      <h2 className="mb-1 font-semibold">
+        {isSelf ? `My ${year} in 15-minute slots` : `${name}'s ${year} in 15-minute slots`}
+      </h2>
+      <p className="mb-2 text-sm text-muted">
+        {days.length.toLocaleString()} days · {Math.round(logged).toLocaleString()} hours accounted for. Hover any slot for detail.
+      </p>
       <div className="card overflow-x-auto p-4">
         <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
           {days.map(([date, d]) => (
@@ -421,6 +466,16 @@ function ProfileYearBars({ strip }: { strip: DayStripRow[] }) {
             </div>
           ))}
         </div>
+      </div>
+      {/* a legend, so the colours mean something without opening another page */}
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {totals.map(([cat, h]) => (
+          <span key={cat} className="inline-flex items-center gap-1.5 text-xs text-muted">
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: categoryColor(cat) }} />
+            {categoryName(cat)}
+            <span className="tabular-nums text-faint">{Math.round(h).toLocaleString()}h</span>
+          </span>
+        ))}
       </div>
     </section>
   );
@@ -457,201 +512,5 @@ function ProfileMetricsChart({ name, rows }: { name: string; rows: MemberDayMetr
   );
 }
 
-/** Read-only month grid (like the Month page): reliable hover, optional inline text. */
-function ProfileDayStrip({ name, strip }: { name: string; strip: DayStripRow[] }) {
-  const byDate = useMemo(() => {
-    const map = new Map<string, Map<number, { category: number; label: string | null }>>();
-    for (const r of strip) {
-      if (!map.has(r.date)) map.set(r.date, new Map());
-      map.get(r.date)!.set(r.slot, { category: r.category, label: r.label });
-    }
-    return map;
-  }, [strip]);
-
-  const months = useMemo(() => [...new Set([...byDate.keys()].map((d) => d.slice(0, 7)))].sort(), [byDate]);
-  const [ym, setYm] = useState<string>("");
-  const [showText, setShowText] = useState(false);
-  const month = ym || months[months.length - 1] || "";
-
-  const dates = useMemo(() => {
-    if (!month) return [];
-    const [y, m] = month.split("-").map(Number);
-    const n = new Date(y, m, 0).getDate();
-    return Array.from({ length: n }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
-  }, [month]);
-
-  if (months.length === 0) return null;
-
-  return (
-    <section>
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <h2 className="font-semibold">Their days, 15 minutes at a time</h2>
-        <select value={month} onChange={(e) => setYm(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
-          {months.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-        <button
-          onClick={() => setShowText((v) => !v)}
-          className={`rounded-lg border px-2.5 py-1 text-sm ${showText ? "bg-accent-soft font-semibold text-accent" : ""}`}
-          title="Show activity text in cells"
-        >
-          Aa
-        </button>
-      </div>
-      <p className="mb-2 text-sm text-muted">{name} shares full day detail. Hover any cell — or hit Aa to read it straight off the grid.</p>
-      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        {CATEGORIES.map((c) => (
-          <span key={c.code} className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />
-            {c.name}
-          </span>
-        ))}
-      </div>
-      <div className="max-h-[70vh] overflow-auto rounded-xl border bg-surface">
-        <table className="daygrid border-collapse">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr>
-              <th className="sticky left-0 z-20 bg-surface px-1 py-1">time</th>
-              {dates.map((d) => (
-                <th key={d} style={{ minWidth: showText ? 90 : 34 }} className="px-1 py-1">
-                  {Number(d.slice(8))}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => (
-              <tr key={s}>
-                <td className="sticky left-0 z-10 bg-surface px-1 text-right font-mono text-[10px] text-faint">
-                  {s % 4 === 0 ? slotToTime(s) : ""}
-                </td>
-                {dates.map((date) => {
-                  const c = byDate.get(date)?.get(s);
-                  return (
-                    <td
-                      key={date}
-                      title={c ? `${date} ${slotToTime(s)} — ${categoryName(c.category)}${c.label ? `: ${c.label}` : ""}` : `${date} ${slotToTime(s)}`}
-                      className="overflow-hidden whitespace-nowrap align-middle"
-                      style={{ height: 13, maxWidth: showText ? 90 : 34, background: c ? categoryColor(c.category) + "dd" : undefined }}
-                    >
-                      {showText && c?.label ? (
-                        <span className="block truncate px-0.5 text-[9px] font-medium text-white/95" style={{ lineHeight: "13px" }}>
-                          {c.label}
-                        </span>
-                      ) : null}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** Year heatmap: productive-vs-brainrot blend or dominant category, per day. */
-function ProfileYearHeatmap({ strip }: { strip: DayStripRow[] }) {
-  const [mode, setMode] = useState<"buckets" | "dominant">("buckets");
-  const colors = useMemo(() => (typeof window === "undefined" ? DEFAULT_BUCKET_COLORS : loadBucketColors()), []);
-  const buckets = useMemo(() => defaultBuckets(), []);
-
-  const byDate = useMemo(() => {
-    const map = new Map<string, DayStripRow[]>();
-    for (const r of strip) map.set(r.date, [...(map.get(r.date) ?? []), r]);
-    return map;
-  }, [strip]);
-
-  const years = useMemo(() => [...new Set([...byDate.keys()].map((d) => Number(d.slice(0, 4))))].sort(), [byDate]);
-  const [year, setYear] = useState<number>(0);
-  const y = year || years[years.length - 1] || new Date().getFullYear();
-
-  function cell(date: string) {
-    const list = byDate.get(date);
-    if (!list) return null;
-    const catHours = new Map<number, number>();
-    let p = 0, b = 0;
-    for (const e of list) {
-      catHours.set(e.category, (catHours.get(e.category) ?? 0) + HOURS_PER_SLOT);
-      const bk = buckets[e.category] ?? "other";
-      if (bk === "productive") p += HOURS_PER_SLOT;
-      else if (bk === "brainrot") b += HOURS_PER_SLOT;
-    }
-    const opacity = Math.min(1, list.length / 96 + 0.25);
-    if (mode === "dominant") {
-      const top = [...catHours.entries()].sort(([, a2], [, b2]) => b2 - a2)[0];
-      return { color: categoryColor(top[0]), opacity, tip: `${date}: mostly ${categoryName(top[0])} (${top[1].toFixed(1)}h)` };
-    }
-    if (p + b === 0) return { color: "var(--faint)", opacity: 0.35, tip: `${date}: nothing productive or brainrot` };
-    return {
-      color: blendHex(colors.brainrot, colors.productive, p / (p + b)),
-      opacity,
-      tip: `${date}: ${p.toFixed(1)}h productive, ${b.toFixed(1)}h brainrot`,
-    };
-  }
-
-  if (years.length === 0) return null;
-
-  return (
-    <section>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 className="font-semibold">Year at a glance</h2>
-        {years.length > 1 && (
-          <select value={y} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border bg-surface px-2 py-1 text-sm">
-            {years.map((yy) => (
-              <option key={yy} value={yy}>{yy}</option>
-            ))}
-          </select>
-        )}
-        <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
-          {(["buckets", "dominant"] as const).map((m) => (
-            <button key={m} onClick={() => setMode(m)} className={`rounded-lg px-3 py-1 ${mode === m ? "bg-surface font-semibold" : "text-muted"}`}>
-              {m === "buckets" ? "Productive vs brainrot" : "Dominant category"}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="card overflow-x-auto p-4">
-        <table className="border-separate" style={{ borderSpacing: 3 }}>
-          <thead>
-            <tr>
-              <th className="pr-2 text-left text-xs font-medium text-faint">·</th>
-              {Array.from({ length: 31 }, (_, i) => (
-                <th key={i} className="text-center text-[10px] font-normal text-faint">{i + 1}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {MONTH_NAMES.map((mn, mi) => {
-              const daysInMonth = new Date(y, mi + 1, 0).getDate();
-              const ym = `${y}-${String(mi + 1).padStart(2, "0")}`;
-              return (
-                <tr key={mi}>
-                  <td className="pr-2 text-xs font-medium text-muted">{mn}</td>
-                  {Array.from({ length: 31 }, (_, i) => {
-                    if (i >= daysInMonth) return <td key={i} />;
-                    const date = `${ym}-${String(i + 1).padStart(2, "0")}`;
-                    const c = cell(date);
-                    return (
-                      <td key={i}>
-                        <div
-                          title={c?.tip ?? `${date}: not logged`}
-                          className="h-4 w-4 rounded-[4px]"
-                          style={{ background: c ? c.color : "var(--surface-2)", opacity: c?.opacity ?? 1 }}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
