@@ -5,11 +5,13 @@
  * spreadsheet with a scoreboard font. The data was already there; nothing
  * drew it.
  *
- * Four views, each answering a question a table cannot:
+ * Six views, each answering a question a table cannot:
  *   Race         — who overtook whom, and when
  *   Spread       — is 4th place just behind, or nowhere near
  *   Day shape    — what these people's days actually look like next to mine
- *   Head to head — one rival, every category, and the last fortnight
+ *   Records      — who holds what, so everyone holds something
+ *   Form         — metronome or chaos merchant: the same average, lived very differently
+ *   Head to head — one rival, the all-time record, and the last fortnight
  */
 
 import { useMemo, useState } from "react";
@@ -67,7 +69,7 @@ function lastNDates(rows: LeaderboardRow[], n: number): string[] {
 }
 
 export default function ArenaCharts({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
-  const [view, setView] = useState<"race" | "spread" | "shape" | "h2h">("race");
+  const [view, setView] = useState<"race" | "spread" | "shape" | "records" | "form" | "h2h">("race");
   const people = useMemo(() => peopleFrom(rows), [rows]);
 
   if (rows.length === 0) return null;
@@ -76,6 +78,8 @@ export default function ArenaCharts({ rows, me }: { rows: LeaderboardRow[]; me: 
     { key: "race" as const, label: "Race", hint: "Who pulled ahead, and when" },
     { key: "spread" as const, label: "Spread", hint: "Where you sit in the pack" },
     { key: "shape" as const, label: "Day shape", hint: "What their days look like" },
+    { key: "records" as const, label: "Records", hint: "Who holds what" },
+    { key: "form" as const, label: "Form", hint: "Machine or chaos merchant" },
     { key: "h2h" as const, label: "Head to head", hint: "You vs one person" },
   ];
 
@@ -99,6 +103,8 @@ export default function ArenaCharts({ rows, me }: { rows: LeaderboardRow[]; me: 
       {view === "race" && <Race rows={rows} me={me} />}
       {view === "spread" && <Spread people={people} me={me} />}
       {view === "shape" && <DayShape people={people} me={me} />}
+      {view === "records" && <Records rows={rows} people={people} me={me} />}
+      {view === "form" && <Form rows={rows} me={me} />}
       {view === "h2h" && <HeadToHead rows={rows} people={people} me={me} />}
     </section>
   );
@@ -294,6 +300,23 @@ function HeadToHead({ rows, people, me }: { rows: LeaderboardRow[]; people: Pers
   const wins = strip.filter((d) => d.won).length;
   const losses = strip.filter((d) => !d.won && !d.drew).length;
 
+  // every day you BOTH logged, not just the recent fortnight
+  const allTime = (() => {
+    const mineBy = new Map<string, number>();
+    const theirs = new Map<string, number>();
+    for (const r of rows) {
+      if (r.memberId === mine.id) mineBy.set(r.date, r.productive);
+      if (r.memberId === rival.id) theirs.set(r.date, r.productive);
+    }
+    let w = 0, l = 0, d = 0;
+    for (const [date, a] of mineBy) {
+      if (!theirs.has(date)) continue;          // only days you both logged
+      const b = theirs.get(date)!;
+      if (a > b) w++; else if (a < b) l++; else d++;
+    }
+    return { w, l, d, played: w + l + d };
+  })();
+
   return (
     <>
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
@@ -311,6 +334,38 @@ function HeadToHead({ rows, people, me }: { rows: LeaderboardRow[]; people: Pers
           — you won <b className="text-ok">{wins}</b> of the last {strip.length} days, lost <b className="text-danger">{losses}</b>.
         </span>
       </div>
+
+      {allTime.played > 0 && (
+        <div className="card mb-3 flex flex-wrap items-center gap-4 p-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">All-time record</p>
+            <p className="text-2xl font-bold tabular-nums">
+              <span className="text-ok">{allTime.w}</span>
+              <span className="text-faint"> – </span>
+              <span className="text-danger">{allTime.l}</span>
+              {allTime.d > 0 && <span className="text-faint text-lg"> – {allTime.d}</span>}
+            </p>
+            <p className="text-xs text-muted">
+              across {allTime.played} days you both logged
+              {allTime.played > 0 && <> · you take {Math.round((allTime.w / allTime.played) * 100)}%</>}
+            </p>
+          </div>
+          <div className="min-w-40 flex-1">
+            <div className="flex h-3 overflow-hidden rounded-full bg-surface-2">
+              <div style={{ width: `${(allTime.w / allTime.played) * 100}%`, background: "var(--ok)" }} />
+              <div style={{ width: `${(allTime.d / allTime.played) * 100}%`, background: "var(--surface-2)" }} />
+              <div style={{ width: `${(allTime.l / allTime.played) * 100}%`, background: teamMeta(rival.team).color }} />
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              {allTime.w > allTime.l
+                ? `You have the edge over ${rival.name}.`
+                : allTime.w < allTime.l
+                  ? `${rival.name} has your number.`
+                  : `Dead even with ${rival.name}.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="card mb-3 p-3">
         {cmp.map((c) => {
@@ -342,6 +397,124 @@ function HeadToHead({ rows, people, me }: { rows: LeaderboardRow[]; people: Pers
             style={{ background: d.drew ? "var(--surface-2)" : d.won ? "var(--accent)" : teamMeta(rival.team).color }}
           />
         ))}
+      </div>
+    </>
+  );
+}
+
+/** The trophy cabinet. Everyone should hold something. */
+function Records({ rows, people, me }: { rows: LeaderboardRow[]; people: Person[]; me: string | null }) {
+  const holders = useMemo(() => {
+    const active = people.filter((p) => p.days > 0);
+    if (active.length === 0) return [];
+    const best = (label: string, pick: (p: Person) => number, unit: string, low = false) => {
+      const sorted = [...active].sort((a, b) => (low ? pick(a) - pick(b) : pick(b) - pick(a)));
+      const w = sorted[0];
+      const runner = sorted[1];
+      return {
+        label,
+        name: w.name,
+        id: w.id,
+        value: `${pick(w).toFixed(1)}${unit}`,
+        margin: runner ? `${Math.abs(pick(w) - pick(runner)).toFixed(1)}${unit} clear of ${runner.name}` : "unopposed",
+      };
+    };
+    // one big day, not an average — the single best 24 hours anyone logged
+    const byDay = new Map<string, { name: string; id: string; v: number }>();
+    for (const r of rows) {
+      const cur = byDay.get(r.memberId);
+      if (!cur || r.productive > cur.v) byDay.set(r.memberId, { name: r.displayName, id: r.memberId, v: r.productive });
+    }
+    const bigDay = [...byDay.values()].sort((a, b) => b.v - a.v)[0];
+    return [
+      best("Most productive", (p) => p.productive / p.days, "h a day"),
+      best("Most social", (p) => p.social / p.days, "h a day"),
+      best("Least brainrot", (p) => p.brainrot / p.days, "h a day", true),
+      best("Most brainrot", (p) => p.brainrot / p.days, "h a day"),
+      best("Most days logged", (p) => p.days, " days"),
+      bigDay && {
+        label: "Biggest single day",
+        name: bigDay.name,
+        id: bigDay.id,
+        value: `${bigDay.v.toFixed(1)}h`,
+        margin: "productive, in one day",
+      },
+    ].filter(Boolean) as Array<{ label: string; name: string; id: string; value: string; margin: string }>;
+  }, [people, rows]);
+
+  const mine = holders.filter((h) => h.id === me).length;
+  if (holders.length === 0) return null;
+
+  return (
+    <>
+      <p className="mb-2 text-sm text-muted">
+        Who holds what, in this scope. {mine > 0 ? <>You hold <b>{mine}</b> of {holders.length}.</> : <>You hold none of them yet.</>}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {holders.map((h) => (
+          <div key={h.label} className={`card p-4 ${h.id === me ? "border-2 border-accent-soft" : ""}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">{h.label}</p>
+            <p className="mt-1 text-lg font-bold">{h.name}{h.id === me && <span className="text-accent"> (you)</span>}</p>
+            <p className="text-2xl font-bold tabular-nums">{h.value}</p>
+            <p className="mt-0.5 text-xs text-muted">{h.margin}</p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Average against variability. Top-left is a metronome, top-right is someone
+ * having enormous days and then nothing. Both can be productive; they are
+ * completely different people to be.
+ */
+function Form({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
+  const data = useMemo(() => {
+    const per = new Map<string, { name: string; team: string; xs: number[] }>();
+    for (const r of rows) {
+      const e = per.get(r.memberId) ?? { name: r.displayName, team: r.team, xs: [] };
+      e.xs.push(r.productive);
+      per.set(r.memberId, e);
+    }
+    return [...per.entries()]
+      .filter(([, e]) => e.xs.length >= 5)
+      .map(([id, e]) => {
+        const mean = e.xs.reduce((s, x) => s + x, 0) / e.xs.length;
+        const sd = Math.sqrt(e.xs.reduce((s, x) => s + (x - mean) ** 2, 0) / e.xs.length);
+        return { id, name: e.name, team: e.team, mean: Math.round(mean * 10) / 10, sd: Math.round(sd * 10) / 10 };
+      })
+      .sort((a, b) => a.sd - b.sd);
+  }, [rows]);
+
+  if (data.length === 0) return <p className="card p-4 text-sm text-faint">Not enough days logged yet to judge anyone&apos;s form.</p>;
+  const steadiest = data[0];
+  const wildest = data[data.length - 1];
+  const mine = data.find((d) => d.id === me);
+
+  return (
+    <>
+      <p className="mb-2 text-sm text-muted">
+        How much each person swings day to day. <b>{steadiest.name}</b> is the metronome (±{steadiest.sd}h),
+        <b> {wildest.name}</b> the chaos merchant (±{wildest.sd}h).
+        {mine && <> You swing ±{mine.sd}h around {mine.mean}h.</>}
+      </p>
+      <div className="h-72 card p-2">
+        <ResponsiveContainer>
+          <BarChart data={data} layout="vertical" margin={{ left: 8, right: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis type="number" tick={{ fontSize: 10 }} unit="h" />
+            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={92} />
+            <Tooltip formatter={(v: number, n: string) => [`${v}h`, n === "mean" ? "average day" : "swing (±1 sd)"]} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Bar dataKey="mean" name="average day" radius={[0, 3, 3, 0]}>
+              {data.map((d) => (
+                <Cell key={d.id} fill={d.id === me ? "var(--accent)" : teamMeta(d.team).color} />
+              ))}
+            </Bar>
+            <Bar dataKey="sd" name="swing" fill="var(--surface-2)" radius={[0, 3, 3, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </>
   );

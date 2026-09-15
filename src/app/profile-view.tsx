@@ -301,7 +301,6 @@ export default function ProfileView({ userId }: { userId: string }) {
           hidden unless the owner had left the "days" section switched on. */}
       {strip.length > 0 && <ProfileYearBars strip={strip} name={name} isSelf={isSelf} />}
 
-      {show("metrics") && memberMetrics.length > 2 && <ProfileMetricsChart name={name} rows={memberMetrics} />}
 
       {show("ranking") && hasDayData && (
         <section>
@@ -446,25 +445,46 @@ function ProfileYearBars({ strip, name, isSelf }: { strip: DayStripRow[]; name: 
       <p className="mb-2 text-sm text-muted">
         {days.length.toLocaleString()} days · {Math.round(logged).toLocaleString()} hours accounted for. Hover any slot for detail.
       </p>
-      <div className="card overflow-x-auto p-4">
-        <div className="flex items-end gap-[3px]" style={{ minWidth: days.length * 13 }}>
+      {/* One column per day, all of them, fitted to the card. It used to be a
+          fixed 13px per day inside overflow-x-auto, so a year was 3,350px of
+          sideways scrolling and you could never see the shape of it at once.
+          minWidth:0 on the children is load-bearing: flex items default to
+          min-width:auto and refuse to shrink below their content. */}
+      <div className="card p-4">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+            gap: days.length > 180 ? 0 : 1,
+            width: "100%",
+          }}
+        >
           {days.map(([date, d]) => (
-            <div key={date} className="flex flex-col items-center">
-              <div className="flex h-[288px] w-[10px] flex-col overflow-hidden rounded-full">
-                {d.slots.map((cat, s) => (
-                  <div
-                    key={s}
-                    title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${d.labels[s] ? ` (${d.labels[s]})` : ""}` : ""}`}
-                    className="w-full flex-1"
-                    style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)" }}
-                  />
-                ))}
-              </div>
-              <span className="mt-1 text-[8px] text-faint" style={{ writingMode: "vertical-rl" }}>
-                {date.slice(5)}
-              </span>
+            <div key={date} className="flex h-[260px] flex-col overflow-hidden" style={{ minWidth: 0 }}>
+              {d.slots.map((cat, s) => (
+                <div
+                  key={s}
+                  title={`${date} ${slotToTime(s)}${cat != null ? ` — ${categoryName(cat)}${d.labels[s] ? ` (${d.labels[s]})` : ""}` : ""}`}
+                  className="w-full flex-1"
+                  style={{ background: cat != null ? categoryColor(cat) : "var(--surface-2)", minHeight: 0 }}
+                />
+              ))}
             </div>
           ))}
+        </div>
+        {/* months, rather than 258 unreadable vertical dates */}
+        <div
+          className="mt-1"
+          style={{ display: "grid", gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
+        >
+          {days.map(([date], i) => {
+            const first = i === 0 || days[i - 1][0].slice(5, 7) !== date.slice(5, 7);
+            return (
+              <span key={date} className="overflow-visible whitespace-nowrap text-[9px] text-faint" style={{ minWidth: 0 }}>
+                {first ? MONTHS[Number(date.slice(5, 7)) - 1] : ""}
+              </span>
+            );
+          })}
         </div>
       </div>
       {/* a legend, so the colours mean something without opening another page */}
@@ -481,36 +501,8 @@ function ProfileYearBars({ strip, name, isSelf }: { strip: DayStripRow[]; name: 
   );
 }
 
-const METRIC_LINES: Array<{ key: keyof MemberDayMetricsRow; label: string; color: string }> = [
-  { key: "emotionalScore", label: "Emotion", color: "#4f6ef7" },
-  { key: "tired", label: "Tired", color: "#dc2626" },
-  { key: "startFriction", label: "Start friction", color: "#f59e0b" },
-  { key: "endBrainFatigue", label: "Brain fatigue", color: "#a78bfa" },
-];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/** Emotional score & friends over time — the good stuff. */
-function ProfileMetricsChart({ name, rows }: { name: string; rows: MemberDayMetricsRow[] }) {
-  return (
-    <section>
-      <h2 className="mb-1 font-semibold">How {name} felt</h2>
-      <p className="mb-2 text-sm text-muted">Emotional score, tiredness, start friction and brain fatigue, out of 10.</p>
-      <div className="h-64 card p-2">
-        <ResponsiveContainer>
-          <LineChart data={rows}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-            <YAxis domain={[0, 10]} tick={{ fontSize: 10 }} />
-            <Tooltip labelFormatter={(d) => String(d)} />
-            <Legend />
-            {METRIC_LINES.map((m) => (
-              <Line key={m.key} type="monotone" strokeWidth={2.5} dataKey={m.key} name={m.label} stroke={m.color} dot={false} connectNulls />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-}
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
