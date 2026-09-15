@@ -93,6 +93,30 @@ export default function MoneyPage() {
       </div>
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
+      {summary && summary.entries === 0 && (
+        <div className="card border-2 border-accent-soft p-4">
+          <h2 className="font-semibold">Start here</h2>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-muted">
+            <li>Log something you bought — amount, then tap a category. That&apos;s it.</li>
+            <li>
+              Add your <b>income</b> below. Challenges rank people by spending as a share of income, so without it you
+              appear unranked — this is the step everyone misses.
+            </li>
+            <li>
+              Disagree with our essential/non-essential calls? Tap any category under <b>Categories</b> to flip it.
+              It only changes things for you.
+            </li>
+          </ol>
+        </div>
+      )}
+
+      {summary && summary.entries > 0 && summary.income === 0 && (
+        <div className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">
+          No income recorded this month — you&apos;ll show as <b>unranked</b> in challenges until you add it. It&apos;s
+          under <b>Income</b> at the bottom of this page.
+        </div>
+      )}
+
       {summary && <SummaryBar s={summary} />}
 
       {/* big, thumb-sized tabs rather than a dense toolbar */}

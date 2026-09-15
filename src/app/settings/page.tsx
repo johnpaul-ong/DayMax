@@ -25,6 +25,7 @@ import {
 } from "@/lib/theme";
 import type { BucketSettings } from "@/lib/types";
 import { loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "@/lib/capture";
+import { CURRENCIES, fetchCurrency, setCurrency } from "@/lib/money";
 import { disablePush, enablePush, fetchPushPrefs, pushSupport, savePushPrefs, type PushPrefs } from "@/lib/push";
 
 const BUCKETS: Bucket[] = ["productive", "brainrot", "other"];
@@ -574,6 +575,36 @@ function ProfileVisibilitySection() {
   );
 }
 
+/** Currency, used everywhere money is shown and to guard challenge rankings. */
+function CurrencySection() {
+  const [cur, setCur] = useState<string>("");
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    fetchCurrency().then(setCur).catch(() => {});
+  }, []);
+  if (!cur) return null;
+  return (
+    <div className="card mb-6 p-4">
+      <h2 className="mb-1 font-semibold">Currency</h2>
+      <p className="mb-3 text-sm text-muted">
+        Used everywhere money appears. Challenges compare a share of income rather than raw amounts, so people on
+        different currencies can still compete — but the numbers shown are yours.
+      </p>
+      <select
+        value={cur}
+        onChange={(e) => {
+          setCur(e.target.value);
+          setCurrency(e.target.value).then(() => setMsg("Saved.")).catch((x) => setMsg(String(x.message ?? x)));
+        }}
+        className="rounded-lg border bg-surface px-2 py-2 text-sm"
+      >
+        {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+      {msg && <span className="ml-2 text-sm text-muted">{msg}</span>}
+    </div>
+  );
+}
+
 /** Which lift leads your profile. Falls back to your most-logged one. */
 function DefaultLiftSection() {
   const [exercises, setExercises] = useState<Array<{ exercise: string; sessions: number }>>([]);
@@ -821,6 +852,7 @@ export default function SettingsPage() {
       <ProfileSection />
       <UsernameSection />
       <DefaultLiftSection />
+      <CurrencySection />
       <ProfileVisibilitySection />
       <CaptureSection />
       <PushSection />

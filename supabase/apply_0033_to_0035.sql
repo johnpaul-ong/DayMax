@@ -1,11 +1,8 @@
 -- ============================================================================
 -- DayMax — migrations 0033 to 0035
---
---   0033  Web Push subscriptions (from the last round)
---   0034  Money: spending, income, categories, essential/non-essential
---   0035  Challenges: time-boxed competitions with frozen results,
---         including "30 Days, Less Spent" (15 Sep -> 15 Oct 2026)
---
+--   0033  Web Push subscriptions
+--   0034  Money: spending, income, categories, essential split, currency
+--   0035  Challenges, incl. "30 Days, Less Spent" (15 Sep -> 15 Oct 2026)
 -- Wrapped in a transaction: if anything fails, nothing changes.
 -- ============================================================================
 
@@ -370,6 +367,12 @@ insert into public.pursuits (id, owner_id, name, description, kind, is_public) v
    'custom', true)
 on conflict (id) do nothing;
 
+-- 7. Currency ---------------------------------------------------------------------
+-- Money is meaningless without it, and a challenge that silently ranks dollars
+-- against euros is actively wrong. Defaults to AUD because that's where this
+-- was built; every user can change it.
+alter table public.profiles add column if not exists currency text not null default 'AUD';
+
 
 -- ==========================================================================
 -- 0035_challenges.sql
@@ -616,9 +619,6 @@ values (
 
 commit;
 
--- ============================================================================
--- VERIFY (run separately)
--- ============================================================================
--- select count(*) as builtin_categories from public.spend_categories where user_id is null;   -- expect 25
--- select name, starts_on, ends_on from public.challenges;                                     -- expect the 30-day one
--- select * from public.my_spend_categories() limit 5;
+-- VERIFY (run separately):
+-- select count(*) from public.spend_categories where user_id is null;  -- 25
+-- select name, starts_on, ends_on from public.challenges;

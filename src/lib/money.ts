@@ -385,7 +385,48 @@ export async function createChallenge(c: {
   return data.id as string;
 }
 
-export function money(n: number | null | undefined, currency = "$"): string {
+/**
+ * Currency. Stored on the profile so challenge standings can refuse to compare
+ * dollars with euros — a leaderboard that silently mixes currencies is worse
+ * than no leaderboard.
+ */
+export const CURRENCIES = ["AUD", "USD", "GBP", "EUR", "NZD", "CAD", "JPY", "SGD"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
+const SYMBOLS: Record<string, string> = {
+  AUD: "$", USD: "$", NZD: "$", CAD: "$", GBP: "£", EUR: "€", JPY: "¥", SGD: "$",
+};
+
+let cachedCurrency: string | null = null;
+
+export function currencySymbol(code?: string | null): string {
+  return SYMBOLS[code ?? cachedCurrency ?? "AUD"] ?? "$";
+}
+
+export async function fetchCurrency(): Promise<string> {
+  if (cachedCurrency) return cachedCurrency;
+  try {
+    const supabase = createClient();
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return "AUD";
+    const { data } = await supabase.from("profiles").select("currency").eq("id", auth.user.id).single();
+    cachedCurrency = data?.currency ?? "AUD";
+    return cachedCurrency!;
+  } catch {
+    return "AUD";
+  }
+}
+
+export async function setCurrency(code: string): Promise<void> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { error } = await supabase.from("profiles").update({ currency: code }).eq("id", user_id);
+  if (error) throw error;
+  cachedCurrency = code;
+}
+
+export function money(n: number | null | undefined, currency?: string): string {
   if (n == null) return "—";
-  return `${currency}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const sym = currencySymbol(currency);
+  return `${sym}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

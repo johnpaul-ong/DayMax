@@ -222,3 +222,9 @@ insert into public.pursuits (id, owner_id, name, description, kind, is_public) v
    'What you spend, and what of it you actually needed. Categories are yours to bend.',
    'custom', true)
 on conflict (id) do nothing;
+
+-- 7. Currency ---------------------------------------------------------------------
+-- Money is meaningless without it, and a challenge that silently ranks dollars
+-- against euros is actively wrong. Defaults to AUD because that's where this
+-- was built; every user can change it.
+alter table public.profiles add column if not exists currency text not null default 'AUD';
