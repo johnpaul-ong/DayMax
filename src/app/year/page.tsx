@@ -14,6 +14,7 @@ import { fetchAllDayEntries, fetchBucketSettings } from "@/lib/data";
 import { bucketize, hoursByCategory, productiveRatio } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import type { BucketSettings, DayEntry } from "@/lib/types";
+import ViewZoom from "../view-zoom";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 type Mode = "buckets" | "dominant";
@@ -82,6 +83,7 @@ export default function YearPage() {
 
   return (
     <div>
+      <ViewZoom />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h1 className="mr-2 text-xl font-bold">Year</h1>
         <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="field w-auto py-1">

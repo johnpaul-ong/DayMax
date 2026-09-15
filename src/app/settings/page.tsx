@@ -6,6 +6,7 @@
  * (Share rules and invites arrive with Phase 3.)
  */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CATEGORIES, type Bucket } from "@/lib/categories";
 import { loadHiddenTabs, NAV_TABS, saveHiddenTabs } from "../nav-links";
@@ -367,6 +368,36 @@ function BucketColorRows() {
   );
 }
 
+/**
+ * Import, Export and Metrics used to be three top-level nav items. Nobody
+ * navigates to Import twice — they are tools you reach for occasionally, so
+ * they live here instead of costing a third of the navigation.
+ */
+function DataSection() {
+  const links = [
+    { href: "/metrics", label: "Day metrics", hint: "Emotion, tiredness, deep time, weight and notes — every day in one editable table." },
+    { href: "/import", label: "Import", hint: "Bring in a spreadsheet of days, slots or lifts." },
+    { href: "/export", label: "Export", hint: "Take everything with you as CSV." },
+  ];
+  return (
+    <>
+      <h2 className="mb-1 font-semibold">Your data</h2>
+      <p className="mb-3 text-sm text-muted">Everything you have logged, in and out.</p>
+      <div className="card mb-6 divide-y">
+        {links.map((l) => (
+          <Link key={l.href} href={l.href} className="flex items-center gap-3 px-4 py-3 transition hover:bg-surface-2">
+            <span className="flex-1">
+              <span className="block text-sm font-medium">{l.label}</span>
+              <span className="block text-xs text-muted">{l.hint}</span>
+            </span>
+            <span className="text-faint" aria-hidden="true">→</span>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function NavigationSection() {
   const [hidden, setHidden] = useState<string[] | null>(null);
   useEffect(() => setHidden(loadHiddenTabs()), []);
@@ -382,11 +413,12 @@ function NavigationSection() {
     <div className="card mb-6 p-4">
       <h2 className="mb-1 font-semibold">Navigation</h2>
       <p className="mb-3 text-sm text-muted">
-        Not a lifter? Hide the whole tab. DayMax is your app — show only what you track. (Saved on this device;
-        Settings can&apos;t be hidden, for obvious reasons.)
+        Don&apos;t compete? Hide Arena. Don&apos;t need the directory? Hide Search. DayMax is your app — show only
+        what you use. Hiding a tab hides everything under it, so switching Arena off also hides Side by side.
+        (Saved on this device. Today and Settings stay put — they&apos;re the way back to everything else.)
       </p>
       <div className="flex flex-wrap gap-2">
-        {NAV_TABS.filter((t) => t.href !== "/settings").map((t) => (
+        {NAV_TABS.filter((t) => t.href !== "/settings" && t.href !== "/today").map((t) => (
           <button
             key={t.href}
             onClick={() => toggle(t.href)}
@@ -858,6 +890,7 @@ export default function SettingsPage() {
       <PushSection />
       <AppearanceSection />
       <NavigationSection />
+      <DataSection />
       <LabelRenameSection />
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
       <p className="mb-3 text-sm text-muted">

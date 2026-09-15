@@ -11,6 +11,7 @@ import { CATEGORIES, categoryColor, slotToTime, SLOTS_PER_DAY } from "@/lib/cate
 import { deleteDayEntries, fetchDayEntries, fetchDayMetrics, upsertDayEntries, upsertDayMetrics } from "@/lib/data";
 import type { DayMetrics } from "@/lib/types";
 import { localToday } from "@/lib/dates";
+import ViewZoom from "../view-zoom";
 
 export default function TodayPage() {
   const todayISO = localToday();
@@ -122,6 +123,7 @@ export default function TodayPage() {
 
   return (
     <div className="mx-auto max-w-lg">
+      <ViewZoom />
       <div className="mb-3 flex items-center gap-2">
         <h1 className="text-xl font-bold">Today</h1>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border px-2 py-1 text-sm" />

@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, loadTheme, type BucketColors } from "@/lib/theme";
 import { fetchTeamTotals, teamMeta, type TeamTotal } from "@/lib/teams";
 import { localToday } from "@/lib/dates";
+import ArenaModes from "./modes";
 
 // The three standard scopes, always shown. Anything else (a track) is picked
 // from the dropdown beside them.
@@ -218,10 +219,19 @@ export default function ArenaPage() {
       .sort((a, b) => (asc ? (sel(a)! - sel(b)!) : (sel(b)! - sel(a)!)))
       .slice(0, n);
 
-  if (loading) return <p className="text-sm text-muted">Loading the Arena…</p>;
+  // The switcher used to sit below this, so it vanished while the boards
+  // loaded and you could not flip to Side by side during the wait.
+  if (loading)
+    return (
+      <div className="mx-auto max-w-4xl">
+        <ArenaModes />
+        <p className="text-sm text-muted">Loading the Arena…</p>
+      </div>
+    );
 
   return (
     <div className="mx-auto max-w-4xl">
+      <ArenaModes />
       <h1 className="mb-1 text-2xl font-bold">The Arena</h1>
       <p className="mb-5 text-sm text-muted">
         Pick who you&apos;re up against. Click a name for their profile, a

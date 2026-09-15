@@ -9,54 +9,71 @@ export interface NavGroup {
   subs: Array<{ href: string; label: string }>;
 }
 
+/**
+ * Nine destinations, not sixteen.
+ *
+ * The old nav listed every page as a peer, so Today / Month / Year / Analytics
+ * / Metrics read as five separate features when they are views of one dataset,
+ * and a first-time user had to hold the whole map in their head to find
+ * something they had already seen once. The mobile bar had five tabs and was
+ * perfectly legible; this brings the desktop nav back towards that.
+ *
+ * Nothing was deleted. Month and Year became zoom levels on Today, Side by
+ * side became a mode inside Arena, Explore is reachable from My pursuits and
+ * Search, and Import / Export / Metrics moved into Settings under "Your data" —
+ * every route still resolves, so old links and bookmarks keep working.
+ */
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Life",
-    subs: [
-      { href: "/today", label: "Today" },
-      { href: "/day", label: "Month" },
-      { href: "/year", label: "Year" },
-    ],
+    // one destination: the zoom switcher on the page handles day/month/year
+    subs: [{ href: "/today", label: "Today" }],
   },
   {
     label: "Pursuits",
     subs: [
-      // Deliberately only three. Lifts and Money are pursuits — you reach them
-      // through My pursuits, not as peers of it in the nav.
       { href: "/pursuits", label: "My pursuits" },
       { href: "/challenges", label: "Challenges" },
-      { href: "/pursuits/explore", label: "Explore" },
     ],
   },
   {
     label: "Community",
     subs: [
-      { href: "/friends", label: "Friends" },
       { href: "/arena", label: "Arena" },
-      { href: "/arena/compare", label: "Side by side" },
+      { href: "/friends", label: "Friends" },
       { href: "/search", label: "Search" },
     ],
   },
   {
-    label: "Profile",
+    label: "You",
     subs: [
       { href: "/profile", label: "Profile" },
       { href: "/overview", label: "Analytics" },
-      { href: "/metrics", label: "Metrics" },
-      { href: "/import", label: "Import" },
-      { href: "/export", label: "Export" },
       { href: "/settings", label: "Settings" },
     ],
   },
 ];
 
-// flat list for the "hide tabs" setting (Settings itself can't be hidden)
+// flat list for the "hide tabs" setting
 export const NAV_TABS = NAV_GROUPS.flatMap((g) => g.subs).map((s) => ({ href: s.href, label: s.label }));
+
+/**
+ * Tabs you cannot hide. Settings is the only way to unhide anything, and Today
+ * is the only nav route to the day/month/year views now that Month and Year are
+ * zoom levels on the page rather than tabs of their own — hiding it would strip
+ * three screens out of the app with nothing left pointing at them.
+ */
+const UNHIDEABLE = ["/settings", "/today"];
 
 export function loadHiddenTabs(): string[] {
   try {
     const raw = localStorage.getItem("daymax-hidden-tabs");
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    const stored = raw ? (JSON.parse(raw) as string[]) : [];
+    // Drop entries for tabs that no longer exist. /day, /year, /arena/compare,
+    // /metrics, /import and /export were all hideable tabs once; leaving their
+    // stored values in place would mean a preference nobody can see or undo.
+    const known = new Set(NAV_TABS.map((t) => t.href));
+    return stored.filter((h) => known.has(h) && !UNHIDEABLE.includes(h));
   } catch {
     return [];
   }
@@ -70,9 +87,13 @@ export function saveHiddenTabs(hidden: string[]) {
 }
 
 function groupFor(pathname: string): NavGroup | null {
-  if (pathname === "/lifts") return NAV_GROUPS[1]; // Lifts pursuit lives under Pursuits
-  if (pathname.startsWith("/pursuits") || pathname.startsWith("/money") || pathname.startsWith("/challenges")) return NAV_GROUPS[1];
-  if (pathname.startsWith("/friends") || pathname.startsWith("/arena") || pathname.startsWith("/join") || pathname.startsWith("/search")) return NAV_GROUPS[2];
+  // Routes that no longer appear in the nav still need to light up a group,
+  // otherwise landing on /import or /year leaves the whole bar looking inert.
+  const startsWithAny = (...ps: string[]) => ps.some((x) => pathname === x || pathname.startsWith(x + "/"));
+  if (startsWithAny("/today", "/day", "/year")) return NAV_GROUPS[0];
+  if (startsWithAny("/pursuits", "/money", "/challenges", "/lifts", "/habits")) return NAV_GROUPS[1];
+  if (startsWithAny("/friends", "/arena", "/join", "/search")) return NAV_GROUPS[2];
+  if (startsWithAny("/profile", "/overview", "/settings", "/metrics", "/import", "/export")) return NAV_GROUPS[3];
   for (const g of NAV_GROUPS) {
     if (g.subs.some((s) => pathname === s.href || pathname.startsWith(s.href + "/"))) return g;
   }
@@ -105,7 +126,7 @@ export default function NavLinks() {
   }, [pathname]);
 
   const active = groupFor(pathname);
-  const visibleSubs = (g: NavGroup) => g.subs.filter((s) => s.href === "/settings" || !hidden.includes(s.href));
+  const visibleSubs = (g: NavGroup) => g.subs.filter((s) => UNHIDEABLE.includes(s.href) || !hidden.includes(s.href));
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -129,27 +150,31 @@ export default function NavLinks() {
           );
         })}
       </div>
-      {active && visibleSubs(active).length > 1 && (
-        <div className="flex items-center gap-0.5 overflow-x-auto">
-          {visibleSubs(active).map((s) => {
-            const on = pathname === s.href || pathname.startsWith(s.href + "/");
-            return (
-              <Link
-                key={s.href}
-                href={s.href}
-                className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                  on ? "bg-surface-2 font-semibold text-ink" : "text-faint hover:text-ink"
-                }`}
-              >
-                {s.label}
-                {s.href === "/friends" && requests > 0 && (
-                  <span className="ml-1 rounded-full bg-accent px-1.5 text-[10px] font-bold text-accent-contrast">{requests}</span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      {/* Life has a single sub, so this row would disappear on /today, /day and
+          /year and shunt the whole page up. Reserve the height either way. */}
+      <div className="min-h-[26px]">
+        {active && visibleSubs(active).length > 1 && (
+          <div className="flex items-center gap-0.5 overflow-x-auto">
+            {visibleSubs(active).map((s) => {
+              const on = pathname === s.href || pathname.startsWith(s.href + "/");
+              return (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                    on ? "bg-surface-2 font-semibold text-ink" : "text-faint hover:text-ink"
+                  }`}
+                >
+                  {s.label}
+                  {s.href === "/friends" && requests > 0 && (
+                    <span className="ml-1 rounded-full bg-accent px-1.5 text-[10px] font-bold text-accent-contrast">{requests}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

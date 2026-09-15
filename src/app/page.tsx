@@ -168,6 +168,7 @@ export default function HomePage() {
   const [colors, setColors] = useState<BucketColors>(DEFAULT_BUCKET_COLORS);
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
   const [customizing, setCustomizing] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   const stripVisible = layout.some((s) => s.key === "strip" && s.visible);
 
@@ -290,7 +291,25 @@ export default function HomePage() {
         layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
       )}
 
-      {weekEntries.length > 0 && <ShareCard />}
+      {/* A poster of your year is a lovely thing to have and a terrible thing
+          to be shown every single visit — the home page was six stacked
+          sections deep before this one. Folded away until asked for. */}
+      {weekEntries.length > 0 && (
+        <div>
+          <button
+            onClick={() => setSharing((v) => !v)}
+            aria-expanded={sharing}
+            className="text-sm font-medium text-muted transition hover:text-accent"
+          >
+            {sharing ? "▾" : "▸"} Share your year as an image
+          </button>
+          {sharing && (
+            <div className="mt-2">
+              <ShareCard />
+            </div>
+          )}
+        </div>
+      )}
 
       {customizing && (
         <div className="card p-3">

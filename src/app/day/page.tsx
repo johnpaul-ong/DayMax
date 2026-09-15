@@ -12,6 +12,7 @@ import { parseGridCell } from "@/lib/gridParse";
 import { deleteDayEntries, fetchDayEntries, upsertDayEntries } from "@/lib/data";
 import type { DayEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
+import ViewZoom from "../view-zoom";
 
 type CellMap = Map<string, { category: number; label: string | null }>;
 const key = (date: string, slot: number) => `${date}|${slot}`;
@@ -165,6 +166,7 @@ export default function DayGridPage() {
 
   return (
     <div onMouseUp={() => (dragging.current = false)}>
+      <ViewZoom />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h1 className="mr-2 text-xl font-bold">Month grid</h1>
         <input

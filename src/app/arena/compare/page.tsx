@@ -23,6 +23,7 @@ import { weekStart } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { localToday } from "@/lib/dates";
+import ArenaModes from "../modes";
 
 // One slot = 6px, so a whole day is 576px. Shared by the column and the
 // hour ruler next to it so they cannot drift apart.
@@ -210,6 +211,7 @@ export default function ArenaComparePage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <ArenaModes />
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold">Side by side</h1>
         <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
@@ -227,7 +229,6 @@ export default function ArenaComparePage() {
         )}
         {scope !== "day" && <span className="text-xs tabular-nums text-faint">{periodLabel}</span>}
         <button onClick={() => shift(1)} disabled={from >= todayISO} className="rounded-lg border px-2.5 py-1 text-sm disabled:opacity-40">→</button>
-        <Link href="/arena" className="ml-auto text-sm font-medium text-accent hover:underline">← Arena</Link>
       </div>
 
       {roster.length > 0 && (
