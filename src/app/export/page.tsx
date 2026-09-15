@@ -7,8 +7,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { fetchDayEntries, fetchDayMetrics } from "@/lib/data";
-import { buildMonthGridXlsx } from "@/lib/xlsxIO";
+import { fetchAllDayEntries, fetchDayEntries, fetchDayMetrics } from "@/lib/data";
+import { buildAllMonthsXlsx, buildMonthGridXlsx } from "@/lib/xlsxIO";
 import { localToday, localMonth } from "@/lib/dates";
 
 export default function ExportPage() {
@@ -57,6 +57,8 @@ export default function ExportPage() {
         {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
       </div>
 
+      <AllMonthsExport />
+
       <EverythingExport />
 
       <p className="mt-4 text-sm text-muted">
@@ -64,6 +66,53 @@ export default function ExportPage() {
         <Link href="/gaps" className="font-medium text-accent hover:underline">Missing time</Link> builds a workbook of
         only the days that aren&apos;t finished.
       </p>
+    </div>
+  );
+}
+
+/** Every month you have logged, one sheet each, in a single download. */
+function AllMonthsExport() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function download() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const [entries, metrics] = await Promise.all([
+        fetchAllDayEntries(),
+        fetchDayMetrics("2000-01-01", "2100-01-01").catch(() => []),
+      ]);
+      if (entries.length === 0) {
+        setMsg("Nothing logged yet.");
+        return;
+      }
+      const blob = buildAllMonthsXlsx(entries, metrics);
+      const months = new Set(entries.map((e) => e.date.slice(0, 7))).size;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `daymax_all_months.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setMsg(`${months} month${months === 1 ? "" : "s"}, ${entries.length.toLocaleString()} slots.`);
+    } catch (e: any) {
+      setMsg(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card mt-4 p-4">
+      <h2 className="mb-1 font-semibold">Every month, one file</h2>
+      <p className="mb-3 text-sm text-muted">
+        One sheet per month across your whole history, in the same layout as the single-month export — so it reads
+        back in through Import in one go rather than thirty separate files.
+      </p>
+      <button onClick={() => void download()} disabled={busy} className="w-full rounded-lg bg-accent py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40">
+        {busy ? "Building…" : "Download every month"}
+      </button>
+      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
     </div>
   );
 }

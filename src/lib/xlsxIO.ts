@@ -155,6 +155,28 @@ export function buildMonthGridXlsx(ym: string, entries: DayEntry[], metrics: Day
 }
 
 /**
+ * Every month you have ever logged, one sheet each, in one file.
+ *
+ * The per-month export meant thirty-odd downloads to get a backup of a
+ * three-year history. Same layout as the single-month export, so the whole
+ * thing re-imports in one go too.
+ */
+export function buildAllMonthsXlsx(entries: DayEntry[], metrics: DayMetrics[]): Blob {
+  const months = [...new Set(entries.map((e) => e.date.slice(0, 7)))].sort();
+  const wb = XLSX.utils.book_new();
+  for (const ym of months) {
+    const [y, mo] = ym.split("-").map(Number);
+    const daysInMonth = new Date(y, mo, 0).getDate();
+    const dates = Array.from({ length: daysInMonth }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
+    // scope the rows to the month so a decade of history isn't re-scanned 36 times
+    const inMonth = entries.filter((e) => e.date.startsWith(ym));
+    const metsInMonth = metrics.filter((m) => m.date.startsWith(ym));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(gridAoa(dates, inMonth, metsInMonth)), ym);
+  }
+  return toBlob(wb);
+}
+
+/**
  * A workbook of just the days that aren't finished, one sheet per month.
  *
  * Whatever is already logged is filled in, so only the blanks need typing.
