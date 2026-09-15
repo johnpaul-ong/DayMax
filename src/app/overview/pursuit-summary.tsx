@@ -180,7 +180,10 @@ async function statCard(p: Pursuit): Promise<Card | null> {
   try {
     const { createClient } = await import("@/lib/supabase/client");
     const { data } = await createClient().auth.getUser();
-    const top = await fetchStatTop(first.id, 50);
+    // 0030 clamps this to 25 no matter what you ask for, so asking for 50 just
+    // silently gets 25. Ask for what you can have; if you are not in the top
+    // 25 the badge is simply left off rather than showing a wrong rank.
+    const top = await fetchStatTop(first.id, 25);
     const i = top.findIndex((t) => t.memberId === data.user?.id);
     if (i >= 0) rank = i + 1;
   } catch {}
