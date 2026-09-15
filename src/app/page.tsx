@@ -118,7 +118,7 @@ function LifeCard({ life, country }: { life: LifeStats; country: string | null }
   );
 }
 
-function YearStrip({ entries }: { entries: DayEntry[] }) {
+function YearStrip({ entries, showUnlogged }: { entries: DayEntry[]; showUnlogged: boolean }) {
   const days = useMemo(() => {
     const byDate = new Map<string, { slots: (number | null)[]; labels: (string | null)[] }>();
     for (const e of entries) {
@@ -127,8 +127,23 @@ function YearStrip({ entries }: { entries: DayEntry[] }) {
       d.slots[e.slot] = e.category;
       d.labels[e.slot] = e.label;
     }
-    return [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
-  }, [entries]);
+    // Every calendar day from your first log to today, so days you never
+    // touched are visible as gaps rather than silently closing up.
+    const all = [...byDate.keys()].sort();
+    if (all.length === 0) return [];
+    const out: Array<[string, { slots: (number | null)[]; labels: (string | null)[] }]> = [];
+    const d = new Date(all[0] + "T00:00:00");
+    const end = new Date(localToday() + "T00:00:00");
+    while (d <= end) {
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const row = byDate.get(iso);
+      if (row) out.push([iso, row]);
+      else if (showUnlogged)
+        out.push([iso, { slots: new Array(SLOTS_PER_DAY).fill(null), labels: new Array(SLOTS_PER_DAY).fill(null) }]);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }, [entries, showUnlogged]);
 
   if (days.length === 0)
     return <p className="card p-4 text-sm text-faint">Nothing logged yet — your year will appear here, one bar per day.</p>;
@@ -169,6 +184,17 @@ export default function HomePage() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
   const [customizing, setCustomizing] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [showUnlogged, setShowUnlogged] = useState(true);
+  useEffect(() => {
+    try { setShowUnlogged(localStorage.getItem("daymax-show-unlogged") !== "0"); } catch {}
+  }, []);
+  function toggleUnlogged() {
+    setShowUnlogged((v) => {
+      const next = !v;
+      try { localStorage.setItem("daymax-show-unlogged", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  }
 
   const stripVisible = layout.some((s) => s.key === "strip" && s.visible);
 
@@ -213,6 +239,22 @@ export default function HomePage() {
   }
 
   const todayEntries = useMemo(() => weekEntries.filter((e) => e.date === todayISO), [weekEntries, todayISO]);
+  // days between your first log and today with nothing on them at all
+  const unloggedDays = useMemo(() => {
+    if (!allEntries || allEntries.length === 0) return 0;
+    const have = new Set(allEntries.map((e) => e.date));
+    const all = [...have].sort();
+    let n = 0;
+    const d = new Date(all[0] + "T00:00:00");
+    const end = new Date(todayISO + "T00:00:00");
+    while (d <= end) {
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (!have.has(iso)) n++;
+      d.setDate(d.getDate() + 1);
+    }
+    return n;
+  }, [allEntries, todayISO]);
+
   const todayTotals = useMemo(() => (settings ? bucketize(hoursByCategory(todayEntries), settings) : null), [todayEntries, settings]);
   const weekTotals = useMemo(() => (settings ? bucketize(hoursByCategory(weekEntries), settings) : null), [weekEntries, settings]);
 
@@ -239,8 +281,25 @@ export default function HomePage() {
   const SECTION_RENDER: Record<HomeKey, () => React.ReactNode> = {
     strip: () => (
       <section key="strip">
-        <h2 className="mb-2 text-sm font-semibold text-muted">Every day, every 15 minutes</h2>
-        {allEntries === null ? <p className="text-sm text-faint">Loading your year…</p> : <YearStrip entries={allEntries} />}
+        <div className="mb-2 flex flex-wrap items-baseline gap-2">
+          <h2 className="text-sm font-semibold text-muted">Every day, every 15 minutes</h2>
+          {allEntries !== null && unloggedDays > 0 && (
+            <button
+              onClick={toggleUnlogged}
+              aria-pressed={showUnlogged}
+              className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                showUnlogged ? "bg-accent-soft text-accent" : "text-faint hover:text-ink"
+              }`}
+            >
+              {showUnlogged ? "✓ " : ""}{unloggedDays} unlogged {unloggedDays === 1 ? "day" : "days"}
+            </button>
+          )}
+        </div>
+        {allEntries === null ? (
+          <p className="text-sm text-faint">Loading your year…</p>
+        ) : (
+          <YearStrip entries={allEntries} showUnlogged={showUnlogged} />
+        )}
       </section>
     ),
     today: () => (

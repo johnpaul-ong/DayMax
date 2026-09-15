@@ -7,6 +7,7 @@
 
 import * as XLSX from "xlsx";
 import { CATEGORIES, categoryName, slotToTime, SLOTS_PER_DAY } from "./categories";
+import { localToday } from "./dates";
 import { findTimeColumn, parseMonthGrid, type GridParseResult } from "./gridParse";
 import { parseLiftSheet, type LiftParseResult } from "./liftParse";
 import { parseSheet2, type Sheet2ParseResult } from "./sheet2Parse";
@@ -163,11 +164,17 @@ export function buildMonthGridXlsx(ym: string, entries: DayEntry[], metrics: Day
  */
 export function buildAllMonthsXlsx(entries: DayEntry[], metrics: DayMetrics[]): Blob {
   const months = [...new Set(entries.map((e) => e.date.slice(0, 7)))].sort();
+  const today = localToday();
   const wb = XLSX.utils.book_new();
   for (const ym of months) {
     const [y, mo] = ym.split("-").map(Number);
     const daysInMonth = new Date(y, mo, 0).getDate();
-    const dates = Array.from({ length: daysInMonth }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`);
+    // Stop at today. The current month used to export all 30 days, so the file
+    // carried empty columns for days that have not happened — which any
+    // gap-filling pass then treats as time you failed to log.
+    const dates = Array.from({ length: daysInMonth }, (_, i) => `${ym}-${String(i + 1).padStart(2, "0")}`)
+      .filter((d) => d <= today);
+    if (dates.length === 0) continue;
     // scope the rows to the month so a decade of history isn't re-scanned 36 times
     const inMonth = entries.filter((e) => e.date.startsWith(ym));
     const metsInMonth = metrics.filter((m) => m.date.startsWith(ym));
