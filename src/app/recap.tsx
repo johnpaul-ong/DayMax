@@ -11,7 +11,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName, defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
-import { fetchAllDayEntries } from "@/lib/data";
+import { fetchAllDayEntries, fetchDailyMetrics, fetchLifts } from "@/lib/data";
+import BigThree from "./big-three";
+import type { LiftLike } from "@/lib/liftGroups";
 import { localToday } from "@/lib/dates";
 import type { DayEntry } from "@/lib/types";
 
@@ -34,13 +36,26 @@ function monthsBack(iso: string, n: number): string {
 
 export default function Recap() {
   const [entries, setEntries] = useState<DayEntry[] | null>(null);
+  const [lifts, setLifts] = useState<LiftLike[]>([]);
+  const [bw, setBw] = useState<number | null>(null);
+
   useEffect(() => {
     fetchAllDayEntries().then(setEntries).catch(() => setEntries([]));
+    fetchLifts().then(setLifts).catch(() => {});
+    // latest bodyweight, for the relative-strength figure
+    fetchDailyMetrics("bodyweight_kg")
+      .then((rows) => {
+        const last = [...rows].sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
+        setBw(last?.value ?? null);
+      })
+      .catch(() => {});
   }, []);
+
   if (!entries || entries.length === 0) return null;
   return (
     <>
       <WeekRecap entries={entries} />
+      {lifts.length > 0 && <BigThree rows={lifts} bodyweightKg={bw} />}
       <OnThisDay entries={entries} />
     </>
   );

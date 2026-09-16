@@ -33,6 +33,7 @@ import { teamMeta } from "@/lib/teams";
 import { TeamDot } from "./team-name";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
+import BigThree from "./big-three";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -344,6 +345,15 @@ export default function ProfileView({ userId }: { userId: string }) {
             </ResponsiveContainer>
           </div>
         </section>
+      )}
+
+      {/* the big three together, before the single-exercise picker */}
+      {show("lifts") && liftRows.length > 0 && (
+        <BigThree
+          rows={liftRows}
+          bodyweightKg={bodyweight.length ? bodyweight[bodyweight.length - 1].weightKg : null}
+          title={isSelf ? "Your big three" : `${name}'s big three`}
+        />
       )}
 
       {show("lifts") && liftRows.length > 0 && (

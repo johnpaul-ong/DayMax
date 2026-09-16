@@ -423,27 +423,61 @@ function YouCard({ challengeId, me, onChanged }: { challengeId: string; me: Stan
     setIncome(me.income != null ? String(me.income) : "");
   }, [me.income]);
 
+  const pctOf = (v: number | null) =>
+    me.income != null && me.income > 0 && v != null ? Math.round((v / me.income) * 1000) / 10 : null;
+  const essPct = pctOf(me.essential);
+  const totPct = pctOf(me.total);
+  const left = me.income != null && me.total != null ? me.income - me.total : null;
+
   return (
     <div className="card p-4">
       <h2 className="mb-2 font-semibold">You</h2>
+      {/* Income was only ever divided into non-essential spend, so with £0 of
+          non-essential it showed "0% of income" and looked like the income
+          setting did nothing. It works; it was multiplying zero. Income now
+          appears against every figure, and the bar shows what is left of it. */}
       <div className="flex flex-wrap gap-6">
         <div>
           <p className="text-3xl font-bold tabular-nums">{money(me.nonEssential)}</p>
-          <p className="text-xs text-muted">non-essential</p>
+          <p className="text-xs text-muted">
+            non-essential{me.pct != null && <> · <b>{me.pct}%</b> of income</>}
+          </p>
         </div>
         <div>
-          <p className="text-3xl font-bold tabular-nums">{me.pct ?? "—"}%</p>
-          <p className="text-xs text-muted">of income</p>
+          <p className="text-3xl font-bold tabular-nums">{money(me.essential)}</p>
+          <p className="text-xs text-muted">
+            essential{essPct != null && <> · {essPct}% of income</>}
+          </p>
+        </div>
+        <div>
+          <p className="text-3xl font-bold tabular-nums">{money(me.total)}</p>
+          <p className="text-xs text-muted">
+            all spending{totPct != null && <> · {totPct}% of income</>}
+          </p>
         </div>
         <div>
           <p className="text-3xl font-bold tabular-nums">{money(me.perDay)}</p>
           <p className="text-xs text-muted">a day</p>
         </div>
-        <div>
-          <p className="text-3xl font-bold tabular-nums">{money(me.essential)}</p>
-          <p className="text-xs text-muted">essential</p>
-        </div>
+        {left != null && (
+          <div>
+            <p className="text-3xl font-bold tabular-nums text-ok">{money(left)}</p>
+            <p className="text-xs text-muted">still unspent</p>
+          </div>
+        )}
       </div>
+
+      {me.income != null && me.income > 0 && (
+        <div className="mt-3">
+          <div className="flex h-3 overflow-hidden rounded-full bg-surface-2">
+            <div style={{ width: `${Math.min(100, ((me.essential ?? 0) / me.income) * 100)}%`, background: "#16a34a" }} title={`essential ${money(me.essential)}`} />
+            <div style={{ width: `${Math.min(100, ((me.nonEssential ?? 0) / me.income) * 100)}%`, background: "#dc2626" }} title={`non-essential ${money(me.nonEssential)}`} />
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {money(me.income)} income · {money(me.total)} spent · <b>{money(left)}</b> left
+          </p>
+        </div>
+      )}
 
       {me.topCategory && (
         <p className="mt-2 text-sm text-muted">
