@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { localToday } from "@/lib/dates";
+import NonEssential from "./non-essential";
 import {
   addIncome,
   addSpend,
@@ -146,7 +147,14 @@ export default function MoneyPage() {
         />
       )}
 
-      {tab === "insight" && <Insight byCat={byCat} daily={daily} summary={summary} />}
+      {tab === "insight" && (
+        <div className="space-y-6">
+          {/* non-essential first: it is the only spending you can act on, and
+              the only number the challenge ranks */}
+          <NonEssential />
+          <Insight byCat={byCat} daily={daily} summary={summary} />
+        </div>
+      )}
 
       <CategoryManager cats={cats} onChanged={reload} />
       <IncomeBox today={todayISO} onAdded={reload} />
@@ -456,11 +464,19 @@ function Insight({
 
   return (
     <div className="space-y-4">
-      {worst && summary && summary.nonEssential > 0 && (
+      {worst && summary && summary.nonEssential > 0 ? (
         <p className="card p-4 text-sm">
           Your biggest non-essential is <b>{worst.name}</b> at {money(worst.total)} —{" "}
           {Math.round((worst.total / summary.nonEssential) * 100)}% of everything you didn&apos;t strictly need.
         </p>
+      ) : (
+        summary &&
+        summary.total > 0 && (
+          <p className="card p-4 text-sm">
+            Every {money(summary.total)} you logged this month is marked <b>essential</b>, so there is nothing for a
+            budget challenge to rank. If that is not right, tap a category under <b>Categories</b> to flip it.
+          </p>
+        )
       )}
 
       <div className="card p-3">
