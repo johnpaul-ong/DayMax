@@ -1,6 +1,22 @@
 "use client";
 
-/** Money: spending, income, categories, and challenges. */
+/**
+ * Money: your own spending, income and categories.
+ *
+ * Historically this file also held the challenge-metric vocabulary, the
+ * challenge data layer and the currency plumbing — it grew to ~880 lines
+ * and became the answer to "where does X live?" for every money-adjacent
+ * thing in the app. That's now three sibling modules:
+ *
+ *   currency.ts           CURRENCIES, money(), fetchCurrency, setCurrency…
+ *   challengeMetrics.ts   the metric registry + formatScore()
+ *   challenges.ts         RPC-backed fetch/mutation for challenges
+ *
+ * This module re-exports every symbol they used to expose so import sites
+ * (`from "@/lib/money"`) keep working. The re-exports are cheap and let
+ * you deep-link the smaller file when writing new code, without a
+ * codebase-wide rename.
+ */
 
 import { createClient } from "@/lib/supabase/client";
 
@@ -276,601 +292,59 @@ export async function fetchRecentItems(): Promise<RecentItem[]> {
   }));
 }
 
-// --- challenges ---------------------------------------------------------------
-
-/**
- * A challenge is one sentence: over THIS WINDOW, rank members by THIS NUMBER,
- * where MORE or LESS wins. The three parts are independent —
- *
- *   metric     what number to compute
- *   direction  which end of it wins ('more' | 'less')
- *   statId     which pursuit stat, when metric is 'pursuit_stat'
- *
- * `lower_nonessential` and `lower_nonessential_pct` are the two original
- * spellings from migration 0035, which baked the direction into the name.
- * They still exist on live rows (Budget Baddies is one) and still rank
- * identically; `canonicalMetric()` folds them onto their new names, exactly
- * as `challenge_metric()` does in SQL. Never write them on a new challenge.
- */
-export type ChallengeMetric =
-  | "lower_nonessential"
-  | "lower_nonessential_pct"
-  | "money_nonessential"
-  | "money_nonessential_pct"
-  | "money_total"
-  | "life_productive_hours"
-  | "life_workmax"
-  | "life_focus"
-  | "life_brainrot_hours"
-  | "life_sleep_hours"
-  | "life_streak"
-  | "pursuit_stat";
-
-export type ChallengeDirection = "more" | "less";
-export type MetricFamily = "money" | "life" | "stat";
-
-export interface Challenge {
-  id: string;
-  name: string;
-  description: string;
-  metric: ChallengeMetric;
-  /** Which end wins. The server resolves the default, so this is never null. */
-  direction: ChallengeDirection;
-  /** Set when metric is 'pursuit_stat'. */
-  statId: string | null;
-  /** The pursuit this hangs off — where members go to log. */
-  pursuitId: string | null;
-  /** "Most productive hours". Computed server-side so a stat's own name is in it. */
-  metricLabel: string;
-  /** 'currency' | '%' | 'h' | 'pts' | 'days' | a stat's own unit | ''. */
-  scoreUnit: string;
-  startsOn: string;
-  endsOn: string;
-  members: number;
-  isMember: boolean;
-  isOwner: boolean;
-  finalized: boolean;
-  daysLeft: number;
-  inviteToken: string | null;
-}
-
-export interface Standing {
-  userId: string;
-  displayName: string;
-  username: string | null;
-  team: string;
-  score: number | null;
-  nonEssential: number | null;
-  essential: number | null;
-  total: number | null;
-  income: number | null;
-  pct: number | null;
-  entries: number;
-  perDay: number;
-  topCategory: string | null;
-  topCategoryAmount: number | null;
-  sharesAmounts: boolean;
-  isMe: boolean;
-  /** How to format `score`. 'currency' means "use money()". */
-  scoreUnit: string;
-  /** "Least non-essential spending" — what the number in `score` is. */
-  scoreLabel: string;
-  /** True when the SMALLEST score wins. Rows arrive leader-first either way. */
-  rankLess: boolean;
-}
-
-export interface ChallengeDay {
-  date: string;
-  userId: string;
-  displayName: string;
-  spent: number;
-  running: number;
-}
-
-export interface ChallengeCategory {
-  name: string;
-  essential: boolean;
-  total: number;
-  people: number;
-}
-
-export interface InvitableFriend {
-  memberId: string;
-  displayName: string;
-  username: string | null;
-  invited: boolean;
-}
-
-export interface PendingInvite {
-  challengeId: string;
-  name: string;
-  startsOn: string;
-  endsOn: string;
-  invitedByName: string;
-}
-
-export async function fetchChallenges(): Promise<Challenge[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("my_challenges");
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name,
-    description: r.description,
-    metric: r.metric,
-    // Pre-0038 databases don't return these, so fall back to the same defaults
-    // the SQL uses rather than rendering "undefined" on every card.
-    direction: (r.direction ?? defaultDirection(r.metric)) as ChallengeDirection,
-    statId: r.stat_id ?? null,
-    pursuitId: r.pursuit_id ?? null,
-    metricLabel: r.metric_label ?? metricLabel(r.metric, r.direction ?? defaultDirection(r.metric)),
-    scoreUnit: r.score_unit ?? metricUnit(r.metric),
-    startsOn: String(r.starts_on),
-    endsOn: String(r.ends_on),
-    members: Number(r.members),
-    isMember: !!r.is_member,
-    isOwner: !!r.is_owner,
-    finalized: !!r.finalized,
-    daysLeft: Number(r.days_left),
-    inviteToken: r.invite_token,
-  }));
-}
-
-export async function fetchStandings(challengeId: string): Promise<Standing[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("challenge_standings", { c: challengeId });
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    userId: r.user_id,
-    displayName: r.display_name,
-    username: r.username,
-    team: r.team ?? "light",
-    score: r.score == null ? null : Number(r.score),
-    nonEssential: r.non_essential == null ? null : Number(r.non_essential),
-    essential: r.essential == null ? null : Number(r.essential),
-    total: r.total == null ? null : Number(r.total),
-    income: r.income == null ? null : Number(r.income),
-    pct: r.pct == null ? null : Number(r.pct),
-    entries: Number(r.entries ?? 0),
-    perDay: Number(r.per_day ?? 0),
-    topCategory: r.top_category ?? null,
-    topCategoryAmount: r.top_category_amount == null ? null : Number(r.top_category_amount),
-    sharesAmounts: !!r.shares_amounts,
-    isMe: !!r.is_me,
-    scoreUnit: r.score_unit ?? "currency",
-    scoreLabel: r.score_label ?? "Least non-essential spending",
-    rankLess: r.rank_less ?? true,
-  }));
-}
-
-/** Cumulative non-essential spend per person, per day — the race chart. */
-const MIGRATION_0036 =
-  "These charts are temporarily unavailable. If it persists, contact the app owner.";
-
-export async function fetchChallengeDaily(challengeId: string): Promise<ChallengeDay[]> {
-  // One row per member per day: a 90-day challenge with a dozen people is over
-  // a thousand rows, and Supabase caps an RPC at 1000. Page it. (challenge_daily
-  // orders by date then user id precisely so paging can't skip or duplicate.)
-  const supabase = createClient();
-  const data: any[] = [];
-  const page = 1000;
-  for (let from = 0; ; from += page) {
-    const { data: chunk, error } = await supabase
-      .rpc("challenge_daily", { c: challengeId })
-      .range(from, from + page - 1);
-    if (error) throw new Error(MIGRATION_0036);
-    if (!chunk || (chunk as any[]).length === 0) break;
-    data.push(...(chunk as any[]));
-    if ((chunk as any[]).length < page) break;
-  }
-  return (data ?? []).map((r: any) => ({
-    date: String(r.date),
-    userId: r.user_id,
-    displayName: r.display_name,
-    spent: Number(r.spent),
-    running: Number(r.running),
-  }));
-}
-
-/** What the whole group is spending on. Aggregate — leaks no individual. */
-export async function fetchChallengeCategories(challengeId: string): Promise<ChallengeCategory[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("challenge_categories", { c: challengeId });
-  if (error) throw new Error(MIGRATION_0036);
-  return (data ?? []).map((r: any) => ({
-    name: r.name,
-    essential: !!r.essential,
-    total: Number(r.total),
-    people: Number(r.people),
-  }));
-}
-
-export async function fetchInvitableFriends(challengeId: string): Promise<InvitableFriend[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("challenge_invitable_friends", { c: challengeId });
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    memberId: r.member_id,
-    displayName: r.display_name,
-    username: r.username,
-    invited: !!r.invited,
-  }));
-}
-
-export async function inviteFriend(challengeId: string, friendId: string): Promise<void> {
-  const supabase = createClient();
-  const invited_by = await uid();
-  const { error } = await supabase
-    .from("challenge_invites")
-    .insert({ challenge_id: challengeId, invited_user: friendId, invited_by });
-  if (error && !String(error.message).includes("duplicate")) throw error;
-}
-
-export async function fetchMyInvites(): Promise<PendingInvite[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("my_challenge_invites");
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    challengeId: r.challenge_id,
-    name: r.name,
-    startsOn: String(r.starts_on),
-    endsOn: String(r.ends_on),
-    invitedByName: r.invited_by_name,
-  }));
-}
-
-export async function dismissInvite(challengeId: string): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  await supabase.from("challenge_invites").delete().eq("challenge_id", challengeId).eq("invited_user", user_id);
-}
-
-/** Your income baseline for a challenge. null = let the app work it out. */
-export async function setIncomeOverride(challengeId: string, amount: number | null): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  // .select() matters: without it PostgREST reports success for an UPDATE that
-  // matched zero rows, so setting your income on a challenge you had not yet
-  // joined looked like it worked and changed nothing.
-  const { data, error } = await supabase
-    .from("challenge_members")
-    .update({ income_override: amount })
-    .eq("challenge_id", challengeId)
-    .eq("user_id", user_id)
-    .select("user_id");
-  if (error) {
-    if (String(error.message).includes("income_override"))
-      throw new Error("Income overrides are temporarily unavailable. If it persists, contact the app owner.");
-    throw error;
-  }
-  if (!data || data.length === 0) {
-    const { error: insErr } = await supabase
-      .from("challenge_members")
-      .insert({ challenge_id: challengeId, user_id, income_override: amount });
-    if (insErr) throw new Error("Join the challenge first, then set your income.");
-  }
-}
-
-export async function joinChallenge(id: string): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  const { error } = await supabase.from("challenge_members").insert({ challenge_id: id, user_id });
-  if (error && !String(error.message).includes("duplicate")) throw error;
-  // joining the challenge should also put you in its pursuit, so you can log
-  const { data: ch } = await supabase.from("challenges").select("pursuit_id").eq("id", id).single();
-  if (ch?.pursuit_id) {
-    await supabase.from("pursuit_members").insert({ pursuit_id: ch.pursuit_id, user_id }).then(() => {}, () => {});
-  }
-}
-
-export async function leaveChallenge(id: string): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  const { error } = await supabase.from("challenge_members").delete().eq("challenge_id", id).eq("user_id", user_id);
-  if (error) throw error;
-}
-
-export async function setShareAmounts(challengeId: string, share: boolean): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  const { error } = await supabase
-    .from("challenge_members")
-    .update({ share_amounts: share })
-    .eq("challenge_id", challengeId)
-    .eq("user_id", user_id);
-  if (error) throw error;
-}
-
-export async function joinByToken(token: string): Promise<string> {
-  const supabase = createClient();
-  const { data, error } = await supabase.rpc("join_challenge", { token });
-  if (error) throw error;
-  return data as string;
-}
-
-export async function createChallenge(c: {
-  name: string;
-  description: string;
-  startsOn: string;
-  endsOn: string;
-  metric: ChallengeMetric;
-  /** Omit to take the metric's natural direction (a stat uses its own). */
-  direction?: ChallengeDirection | null;
-  /** Required when metric is 'pursuit_stat'; the DB rejects it otherwise. */
-  statId?: string | null;
-  pursuitId?: string | null;
-}): Promise<string> {
-  const supabase = createClient();
-  const owner_id = await uid();
-  if (c.metric === "pursuit_stat" && !c.statId) throw new Error("Pick a stat to compete on.");
-  const { data, error } = await supabase
-    .from("challenges")
-    .insert({
-      owner_id,
-      name: c.name,
-      description: c.description,
-      starts_on: c.startsOn,
-      ends_on: c.endsOn,
-      metric: c.metric,
-      direction: c.direction ?? null,
-      stat_id: c.statId ?? null,
-      pursuit_id: c.pursuitId ?? pursuitForMetric(c.metric),
-    })
-    .select("id")
-    .single();
-  if (error) {
-    const msg = String(error.message ?? error);
-    // The CHECK constraint from 0035 only allowed the two money metrics.
-    if (msg.includes("challenges_metric") || msg.includes("metric_check") || msg.includes("direction"))
-      throw new Error(
-        "This kind of challenge is temporarily unavailable. If it persists, contact the app owner."
-      );
-    throw error;
-  }
-  await supabase.from("challenge_members").insert({ challenge_id: data.id, user_id: owner_id });
-  return data.id as string;
-}
-
-// --- the metric vocabulary ------------------------------------------------------
+// --- backwards-compat re-exports --------------------------------------
 //
-// Mirrors challenge_metric_*() in migration 0038. The SQL is the authority —
-// it computes and ranks — but the picker needs the same list, and the client
-// needs to format a score it did not compute.
+// The three modules the challenge/currency code split into. Everything is
+// re-exported so `import { ... } from "@/lib/money"` keeps working for
+// every existing site; new code can import from the deeper file directly.
 
-export const MONEY_PURSUIT_ID = "33333333-3333-4333-8333-333333333305";
-export const LIFE_PURSUIT_ID = "33333333-3333-4333-8333-333333333301";
+export {
+  CURRENCIES,
+  currencySymbol,
+  fetchCurrency,
+  invalidateCurrencyCache,
+  money,
+  setCurrency,
+  type Currency,
+} from "./currency";
 
-export interface MetricOption {
-  metric: ChallengeMetric;
-  family: MetricFamily;
-  /** The noun, without a "most"/"least" on the front. */
-  noun: string;
-  /** One line explaining where the number comes from. */
-  hint: string;
-  direction: ChallengeDirection;
-  unit: string;
-  group: string;
-}
+export {
+  CHALLENGE_METRICS,
+  LIFE_PURSUIT_ID,
+  MONEY_PURSUIT_ID,
+  canonicalMetric,
+  defaultDirection,
+  formatScore,
+  metricFamily,
+  metricLabel,
+  metricOption,
+  metricUnit,
+  pursuitForMetric,
+  type ChallengeDirection,
+  type ChallengeMetric,
+  type MetricFamily,
+  type MetricOption,
+} from "./challengeMetrics";
 
-/**
- * Everything the UI may offer, in picker order. Legacy spellings are NOT here:
- * they are readable, not writable. Every entry has a matching branch in
- * challenge_standings() — if the server cannot rank it, it does not appear.
- */
-export const CHALLENGE_METRICS: MetricOption[] = [
-  {
-    metric: "money_nonessential",
-    family: "money",
-    noun: "non-essential spending",
-    hint: "What you spent on things you didn't need. Essentials — rent, groceries, bills, transport — don't count.",
-    direction: "less",
-    unit: "currency",
-    group: "Money",
-  },
-  {
-    metric: "money_nonessential_pct",
-    family: "money",
-    noun: "non-essential spending, as a share of income",
-    hint: "The same number over your own income, so a student and a surgeon compete fairly.",
-    direction: "less",
-    unit: "%",
-    group: "Money",
-  },
-  {
-    metric: "money_total",
-    family: "money",
-    noun: "total spending",
-    hint: "Everything logged, essential or not.",
-    direction: "less",
-    unit: "currency",
-    group: "Money",
-  },
-  {
-    metric: "life_productive_hours",
-    family: "life",
-    noun: "productive hours",
-    hint: "Hours in your productive categories on the day grid. Default: Work and Sports.",
-    direction: "more",
-    unit: "h",
-    group: "Life",
-  },
-  {
-    metric: "life_workmax",
-    family: "life",
-    noun: "WorkMax",
-    hint: "Productive hours weighted by how clean they were — 79 productive hours next to 20 of brainrot scores 62.",
-    direction: "more",
-    unit: "h",
-    group: "Life",
-  },
-  {
-    metric: "life_focus",
-    family: "life",
-    noun: "focus score",
-    hint: "Productive as a share of productive + brainrot, 0 to 100. Ignores volume entirely.",
-    direction: "more",
-    unit: "pts",
-    group: "Life",
-  },
-  {
-    metric: "life_brainrot_hours",
-    family: "life",
-    noun: "brainrot hours",
-    hint: "Hours in your brainrot categories. Default: Other and Leisure.",
-    direction: "less",
-    unit: "h",
-    group: "Life",
-  },
-  {
-    metric: "life_sleep_hours",
-    family: "life",
-    noun: "sleep",
-    hint: "Hours logged as Sleep on the day grid.",
-    direction: "more",
-    unit: "h",
-    group: "Life",
-  },
-  {
-    metric: "life_streak",
-    family: "life",
-    noun: "logging streak",
-    hint: "The longest run of consecutive days with anything logged. A consistency contest, not a performance one.",
-    direction: "more",
-    unit: "days",
-    group: "Life",
-  },
-  {
-    metric: "pursuit_stat",
-    family: "stat",
-    noun: "a pursuit stat",
-    hint: "Any stat from a pursuit you're in — pages read, kilometres run, cigarettes not smoked.",
-    direction: "more",
-    unit: "",
-    group: "Pursuits",
-  },
-];
-
-/** Legacy spellings fold onto their new names. Same mapping as SQL. */
-export function canonicalMetric(m: ChallengeMetric | string): ChallengeMetric {
-  if (m === "lower_nonessential") return "money_nonessential";
-  if (m === "lower_nonessential_pct") return "money_nonessential_pct";
-  return (m as ChallengeMetric) ?? "money_nonessential";
-}
-
-export function metricOption(m: ChallengeMetric | string): MetricOption | undefined {
-  const canon = canonicalMetric(m);
-  return CHALLENGE_METRICS.find((o) => o.metric === canon);
-}
-
-export function metricFamily(m: ChallengeMetric | string): MetricFamily {
-  return metricOption(m)?.family ?? "life";
-}
-
-export function defaultDirection(m: ChallengeMetric | string, statDirection?: ChallengeDirection | null): ChallengeDirection {
-  if (canonicalMetric(m) === "pursuit_stat") return statDirection ?? "more";
-  return metricOption(m)?.direction ?? "more";
-}
-
-export function metricUnit(m: ChallengeMetric | string, statUnit?: string | null): string {
-  if (canonicalMetric(m) === "pursuit_stat") return (statUnit ?? "").trim();
-  return metricOption(m)?.unit ?? "";
-}
-
-/** "Most productive hours". Matches challenge_metric_label() in SQL. */
-export function metricLabel(
-  m: ChallengeMetric | string,
-  direction: ChallengeDirection,
-  statName?: string | null
-): string {
-  const canon = canonicalMetric(m);
-  if (canon === "life_streak") return direction === "less" ? "Shortest logging streak" : "Longest logging streak";
-  const noun = canon === "pursuit_stat" ? (statName?.trim() || "a pursuit stat") : metricOption(canon)?.noun ?? "the score";
-  return `${direction === "less" ? "Least" : "Most"} ${noun}`;
-}
-
-/** Which pursuit a challenge on this metric hangs off, so members can log. */
-export function pursuitForMetric(m: ChallengeMetric | string): string | null {
-  const fam = metricFamily(m);
-  if (fam === "money") return MONEY_PURSUIT_ID;
-  if (fam === "life") return LIFE_PURSUIT_ID;
-  return null; // a stat challenge points at the stat's own pursuit
-}
-
-/**
- * Render a score in its own unit. 'currency' is the sentinel the server sends
- * for money metrics — the symbol is the viewer's, not a hardcoded dollar.
- */
-export function formatScore(value: number | null | undefined, unit: string, currency?: string): string {
-  if (value == null) return "—";
-  if (unit === "currency") return money(value, currency);
-  const n = value.toLocaleString(undefined, { maximumFractionDigits: 1 });
-  if (unit === "%") return `${n}%`;
-  if (unit === "") return n;
-  return `${n} ${unit}`;
-}
-
-/**
- * Currency. Stored on the profile so challenge standings can refuse to compare
- * dollars with euros — a leaderboard that silently mixes currencies is worse
- * than no leaderboard.
- */
-export const CURRENCIES = ["AUD", "USD", "GBP", "EUR", "NZD", "CAD", "JPY", "SGD"] as const;
-export type Currency = (typeof CURRENCIES)[number];
-
-const SYMBOLS: Record<string, string> = {
-  AUD: "$", USD: "$", NZD: "$", CAD: "$", GBP: "£", EUR: "€", JPY: "¥", SGD: "$",
-};
-
-let cachedCurrency: string | null = null;
-
-/**
- * Clear the module-scoped currency cache. Wired to Supabase's
- * SIGNED_OUT event below so the next signed-in user on the same
- * tab doesn't inherit the previous user's currency preference.
- */
-export function invalidateCurrencyCache(): void {
-  cachedCurrency = null;
-}
-
-// Register the sign-out listener ONCE per module load. Guarded so
-// hot-reload doesn't stack listeners. Browser only; no-op on server
-// (module resolves without a window).
-if (typeof window !== "undefined") {
-  try {
-    createClient().auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") invalidateCurrencyCache();
-    });
-  } catch { /* SSR safety */ }
-}
-
-export function currencySymbol(code?: string | null): string {
-  return SYMBOLS[code ?? cachedCurrency ?? "AUD"] ?? "$";
-}
-
-export async function fetchCurrency(): Promise<string> {
-  if (cachedCurrency) return cachedCurrency;
-  try {
-    const supabase = createClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) return "AUD";
-    const { data } = await supabase.from("profiles").select("currency").eq("id", auth.user.id).single();
-    cachedCurrency = data?.currency ?? "AUD";
-    return cachedCurrency!;
-  } catch {
-    return "AUD";
-  }
-}
-
-export async function setCurrency(code: string): Promise<void> {
-  const supabase = createClient();
-  const user_id = await uid();
-  const { error } = await supabase.from("profiles").update({ currency: code }).eq("id", user_id);
-  if (error) throw error;
-  cachedCurrency = code;
-}
-
-export function money(n: number | null | undefined, currency?: string): string {
-  if (n == null) return "—";
-  const sym = currencySymbol(currency);
-  return `${sym}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+export {
+  createChallenge,
+  dismissInvite,
+  fetchChallengeCategories,
+  fetchChallengeDaily,
+  fetchChallenges,
+  fetchInvitableFriends,
+  fetchMyInvites,
+  fetchStandings,
+  inviteFriend,
+  joinByToken,
+  joinChallenge,
+  leaveChallenge,
+  setIncomeOverride,
+  setShareAmounts,
+  type Challenge,
+  type ChallengeCategory,
+  type ChallengeDay,
+  type InvitableFriend,
+  type PendingInvite,
+  type Standing,
+} from "./challenges";
