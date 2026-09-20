@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { listFriends, searchProfiles, sendFriendRequest, type FoundProfile, type Friendship } from "@/lib/friends";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { fetchDirectory, joinPursuit, type Pursuit, pursuitHref } from "@/lib/pursuits";
 import { fetchTracks, type Track } from "@/lib/friends";
 import { createClient } from "@/lib/supabase/client";
@@ -52,7 +53,7 @@ export default function SearchPage() {
     try {
       setPeople(await searchProfiles(q.trim()));
     } catch (e: any) {
-      setMsg(String(e.message ?? e).includes("does not exist") ? "Search needs migration 0012 — run it in the Supabase SQL Editor." : String(e.message ?? e));
+      setMsg(String(e.message ?? e).includes("does not exist") ? friendlyBackendError(e, "Search") : String(e.message ?? e));
     } finally {
       setBusy(false);
     }

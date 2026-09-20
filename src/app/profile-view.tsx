@@ -62,6 +62,12 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [exercises, setExercises] = useState<Array<{ exercise: string; sessions: number; best: number }>>([]);
   const [defaultEx, setDefaultEx] = useState<string | null>(null);
 
+  // Track when the three "does this profile have anything to show" fetches
+  // have settled so we don't flash the empty CTA at a returning user during
+  // load. The other fetches (bodyweight, pursuits, exercises) don't gate the
+  // empty state.
+  const [dataLoaded, setDataLoaded] = useState(false);
+
   const [myChallenges, setMyChallenges] = useState<Array<{ id: string; name: string; daysLeft: number }>>([]);
   useEffect(() => {
     // only the ones this person is actually in; the board is public anyway
@@ -88,17 +94,21 @@ export default function ProfileView({ userId }: { userId: string }) {
   useEffect(() => {
     if (!userId) return;
     setColors(loadBucketColors());
+    setDataLoaded(false);
     load();
     // Every section reads through its own visibility-gated function, so these
     // all fire at once and each simply returns nothing if it's not shared —
     // no more hunting for a shared track first.
-    fetchMemberDayTotals(userId).then(setDayRows).catch(() => {});
-    fetchMemberDayStrip(userId).then(setStrip).catch(() => {});
     fetchMemberPursuits(userId).then(setPursuits).catch(() => {});
     fetchMemberBodyweight(userId).then(setBodyweight).catch(() => {});
     fetchMemberExercises(userId).then(setExercises).catch(() => {});
-    fetchMemberLifts(userId)
-      .then((lifts) => {
+    // These three decide whether the profile is "empty" — flip dataLoaded
+    // only after all of them settle so the empty state never flashes at a
+    // returning user with data.
+    Promise.allSettled([
+      fetchMemberDayTotals(userId).then(setDayRows),
+      fetchMemberDayStrip(userId).then(setStrip),
+      fetchMemberLifts(userId).then((lifts) => {
         setLiftRows(lifts);
         if (lifts.length) {
           const counts = new Map<string, number>();
@@ -106,8 +116,8 @@ export default function ProfileView({ userId }: { userId: string }) {
           // the owner's chosen default wins; otherwise their most-logged lift
           setExercise((prev) => prev || [...counts.entries()].sort(([, a], [, b]) => b - a)[0][0]);
         }
-      })
-      .catch(() => {});
+      }),
+    ]).finally(() => setDataLoaded(true));
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the profile owner's chosen default lift takes precedence over "most logged"
@@ -182,7 +192,10 @@ export default function ProfileView({ userId }: { userId: string }) {
         </Link>
       </div>
     );
-  if (!name) return <p className="text-sm text-muted">Loading profile…</p>;
+  // The /profile wrapper already renders its own "Opening your profile…" line
+  // while auth resolves; a second "Loading profile…" here just doubled the
+  // spinner. Return nothing during the brief profile-fetch window instead.
+  if (!name) return null;
 
   const show = (s: ProfileSection) => sections.includes(s);
   const hasDayData = dayRows.length > 0;
@@ -414,14 +427,77 @@ export default function ProfileView({ userId }: { userId: string }) {
           year heatmap were both saying what the year strip above already says,
           three sections further down the page. Gone. */}
 
-      {!hasDayData && liftRows.length === 0 && strip.length === 0 && (
-        <p className="card p-4 text-sm text-faint">
-          {sections.length === 0
-            ? `${name} hasn't shared anything publicly.`
-            : `Nothing here yet — ${name} hasn't logged anything.`}
-        </p>
+      {dataLoaded && !hasDayData && liftRows.length === 0 && strip.length === 0 && (
+        isSelf ? <SelfEmptyProfile colors={colors} /> : (
+          <p className="card p-4 text-sm text-faint">
+            {sections.length === 0
+              ? `${name} hasn't shared anything publicly.`
+              : `${name} hasn't shared anything yet. Come back later.`}
+          </p>
+        )
       )}
     </div>
+  );
+}
+
+/**
+ * First-run profile for a signed-in user who has never logged. Instead of the
+ * old "Nothing here yet" line — which reads to a brand new user as a broken
+ * page — we show what will appear once they log, plus the two obvious next
+ * moves: log a slot, or set up a pursuit.
+ */
+function SelfEmptyProfile({ colors }: { colors: BucketColors }) {
+  // A short, honest list of what the profile fills up with. Each row has a
+  // colour swatch so the card feels alive rather than a list of promises.
+  const previews: Array<{ swatch: string; title: string; body: string }> = [
+    {
+      swatch: colors.productive,
+      title: "Your year in 15-minute slots",
+      body: "Every day you log becomes a slim vertical bar — a coloured strip of your whole year.",
+    },
+    {
+      swatch: "#f59e0b",
+      title: "Your typical day, as a clock",
+      body: "The 96 quarter-hours of a day, coloured with what you most often do at each one.",
+    },
+    {
+      swatch: "#16a34a",
+      title: "Productivity ranking",
+      body: "Focus and WorkMax — for today, this week, and all time — computed from your slots.",
+    },
+    {
+      swatch: colors.brainrot,
+      title: "Big three",
+      body: "Squat, bench, deadlift trend lines once you start logging lifts.",
+    },
+  ];
+  return (
+    <section className="card p-5 sm:p-6">
+      <h2 className="text-lg font-semibold">Your profile is waiting on data.</h2>
+      <p className="mt-1 text-sm text-muted">
+        Nothing shows up here until you log a slot. Here's what will appear as
+        soon as you do:
+      </p>
+      <ul className="mt-4 space-y-3">
+        {previews.map((p) => (
+          <li key={p.title} className="flex gap-3">
+            <span
+              aria-hidden="true"
+              className="mt-1 inline-block h-3 w-3 shrink-0 rounded-sm"
+              style={{ background: p.swatch }}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">{p.title}</p>
+              <p className="text-xs text-muted">{p.body}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Link href="/today" className="btn-primary">Log your first day →</Link>
+        <Link href="/pursuits" className="btn-ghost">Set up a pursuit →</Link>
+      </div>
+    </section>
   );
 }
 

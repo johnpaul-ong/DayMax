@@ -29,6 +29,7 @@ import {
   type GoalUnit,
   type LiftGoal,
 } from "@/lib/data";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors } from "@/lib/theme";
 import type { LiftEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
@@ -57,7 +58,7 @@ function GoalsCard({ rows }: { rows: LiftEntry[] }) {
   function reload() {
     fetchLiftGoals()
       .then(setGoals)
-      .catch(() => setErr("Goals need migrations 0002 + 0003 — run them in the Supabase SQL Editor."));
+      .catch((e) => setErr(friendlyBackendError(e, "Lift goals")));
   }
   useEffect(reload, []);
 

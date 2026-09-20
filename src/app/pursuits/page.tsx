@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Line, LineChart, ResponsiveContainer, Tooltip } from "recharts";
 import { localToday } from "@/lib/dates";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import {
   createPursuit,
   fetchDirectory,
@@ -70,7 +71,7 @@ export default function PursuitsPage() {
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
-            ? "Pursuits need migration 0013 — run supabase/migrations/0013_pursuits.sql in the Supabase SQL Editor."
+            ? friendlyBackendError(e, "Pursuits")
             : String(e.message ?? e)
         )
       )

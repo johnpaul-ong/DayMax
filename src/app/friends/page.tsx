@@ -33,6 +33,7 @@ import {
   type Track,
   type TrackMember,
 } from "@/lib/friends";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { createClient } from "@/lib/supabase/client";
 import {
   addComment,
@@ -79,7 +80,7 @@ export default function FriendsPage() {
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
-            ? "Friends needs migration 0005 — run supabase/migrations/0005_friends.sql in the Supabase SQL Editor."
+            ? friendlyBackendError(e, "Friends")
             : String(e.message ?? e)
         )
       )

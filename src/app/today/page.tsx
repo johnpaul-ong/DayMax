@@ -39,6 +39,24 @@ export default function TodayPage() {
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
 
+  // First-run coach. Category defaults to 0, which is a valid category — so
+  // "picked" cannot mean "cat != null". It has to track whether the user
+  // has actually tapped the picker, otherwise the coach reads step 1 as
+  // done before you have done anything.
+  const [catPicked, setCatPicked] = useState(false);
+  // Start with the coach hidden so returning users never see a flash of
+  // it before localStorage is read; the effect below flips it on for
+  // first-timers.
+  const [coached, setCoached] = useState(true);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("daymax-today-coached") !== "1") setCoached(false);
+    } catch {}
+  }, []);
+  const hasSelection = from != null && until != null;
+  const ready = hasSelection; // cat is always a number, so cat != null is always true
+  const coachStep = !catPicked ? 1 : !hasSelection ? 2 : 3;
+
   useEffect(() => {
     fetchDayEntries(date, date)
       .then((es) => setCells(new Map(es.map((e) => [e.slot, { category: e.category, label: e.label }]))))
@@ -82,6 +100,10 @@ export default function TodayPage() {
       await upsertDayEntries(entries);
       setFrom(null);
       setUntil(null);
+      // First successful fill retires the coach. localStorage so returning
+      // users on a fresh reload do not see it again.
+      try { localStorage.setItem("daymax-today-coached", "1"); } catch {}
+      setCoached(true);
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
@@ -166,8 +188,8 @@ export default function TodayPage() {
         {CATEGORIES.map((c) => (
           <button
             key={c.code}
-            onClick={() => setCat(c.code)}
-            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-medium ${cat === c.code ? "ring-2 ring-accent" : ""}`}
+            onClick={() => { setCat(c.code); setCatPicked(true); }}
+            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-medium ${cat === c.code && catPicked ? "ring-2 ring-accent" : ""}`}
             style={{ background: c.color + "22", borderColor: c.color }}
           >
             {c.code} {c.name}
@@ -185,13 +207,52 @@ export default function TodayPage() {
         <span className="w-10 text-muted">{from != null ? slotToTime(from) : "from"}</span>
         <span>→</span>
         <span className="w-10 text-muted">{until != null ? slotToTime(until) : "until"}</span>
-        <button onClick={() => void fill()} disabled={from == null || until == null || saving} className="ml-auto rounded-lg bg-accent px-4 py-2 font-semibold text-accent-contrast disabled:opacity-40">
+        {ready && (
+          <span className="text-xs font-medium text-accent">→ tap Fill</span>
+        )}
+        <button
+          onClick={() => void fill()}
+          disabled={from == null || until == null || saving}
+          // Ready-state: bright accent + pulsing accent ring on top of the
+          // surface, so the Fill button stops looking like the Clear button
+          // once a selection exists. Ring uses ring-offset in the page
+          // surface colour so it reads as a halo rather than a border.
+          className={`ml-auto rounded-lg bg-accent px-4 py-2 font-semibold text-accent-contrast transition disabled:opacity-40 ${
+            ready && !saving
+              ? "shadow-lg shadow-accent/40 ring-2 ring-accent ring-offset-2 ring-offset-surface animate-pulse"
+              : ""
+          }`}
+        >
           Fill
         </button>
         <button onClick={() => void clearRange()} disabled={from == null || until == null || saving} className="rounded-lg border px-3 py-2 disabled:opacity-40">
           Clear
         </button>
       </div>
+
+      {/* First-run coach. The clock uses onSelect (not onPaint), so the
+          "drag to fill" hint baked into the clock never appears — a first
+          drag releases with no visible commit and the small Fill button
+          in the toolbar goes unnoticed. This numbered strip stands in for
+          that, and each step lights up as its condition is met. Retires
+          after the first successful Fill and stays retired via
+          localStorage `daymax-today-coached`. */}
+      {!coached && (
+        <div className="mb-3 rounded-lg border border-accent bg-accent-soft px-3 py-2.5 text-xs">
+          <div className="mb-1.5 font-semibold text-accent">Log your first slot</div>
+          <ol className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <li className={coachStep === 1 ? "font-semibold text-ink" : "text-faint line-through decoration-1"}>
+              1. Pick a category
+            </li>
+            <li className={coachStep === 2 ? "font-semibold text-ink" : coachStep > 2 ? "text-faint line-through decoration-1" : "text-muted"}>
+              2. Drag on the clock
+            </li>
+            <li className={coachStep === 3 ? "font-semibold text-accent" : "text-muted"}>
+              3. Tap Fill
+            </li>
+          </ol>
+        </div>
+      )}
 
       {/* The day as a clock. 96 slots is exactly 2 rings x 12 hours x 4
           quarters, so it lands on a dial with nothing left over. The hour
@@ -209,6 +270,19 @@ export default function TodayPage() {
             setUntil(b);
           }}
         />
+        {/* "No category selected" is a loud state. The category defaults
+            to 0 (a valid code), so a first-time user can drag and hit Fill
+            without ever noticing the picker at the top. This hint under
+            the clock — where their eyes already are after a drag — points
+            back up at it, then fades once the picker is used. */}
+        <p
+          className={`mt-1 text-center text-xs font-medium text-accent transition-opacity duration-500 ${
+            catPicked ? "pointer-events-none opacity-0" : "opacity-100"
+          }`}
+          aria-hidden={catPicked}
+        >
+          Pick a category first ↑
+        </p>
       </div>
 
       {metrics && (

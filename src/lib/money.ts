@@ -417,7 +417,7 @@ export async function fetchStandings(challengeId: string): Promise<Standing[]> {
 
 /** Cumulative non-essential spend per person, per day — the race chart. */
 const MIGRATION_0036 =
-  "These charts need migration 0036 — run supabase/apply_0036.sql in the Supabase SQL editor.";
+  "These charts are temporarily unavailable. If it persists, contact the app owner.";
 
 export async function fetchChallengeDaily(challengeId: string): Promise<ChallengeDay[]> {
   // One row per member per day: a 90-day challenge with a dozen people is over
@@ -512,7 +512,7 @@ export async function setIncomeOverride(challengeId: string, amount: number | nu
     .select("user_id");
   if (error) {
     if (String(error.message).includes("income_override"))
-      throw new Error("Income overrides need migration 0036 — run supabase/apply_0036.sql in the SQL editor.");
+      throw new Error("Income overrides are temporarily unavailable. If it persists, contact the app owner.");
     throw error;
   }
   if (!data || data.length === 0) {
@@ -595,7 +595,7 @@ export async function createChallenge(c: {
     // The CHECK constraint from 0035 only allowed the two money metrics.
     if (msg.includes("challenges_metric") || msg.includes("metric_check") || msg.includes("direction"))
       throw new Error(
-        "This kind of challenge needs migration 0038 — run supabase/migrations/0038_flexible_challenges.sql in the Supabase SQL editor."
+        "This kind of challenge is temporarily unavailable. If it persists, contact the app owner."
       );
     throw error;
   }

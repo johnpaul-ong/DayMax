@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchDailyMetrics, upsertDailyMetrics } from "@/lib/data";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { createClient } from "@/lib/supabase/client";
 import { localToday } from "@/lib/dates";
 
@@ -66,7 +67,7 @@ export default function HabitsPage() {
     } catch (e: any) {
       setError(
         String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
-          ? "Habits needs migration 0012 — run supabase/migrations/0012_friends_search_habits.sql in the Supabase SQL Editor."
+          ? friendlyBackendError(e, "Habits")
           : String(e.message ?? e)
       );
     }

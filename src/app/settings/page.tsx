@@ -3,12 +3,13 @@
 /**
  * Settings: assign each parent category to a ranking bucket.
  * Defaults: productive = Work + Sports, brainrot = Other + Leisure.
- * (Share rules and invites arrive with Phase 3.)
+ *
  */
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CATEGORIES, type Bucket } from "@/lib/categories";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { loadHiddenTabs, NAV_TABS, saveHiddenTabs } from "../nav-links";
 import { fetchBucketSettings, fetchProfile, saveBucketSettings, updateProfile } from "@/lib/data";
 import { COUNTRIES, lifeStats } from "@/lib/life";
@@ -782,7 +783,7 @@ function ProfileSection() {
         setCountry(p.country ?? "");
         setTargetWeight(p.targetWeightKg != null ? String(p.targetWeightKg) : "");
       })
-      .catch(() => setMsg("Profile needs migrations 0002–0004 — run them in the Supabase SQL Editor."));
+      .catch((e) => setMsg(friendlyBackendError(e, "Your profile")));
   }, []);
 
   return (
@@ -896,7 +897,7 @@ export default function SettingsPage() {
       <h2 className="mb-1 font-semibold">Ranking buckets</h2>
       <p className="mb-3 text-sm text-muted">
         Which categories count as productive vs brainrot in the ranking, and what color each bucket gets.
-        Compare (Phase 3) will use these buckets and totals only — friends never see your labels unless you share them.
+        These pick which categories count toward each ranking bucket. Friends never see your labels unless you share them.
       </p>
       <BucketColorRows />
       <div className="card">

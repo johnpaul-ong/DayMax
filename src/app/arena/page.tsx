@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { fetchArena, fetchTracks, type ArenaScope, type LeaderboardRow, type Track } from "@/lib/friends";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import { TeamName } from "../team-name";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
@@ -159,7 +160,7 @@ export default function ArenaPage() {
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist") || String(e.message ?? e).includes("schema cache")
-            ? "The Arena needs migration 0031 — run it in the Supabase SQL Editor."
+            ? friendlyBackendError(e, "The Arena")
             : String(e.message ?? e)
         )
       )

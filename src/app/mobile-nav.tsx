@@ -15,12 +15,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
-  { href: "/today", label: "Today", icon: "M4 4h16v16H4z M4 9h16 M9 4v16" },
-  { href: "/money", label: "Money", icon: "M12 2v20 M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+/**
+ * Five fixed destinations, matched to the desktop nav's primary groups
+ * (Life=/today, Pursuits, Community/Home, Money, You). Today sits in the
+ * centre slot and is styled as the primary tap: it is the "log a slot"
+ * action, which is the whole reason the app exists. Home used to be centre
+ * but it is a read-only surface, so it moves out of the primary slot and
+ * lives next to Pursuits.
+ */
+type Tab = { href: string; label: string; icon: string; primary?: boolean };
+const TABS: Tab[] = [
   { href: "/", label: "Home", icon: "M3 11l9-8 9 8 M5 10v10h14V10" },
-  { href: "/arena", label: "Arena", icon: "M6 21V9 M12 21V4 M18 21v-7" },
   { href: "/pursuits", label: "Pursuits", icon: "M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" },
+  { href: "/today", label: "Today", icon: "M12 5v14 M5 12h14", primary: true },
+  { href: "/money", label: "Money", icon: "M12 2v20 M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" },
+  { href: "/profile", label: "You", icon: "M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 20a8 8 0 0 1 16 0" },
 ];
 
 export default function MobileNav() {
@@ -35,9 +44,29 @@ export default function MobileNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       aria-label="Primary"
     >
-      <div className="flex">
+      <div className="flex items-end">
         {TABS.map((t) => {
           const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href);
+          if (t.primary) {
+            // Elevated centre tap: the "log a slot" primary action. Circle
+            // sits above the bar so a thumb lands on it without hunting.
+            return (
+              <Link
+                key={t.href}
+                href={t.href}
+                aria-current={active ? "page" : undefined}
+                aria-label={`${t.label} — log a slot`}
+                className="flex flex-1 flex-col items-center gap-0.5 pb-2 pt-1 text-[10px] font-semibold text-accent transition"
+              >
+                <span className="flex h-11 w-11 -translate-y-3 items-center justify-center rounded-full bg-accent text-accent-contrast shadow-lg ring-4 ring-surface">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="h-6 w-6" aria-hidden="true">
+                    <path d={t.icon} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="-mt-2">{t.label}</span>
+              </Link>
+            );
+          }
           return (
             <Link
               key={t.href}

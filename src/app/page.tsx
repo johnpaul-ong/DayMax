@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
-import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchProfile } from "@/lib/data";
+import { fetchAllDayEntries, fetchBucketSettings, fetchDayEntries, fetchLifts, fetchProfile } from "@/lib/data";
 import { lifeStats, type LifeStats } from "@/lib/life";
 import { bucketize, focusScore, hoursByCategory, weekStart, workMax } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
@@ -24,14 +24,15 @@ import Recap from "./recap";
 const HOME_SECTIONS = [
   { key: "strip", label: "Every day, every 15 minutes" },
   { key: "todayWeek", label: "Today & this week" },
-  { key: "today", label: "Today (legacy — off)" },
-  { key: "week", label: "This week (legacy — off)" },
   { key: "life", label: "Your life" },
 ] as const;
 type HomeKey = (typeof HOME_SECTIONS)[number]["key"];
+// Legacy layout keys ("today" and "week", superseded by "todayWeek") may still
+// be present in old saved layouts. loadLayout drops any key not in HOME_SECTIONS,
+// so migration is silent: the user just stops seeing the two duplicate blocks
+// they never asked for.
 const DEFAULT_LAYOUT: Array<{ key: HomeKey; visible: boolean }> = [
-  { key: "today", visible: true },
-  { key: "week", visible: true },
+  { key: "todayWeek", visible: true },
   { key: "life", visible: true },
   { key: "strip", visible: false },
 ];
@@ -40,17 +41,67 @@ function loadLayout(): Array<{ key: HomeKey; visible: boolean }> {
   try {
     const raw = localStorage.getItem("daymax-home-layout");
     if (!raw) return [...DEFAULT_LAYOUT];
-    const saved = JSON.parse(raw) as Array<{ key: HomeKey; visible: boolean }>;
+    const saved = JSON.parse(raw) as Array<{ key: string; visible: boolean }>;
     // Migrate: anyone with an old layout that lists 'today'/'week' visible
     // gets todayWeek in their layout too, once. Existing choices preserved.
     const hasNew = saved.some((s) => s.key === "todayWeek");
     if (!hasNew) saved.unshift({ key: "todayWeek", visible: true });
-    const known = saved.filter((s) => HOME_SECTIONS.some((h) => h.key === s.key));
+    const known = saved.filter((s): s is { key: HomeKey; visible: boolean } =>
+      HOME_SECTIONS.some((h) => h.key === s.key)
+    );
     for (const d of DEFAULT_LAYOUT) if (!known.some((s) => s.key === d.key)) known.push(d);
     return known;
   } catch {
     return [...DEFAULT_LAYOUT];
   }
+}
+
+/**
+ * A tiny stylised day-clock, drawn from primitives. Four colour swatches sit
+ * around a soft ring and one accent wedge, giving the empty state a shape
+ * that hints at what the app is for without shipping any external asset.
+ */
+function EmptyClockArt() {
+  const wedge = (start: number, end: number, fill: string, opacity = 1) => {
+    const toXY = (deg: number) => {
+      const r = ((deg - 90) * Math.PI) / 180;
+      return [100 + 78 * Math.cos(r), 100 + 78 * Math.sin(r)];
+    };
+    const [x1, y1] = toXY(start);
+    const [x2, y2] = toXY(end);
+    const large = end - start > 180 ? 1 : 0;
+    return (
+      <path
+        d={`M100 100 L${x1} ${y1} A78 78 0 ${large} 1 ${x2} ${y2} Z`}
+        fill={fill}
+        opacity={opacity}
+      />
+    );
+  };
+  return (
+    <svg viewBox="0 0 200 200" className="mx-auto h-32 w-32" aria-hidden="true">
+      <circle cx="100" cy="100" r="90" fill="var(--surface-2)" opacity="0.6" />
+      {/* stylised sample day: work morning, break, exercise, evening */}
+      {wedge(0, 120, "var(--accent)", 0.55)}
+      {wedge(120, 165, "#f59e0b", 0.55)}
+      {wedge(165, 235, "#16a34a", 0.55)}
+      {wedge(235, 360, "#94a3b8", 0.4)}
+      <circle cx="100" cy="100" r="46" fill="var(--surface)" />
+      {/* clock hands */}
+      <line x1="100" y1="100" x2="100" y2="66" stroke="var(--ink)" strokeWidth="3" strokeLinecap="round" />
+      <line x1="100" y1="100" x2="126" y2="108" stroke="var(--ink)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="100" cy="100" r="4" fill="var(--ink)" />
+      {/* four quarter ticks */}
+      {[0, 90, 180, 270].map((deg) => {
+        const r = ((deg - 90) * Math.PI) / 180;
+        const x1 = 100 + 84 * Math.cos(r);
+        const y1 = 100 + 84 * Math.sin(r);
+        const x2 = 100 + 92 * Math.cos(r);
+        const y2 = 100 + 92 * Math.sin(r);
+        return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" />;
+      })}
+    </svg>
+  );
 }
 
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
@@ -191,6 +242,11 @@ export default function HomePage() {
   const [customizing, setCustomizing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [showUnlogged, setShowUnlogged] = useState(true);
+  // "has the user logged ANYTHING ever?" — null while we're still checking.
+  // We only bother once weekEntries has resolved to empty; an active user
+  // (weekEntries > 0) short-circuits to true and skips these fetches.
+  const [hasAnyEntries, setHasAnyEntries] = useState<boolean | null>(null);
+  const [hasAnyLifts, setHasAnyLifts] = useState<boolean | null>(null);
   useEffect(() => {
     try { setShowUnlogged(localStorage.getItem("daymax-show-unlogged") !== "0"); } catch {}
   }, []);
@@ -229,6 +285,38 @@ export default function HomePage() {
       fetchAllDayEntries().then(setAllEntries).catch(() => setAllEntries([]));
     }
   }, [stripVisible, allEntries]);
+
+  // First-run detection: once the initial week+settings fetch settles, decide
+  // whether this looks like a brand new user. If they have anything logged
+  // this week we already know they're active. Otherwise ask "have they ever
+  // logged anything, anywhere". Both flags must resolve before we replace the
+  // page body — a flash of the empty state for a returning user is nearly as
+  // bad as the wall of zeros we're trying to avoid.
+  useEffect(() => {
+    if (loading) return;
+    if (weekEntries.length > 0) {
+      if (hasAnyEntries !== true) setHasAnyEntries(true);
+      if (hasAnyLifts !== true) setHasAnyLifts(true);
+      return;
+    }
+    if (hasAnyEntries === null) {
+      if (allEntries !== null) {
+        setHasAnyEntries(allEntries.length > 0);
+      } else {
+        fetchAllDayEntries()
+          .then((es) => {
+            setAllEntries(es);
+            setHasAnyEntries(es.length > 0);
+          })
+          .catch(() => setHasAnyEntries(false));
+      }
+    }
+    if (hasAnyLifts === null) {
+      fetchLifts()
+        .then((ls) => setHasAnyLifts(ls.length > 0))
+        .catch(() => setHasAnyLifts(false));
+    }
+  }, [loading, weekEntries.length, allEntries, hasAnyEntries, hasAnyLifts]);
 
   function saveLayout(next: Array<{ key: HomeKey; visible: boolean }>) {
     setLayout(next);
@@ -358,8 +446,6 @@ export default function HomePage() {
         </div>
       </div>
     ),
-    today: () => null,   // superseded by todayWeek, kept in map for TS exhaustiveness
-    week: () => null,
     life: () =>
       life ? (
         <div key="life" className="sm:col-span-6">
@@ -367,6 +453,55 @@ export default function HomePage() {
         </div>
       ) : null,
   };
+
+  // Empty first-run: never logged a slot, never logged a lift, nothing this
+  // week either. Show one invitation instead of six cards full of zeros.
+  const detecting =
+    loading || (weekEntries.length === 0 && (hasAnyEntries === null || hasAnyLifts === null));
+  const isEmpty = !detecting && weekEntries.length === 0 && hasAnyEntries === false && hasAnyLifts === false;
+
+  if (detecting) {
+    // A blank pause is better than a flash of zeros. StreakCard, LifeCard, etc.
+    // stay unmounted until we know whether the user actually has data behind
+    // them, so nothing renders "0" in the interim.
+    return (
+      <div className="mx-auto max-w-2xl pt-16 text-center">
+        <p className="text-sm text-muted">Getting your day ready…</p>
+      </div>
+    );
+  }
+
+  if (isEmpty) {
+    return (
+      <div className="mx-auto max-w-2xl pt-6 sm:pt-10">
+        <div className="card p-8 text-center sm:p-10">
+          <EmptyClockArt />
+          <h1 className="mt-8 text-3xl font-bold tracking-tight sm:text-4xl">
+            Your life, one slot at a time.
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted sm:text-base">
+            DayMax is a clock. Tap any 15-minute slot and say what you were doing.
+            Everything else — your week, your year, your streak — is drawn from
+            those slots as you fill them in.
+          </p>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <Link
+              href="/today"
+              className="btn-primary px-6 py-3 text-base"
+            >
+              Log your first slot →
+            </Link>
+            <Link
+              href="/pursuits/explore"
+              className="text-sm text-muted underline-offset-2 hover:text-accent hover:underline"
+            >
+              or explore what other people track
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

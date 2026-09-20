@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { localToday } from "@/lib/dates";
+import { friendlyBackendError } from "@/lib/friendlyError";
 import {
   CHALLENGE_METRICS,
   createChallenge,
@@ -23,6 +24,18 @@ import {
 } from "@/lib/money";
 import { fetchDirectory, fetchStats, type Pursuit, type PursuitStat } from "@/lib/pursuits";
 
+
+/**
+ * Four starter templates so the empty state is a MENU, not a chevron. A
+ * consumer-facing app should never open on nothing to do; each of these
+ * fills the create form with a working challenge.
+ */
+const STARTERS = [
+  { kicker: "Life",  title: "Most productive week",         blurb: "Whoever logs the most productive hours over 7 days wins.", metric: "life_productive_hours", days: 7 },
+  { kicker: "Life",  title: "Longest logging streak",       blurb: "Longest run of consecutive days with anything logged. A consistency contest.", metric: "life_streak", days: 30 },
+  { kicker: "Money", title: "Least non-essential this month", blurb: "Rent and groceries do not count. Whoever spends least on fun wins.", metric: "money_nonessential", days: 30 },
+  { kicker: "Life",  title: "Best sleep",                   blurb: "Most hours logged as Sleep on the day grid, over a fortnight.", metric: "life_sleep_hours", days: 14 },
+];
 export default function ChallengesPage() {
   const [list, setList] = useState<Challenge[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +50,7 @@ export default function ChallengesPage() {
       .catch((e) =>
         setError(
           String(e.message ?? e).includes("does not exist")
-            ? "Challenges need migrations 0034–0035 — run them in the Supabase SQL editor."
+            ? friendlyBackendError(e, "Challenges")
             : String(e.message ?? e)
         )
       )
@@ -88,12 +101,51 @@ export default function ChallengesPage() {
       <Section title="Starting soon" list={upcoming} />
       <Section title="Finished" list={done} muted />
 
-      <div className="mt-6">
-        <button onClick={() => setCreating(!creating)} className="text-sm font-medium text-muted hover:text-accent">
-          {creating ? "▾" : "▸"} Start your own
-        </button>
-        {creating && <NewChallenge onCreated={reload} />}
-      </div>
+      {/* When there is genuinely nothing here (no invites, no live, no
+          past), a tiny grey chevron labelled "Start your own" is not
+          enough. Show the four starter templates as a real primary CTA. */}
+      {!loading && invites.length === 0 && list.length === 0 && !creating && (
+        <section className="mt-6">
+          <h2 className="mb-1 font-semibold">Start with a template</h2>
+          <p className="mb-3 text-sm text-muted">
+            A challenge picks one thing to rank on and one window to rank it over. Tap any of these to fill in
+            the form.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {STARTERS.map((t) => (
+              <button
+                key={t.title}
+                onClick={() => {
+                  setCreating(true);
+                  // stash the starter in localStorage so NewChallenge can pick it up
+                  try { localStorage.setItem("daymax-challenge-template", JSON.stringify(t)); } catch {}
+                  window.dispatchEvent(new Event("daymax-challenge-template"));
+                }}
+                className="card-lift card p-4 text-left"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wider text-faint">{t.kicker}</p>
+                <p className="mt-1 font-semibold">{t.title}</p>
+                <p className="mt-1 text-sm text-muted">{t.blurb}</p>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setCreating(true)}
+            className="mt-4 text-sm font-medium text-muted hover:text-accent"
+          >
+            ▸ Or start from scratch
+          </button>
+        </section>
+      )}
+
+      {(list.length > 0 || invites.length > 0) && (
+        <div className="mt-6">
+          <button onClick={() => setCreating(!creating)} className="btn-ghost">
+            {creating ? "▾ Cancel" : "+ Start your own"}
+          </button>
+        </div>
+      )}
+      {creating && <NewChallenge onCreated={reload} />}
     </div>
   );
 }
@@ -211,6 +263,30 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
   const [statId, setStatId] = useState("");
 
   const needsStat = metric === "pursuit_stat";
+
+  // A starter button on the empty state can drop a template into localStorage;
+  // pick it up here so the form opens pre-filled. Once consumed, the template
+  // is deleted so opening the form again the next day doesn't refill it.
+  useEffect(() => {
+    const apply = () => {
+      try {
+        const raw = localStorage.getItem("daymax-challenge-template");
+        if (!raw) return;
+        const t = JSON.parse(raw) as { title?: string; blurb?: string; metric?: ChallengeMetric; days?: number };
+        if (t.title) setName(t.title);
+        if (t.blurb) setDesc(t.blurb);
+        if (t.metric) {
+          setMetric(t.metric);
+          setDirection(defaultDirection(t.metric));
+        }
+        if (typeof t.days === "number") setDays(t.days);
+        localStorage.removeItem("daymax-challenge-template");
+      } catch {}
+    };
+    apply();
+    window.addEventListener("daymax-challenge-template", apply);
+    return () => window.removeEventListener("daymax-challenge-template", apply);
+  }, []);
 
   useEffect(() => {
     if (!needsStat || pursuits.length > 0) return;
