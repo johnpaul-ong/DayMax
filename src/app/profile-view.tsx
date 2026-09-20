@@ -70,13 +70,12 @@ export default function ProfileView({ userId }: { userId: string }) {
   const [dataLoaded, setDataLoaded] = useState(false);
 
   const [myChallenges, setMyChallenges] = useState<Array<{ id: string; name: string; daysLeft: number }>>([]);
-  useEffect(() => {
-    // only the ones this person is actually in; the board is public anyway
-    import("@/lib/money")
-      .then((m) => m.fetchChallenges())
-      .then((cs) => setMyChallenges(cs.filter((c) => c.isMember).map((c) => ({ id: c.id, name: c.name, daysLeft: c.daysLeft }))))
-      .catch(() => {});
-  }, [userId]);
+  // Bug fix: this used to fetch on EVERY profile view and show them
+  // as if they belonged to the profile's owner -- so someone else's
+  // page listed YOUR challenges. fetchChallenges() is auth.uid()-
+  // scoped (my_challenges RPC), so it only ever knew the viewer's
+  // memberships. Gate on isSelf. Showing a friend's own challenge
+  // list would need a new SQL function that respects their visibility.
 
   function load() {
     fetchMemberProfile(userId)
@@ -88,6 +87,17 @@ export default function ProfileView({ userId }: { userId: string }) {
         setIsSelf(profile.isSelf);
         setTeam(profile.team);
         setDefaultEx(profile.defaultExercise);
+        // Fetch OWN challenges only when this is the signed-in
+        // user's own profile. Any earlier and we'd show the viewer's
+        // memberships on a friend's page.
+        if (profile.isSelf) {
+          import("@/lib/money")
+            .then((m) => m.fetchChallenges())
+            .then((cs) => setMyChallenges(cs.filter((c) => c.isMember).map((c) => ({ id: c.id, name: c.name, daysLeft: c.daysLeft }))))
+            .catch(() => {});
+        } else {
+          setMyChallenges([]);
+        }
       })
       .catch((e) => setError(String(e.message ?? e)));
   }
