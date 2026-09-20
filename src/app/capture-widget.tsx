@@ -51,6 +51,8 @@ export default function CaptureWidget() {
   const [cat, setCat] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Closed by hand: stay closed until there is genuinely something new. */
+  const dismissedRef = useRef(false);
   const [justSaved, setJustSaved] = useState<number | null>(null);
   const [lastEntry, setLastEntry] = useState<{ category: number; label: string | null } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +65,9 @@ export default function CaptureWidget() {
   const skippedRef = useRef(skipped);
   const settingsRef = useRef(settings);
   useEffect(() => { filledRef.current = filled; }, [filled]);
+  // Cross midnight with the tab open and yesterday's skipped slot indexes
+  // were still suppressing today's.
+  useEffect(() => { setSkipped(new Set()); }, [date]);
   useEffect(() => { skippedRef.current = skipped; }, [skipped]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
@@ -90,14 +95,26 @@ export default function CaptureWidget() {
   }, []);
 
   // --- what's already logged today --------------------------------------------
-  const refresh = useCallback(async () => {
+  /**
+   * Returns the slots as they are NOW, as well as setting state.
+   *
+   * THE BUG: tick() used to `await refresh()` and then read `filledRef.current`.
+   * setFilled is async, React had not committed it, and the ref is only updated
+   * by an effect that runs after commit — so the await bought nothing and every
+   * tick decided using the PREVIOUS tick's data. That is what made it ask about
+   * slots that were already filled.
+   */
+  const refresh = useCallback(async (): Promise<Set<number>> => {
     try {
       const today = await fetchDayEntries(date, date);
-      setFilled(new Set(today.map((e) => e.slot)));
+      const slots = new Set(today.map((e) => e.slot));
+      setFilled(slots);
       const sorted = [...today].sort((a, b) => b.slot - a.slot);
       setLastEntry(sorted[0] ? { category: sorted[0].category, label: sorted[0].label } : null);
+      return slots;
     } catch {
       // offline or signed out — stay quiet rather than popping an error box
+      return filledRef.current;
     }
   }, [date]);
 
@@ -140,17 +157,19 @@ export default function CaptureWidget() {
       if (inQuietHours(now.getHours(), s.quietFrom, s.quietTo)) return setQueue([]);
       if (isSnoozed()) return setQueue([]);
 
-      // refetch before deciding, so a slot logged elsewhere never reappears
-      await refresh();
+      // refetch before deciding, and USE what came back
+      const fresh = await refresh();
       const q = buildQueue({
-        filledSlots: filledRef.current,
+        filledSlots: fresh,
         nowSlot: slotForTime(now),
         lookbackSlots: Math.round(s.lookbackMin / 15),
         maxQueue: s.maxQueue,
         skipped: skippedRef.current,
       });
       setQueue(q);
-      if (q.length > 0) setOpen(true);
+      // Only auto-open. Never re-open something the person just closed —
+      // setOpen(true) on every tick meant the x bought you 60 seconds.
+      if (q.length > 0 && !dismissedRef.current) setOpen(true);
     };
 
     void tick();
@@ -183,6 +202,7 @@ export default function CaptureWidget() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
         clearSnooze();
+        dismissedRef.current = false;
         setOpen(true);
         setTimeout(() => inputRef.current?.focus(), 0);
       }
@@ -204,6 +224,17 @@ export default function CaptureWidget() {
     setQueue((q) => q.filter((s) => s !== slot));
   }, []);
 
+  // A brand-new slot is new information, so it lifts a manual dismissal.
+  // Without this the x would be a permanent mute rather than "not now".
+  const topSlot = queue[0] ?? null;
+  const lastTop = useRef<number | null>(null);
+  useEffect(() => {
+    if (topSlot !== null && lastTop.current !== null && topSlot !== lastTop.current) {
+      dismissedRef.current = false;
+    }
+    lastTop.current = topSlot;
+  }, [topSlot]);
+
   // Nothing left to ask about — get out of the way. Also covers the ticker
   // emptying the queue (quiet hours, snooze, everything filled elsewhere).
   useEffect(() => {
@@ -216,8 +247,11 @@ export default function CaptureWidget() {
   const hints = useMemo(() => suggestLabels(label, memory, 5), [label, memory]);
 
   // focus whenever a new slot comes up, so a queue is pure typing
+  // Focus ONLY when the person asked for it (hotkey, or clicking the box).
+  // It used to focus whenever a slot came up, which yanks your cursor out of
+  // whatever you were typing the moment the reminder appears. Outlook
+  // reminders never take focus, and this should not either.
   useEffect(() => {
-    if (open && current !== null) inputRef.current?.focus();
     setError(null);
   }, [open, current]);
 
@@ -279,10 +313,20 @@ export default function CaptureWidget() {
   if (!signedIn || onAuthScreen || !settings?.enabled || !open || current === null) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:inset-x-auto sm:right-4 sm:w-[26rem]">
-      <div className="card border-2 border-accent-soft p-4 shadow-lg">
+    /* Outlook's reminder window: anchored bottom-right, a fixed ~360px, never
+       full-bleed, and it slides in rather than appearing. On phones it sits
+       ABOVE the tab bar instead of on top of it — the widget is z-50 and
+       MobileNav is z-40, so it was covering the navigation. */
+    <div
+      className="daymax-reminder fixed z-50 sm:right-4 sm:left-auto sm:w-[360px]
+                 left-2 right-2 bottom-[calc(56px+env(safe-area-inset-bottom)+0.5rem)] sm:bottom-4"
+      role="dialog"
+      aria-label="What were you doing?"
+      onMouseDown={() => inputRef.current?.focus()}
+    >
+      <div className="card border border-accent-soft p-3 shadow-2xl ring-1 ring-black/5">
         <div className="mb-2 flex items-baseline gap-2">
-          <h2 className="text-sm font-semibold">
+          <h2 className="text-sm font-semibold tabular-nums">
             {slotToTime(current)}–{slotToTime(current + 1)}
           </h2>
           <span className="text-xs text-muted">what were you doing?</span>
@@ -292,7 +336,10 @@ export default function CaptureWidget() {
             </span>
           )}
           <button
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              dismissedRef.current = true;
+              setOpen(false);
+            }}
             aria-label="Close"
             className="ml-auto text-lg leading-none text-faint hover:text-ink"
           >

@@ -107,3 +107,17 @@
 .daygrid th {
   @apply select-none border p-0 text-[11px] leading-none;
 }
+
+
+/* Quick Capture, Outlook-reminder style: slides up from the bottom-right
+   corner rather than appearing. Respects reduced-motion. */
+@keyframes daymax-reminder-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.daymax-reminder {
+  animation: daymax-reminder-in 160ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .daymax-reminder { animation: none; }
+}
