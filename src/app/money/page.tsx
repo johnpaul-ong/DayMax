@@ -20,6 +20,7 @@ import { localToday } from "@/lib/dates";
 import NonEssential from "./non-essential";
 import IncomeView from "./income";
 import BudgetMeter from "./budget-meter";
+import IncomeRing, { type RingSlice } from "./income-ring";
 import { BoardNotice, ChartEmpty } from "../empty-chart";
 import { categorySwatch, GROUP_COLOR, splitAndColour } from "@/lib/moneyColors";
 import {
@@ -148,18 +149,22 @@ export default function MoneyPage() {
         </div>
       )}
 
-      {/* The big radial meter lives here as the first Money element, not
-          buried inside the Insight tab. It's the only thing that works with
-          one data point and colours itself by diagnosis. */}
+      {/* THE canonical Money visual: your income for the month as a full
+          ring, split into essential (cool green shades, one per category),
+          non-essential (warm red shades) and unspent (grey). Same shape for
+          every person; the panel version on the challenge board just tiles
+          these side by side. */}
       {summary && (
-        <div className="mb-3">
-          <BudgetMeter
-            spend={entries.filter((e) => {
-              const c = cats.find((c) => c.id === e.categoryId);
-              return c && !c.essential;
-            }).map((e) => ({ date: e.date, amount: e.amount }))}
-            budget={null}
-            monthlyIncome={summary.income || null}
+        <div className="card mb-3 p-5">
+          <IncomeRing
+            slices={byCat.map<RingSlice>((c) => ({
+              categoryId: c.categoryId,
+              name: c.name,
+              essential: c.essential,
+              amount: c.total,
+            }))}
+            income={summary.income || null}
+            size={300}
           />
         </div>
       )}
@@ -195,17 +200,6 @@ export default function MoneyPage() {
 
       {tab === "insight" && (
         <div className="space-y-6">
-          {/* Meter first: it works with ONE data point, unlike the trend
-              charts. New users have to see something alive. */}
-          <BudgetMeter
-            spend={(entries ?? []).filter((e) => {
-              const c = cats.find((c) => c.id === e.categoryId);
-              return c && !c.essential;
-            }).map((e) => ({ date: e.date, amount: e.amount }))}
-            budget={null}
-            monthlyIncome={summary?.income ?? null}
-            currency={undefined}
-          />
           <IncomeView />
           <NonEssential />
           <Insight byCat={byCat} daily={daily} summary={summary} />

@@ -324,6 +324,8 @@ export interface PursuitMember {
   /** Can you open their profile? Names only link through when true. */
   isVisible: boolean;
   team: string;
+  /** ISO date of the last activity relevant to this pursuit, or null if never. */
+  lastLogged: string | null;
 }
 
 /** Who else is in this pursuit. */
@@ -337,6 +339,7 @@ export async function fetchPursuitMembers(pursuitId: string): Promise<PursuitMem
     isDemo: !!r.is_demo,
     isVisible: !!r.is_visible,
     team: r.team ?? "light",
+    lastLogged: r.last_logged ? String(r.last_logged) : null,
   }));
 }
 

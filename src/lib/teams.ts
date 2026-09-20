@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Teams: Light, Dark, Cottage and iOS. Your team is your theme — picking a look at
+ * Teams: Light, Dark and Cottage. Your team is your theme — picking a look at
  * signup enlists you, so there's no extra decision and the association is
  * immediate. Every pursuit gets a team scoreboard alongside the personal one.
  */
@@ -15,7 +15,6 @@ export const TEAMS: Array<{ key: Team; label: string; icon: string; color: strin
   { key: "light", label: "Light", icon: "☀️", color: "#f59e0b" },
   { key: "dark", label: "Midnight", icon: "🌙", color: "#6366f1" },
   { key: "cottage", label: "Cottage", icon: "🍃", color: "#16a34a" },
-  { key: "ios", label: "iOS", icon: "📱", color: "#007aff" },
 ];
 
 export function teamMeta(key: string) {

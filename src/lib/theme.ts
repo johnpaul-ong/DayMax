@@ -2,12 +2,11 @@
 
 /** Theme + accent persistence. Stored locally per device. */
 
-export type ThemeName = "light" | "dark" | "cottage" | "ios";
+export type ThemeName = "light" | "dark" | "cottage";
 export const THEMES: Array<{ name: ThemeName; label: string; icon: string }> = [
   { name: "light", label: "Light", icon: "☀️" },
   { name: "dark", label: "Midnight", icon: "🌙" },
   { name: "cottage", label: "Cottage", icon: "🍃" },
-  { name: "ios", label: "iOS", icon: "📱" },
 ];
 
 export function applyTheme(theme: ThemeName, accent?: string | null) {
@@ -20,6 +19,12 @@ export function applyTheme(theme: ThemeName, accent?: string | null) {
     root.style.removeProperty("--accent");
     root.style.removeProperty("--accent-hover");
   }
+}
+
+/** Legacy "ios" values (from when iOS was its own theme) fall through to
+ *  light -- the iOS look is now the shared texture on every theme. */
+function normaliseTheme(t: unknown): ThemeName {
+  return t === "dark" || t === "cottage" ? t : "light";
 }
 
 export function loadTheme(): { theme: ThemeName; accent: string | null } {
@@ -51,7 +56,7 @@ export async function syncThemeFromAccount(): Promise<void> {
     if (!auth.user) return;
     const { data } = await supabase.from("profiles").select("theme, accent").eq("id", auth.user.id).single();
     if (!data?.theme) return;
-    const theme = data.theme as ThemeName;
+    const theme = normaliseTheme(data.theme);
     const accent = data.accent ?? null;
     const local = loadTheme();
     if (local.theme !== theme || local.accent !== accent) {

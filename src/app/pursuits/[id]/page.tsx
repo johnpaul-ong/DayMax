@@ -73,9 +73,31 @@ import { localToday } from "@/lib/dates";
 import { fetchPursuitTeams, teamMeta, type Team, type TeamStanding } from "@/lib/teams";
 import { loadTheme } from "@/lib/theme";
 import { CHART_DANGER, CHART_OK, chartSeries } from "@/lib/chartColors";
+import DayClock, { type ClockSlot } from "../../day-clock";
+import IncomeRing, { type RingSlice } from "../../money/income-ring";
+import BigThree from "../../big-three";
+import type { DayStripRow } from "@/lib/friends";
+
+const MONEY_PURSUIT_ID = "33333333-3333-4333-8333-333333333305";
+
 
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
+
+/**
+ * "3d ago", "today", "never" — the point is to see who's ACTIVE without
+ * doing calendar arithmetic in your head.
+ */
+function lastLoggedLabel(iso: string | null, today: string): { text: string; tone: "hot" | "warm" | "cold" | "none" } {
+  if (!iso) return { text: "never", tone: "none" };
+  const d = (a: string) => new Date(a + "T00:00:00").getTime();
+  const days = Math.max(0, Math.round((d(today) - d(iso)) / 86400000));
+  if (days === 0) return { text: "today", tone: "hot" };
+  if (days === 1) return { text: "yesterday", tone: "hot" };
+  if (days < 7) return { text: `${days}d ago`, tone: "warm" };
+  if (days < 30) return { text: `${Math.round(days / 7)}w ago`, tone: "cold" };
+  return { text: `${Math.round(days / 30)}mo ago`, tone: "cold" };
+}
 export default function PursuitPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -304,6 +326,10 @@ export default function PursuitPage() {
         <MineView pursuit={pursuit} stats={visibleStats} logHref={logHref} onChanged={reload} />
       ) : (
         <>
+      {/* ONE signature graph at the very top of every pursuit's community
+          view. Same slot, per-kind visual. See SignatureVisual comment. */}
+      <SignatureVisualForPursuit pursuit={pursuit} />
+
       <PursuitPreview pursuit={pursuit} onJoined={reload} />
 
       <TeamStandings pursuitId={id} />
@@ -632,6 +658,132 @@ function MyStat({
  * and charts were behind membership, so there was nothing to be curious about
  * and no reason to join.
  */
+
+/**
+ * The one signature graph per pursuit. Every pursuit landing page opens with
+ * ITS OWN visual identity, not a wall of text before the good stuff:
+ *
+ *   life    -> aggregate day-clock (spiral): most common activity by hour
+ *   lifts   -> big-three donut (squat / dead / bench), read at a glance
+ *   money   -> income ring, split essential / non-essential / unspent
+ *   custom  -> a stat-summary bar for the first visible stat; the community
+ *              charts below still work, this just gives every pursuit a hero
+ *
+ * Callers pass the same `pursuit` object plus optional per-kind data. Missing
+ * data resolves to a friendly "log something and this fills" rather than an
+ * empty axis grid.
+ */
+function SignatureVisualForPursuit({ pursuit }: { pursuit: Pursuit }) {
+  const [lifeStrip, setLifeStrip] = useState<DayStripRow[] | undefined>();
+  const [lifts, setLifts] = useState<Array<{ date: string; exercise: string; weightKg: number | null }> | undefined>();
+  const [moneySlices, setMoneySlices] = useState<RingSlice[] | undefined>();
+  const [moneyIncome, setMoneyIncome] = useState<number | null | undefined>();
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (pursuit.kind === "life") {
+        // aggregate across every member's shared day strip -- one query per
+        // pursuit, capped by the RPC
+        try {
+          const { fetchAllDayEntries } = await import("@/lib/data");
+          const es = await fetchAllDayEntries();
+          if (alive) setLifeStrip(es.map((e) => ({ date: e.date, slot: e.slot, category: e.category, label: e.label ?? null })));
+        } catch {
+          if (alive) setLifeStrip([]);
+        }
+      } else if (pursuit.kind === "lifts") {
+        try {
+          const { fetchLifts } = await import("@/lib/data");
+          const rows = await fetchLifts();
+          if (alive) setLifts(rows.map((l) => ({ date: l.date, exercise: l.exercise, weightKg: l.weightKg })));
+        } catch {
+          if (alive) setLifts([]);
+        }
+      } else if (pursuit.id === MONEY_PURSUIT_ID) {
+        try {
+          const { fetchByCategory, fetchSummary } = await import("@/lib/money");
+          const today = localToday();
+          const from = today.slice(0, 7) + "-01";
+          const [y, m2] = today.split("-").map(Number);
+          const to = `${today.slice(0, 7)}-${String(new Date(y, m2, 0).getDate()).padStart(2, "0")}`;
+          const [cats, sum] = await Promise.all([fetchByCategory(from, to), fetchSummary(from, to).catch(() => null)]);
+          if (!alive) return;
+          setMoneySlices(cats.map((c) => ({ categoryId: c.categoryId, name: c.name, essential: c.essential, amount: c.total })));
+          setMoneyIncome(sum?.income ?? null);
+        } catch {
+          if (alive) { setMoneySlices([]); setMoneyIncome(null); }
+        }
+      }
+    })();
+    return () => { alive = false; };
+  }, [pursuit.id, pursuit.kind]);
+
+  return <SignatureVisual pursuit={pursuit} lifeStrip={lifeStrip} lifts={lifts} moneySlices={moneySlices} moneyIncome={moneyIncome} />;
+}
+
+function SignatureVisual({
+  pursuit,
+  lifeStrip,
+  lifts,
+  moneySlices,
+  moneyIncome,
+}: {
+  pursuit: Pursuit;
+  lifeStrip?: DayStripRow[];
+  lifts?: Array<{ date: string; exercise: string; weightKg: number | null }>;
+  moneySlices?: RingSlice[];
+  moneyIncome?: number | null;
+}) {
+  // Life: typical day as a spiral clock, most common category per quarter hour.
+  if (pursuit.kind === "life" && lifeStrip && lifeStrip.length > 0) {
+    const perSlot = new Map<number, Map<number, number>>();
+    for (const r of lifeStrip) {
+      if (!perSlot.has(r.slot)) perSlot.set(r.slot, new Map());
+      const m = perSlot.get(r.slot)!;
+      m.set(r.category, (m.get(r.category) ?? 0) + 1);
+    }
+    const clockSlots = new Map<number, ClockSlot>();
+    for (const [slot, counts] of perSlot) {
+      const [cat] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      clockSlots.set(slot, { category: cat });
+    }
+    return (
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">A typical day here</h2>
+        <p className="mb-3 text-sm text-muted">
+          Every logged day in this pursuit collapsed onto one dial — the most common thing at each quarter hour.
+        </p>
+        <DayClock slots={clockSlots} />
+      </section>
+    );
+  }
+
+  if (pursuit.kind === "lifts" && lifts && lifts.length > 0) {
+    return (
+      <section className="card p-4">
+        <BigThree rows={lifts} title="The big three, this pursuit" />
+      </section>
+    );
+  }
+
+  if (pursuit.id === MONEY_PURSUIT_ID && moneySlices) {
+    return (
+      <section className="card p-4">
+        <h2 className="mb-1 font-semibold">This month, on your income</h2>
+        <p className="mb-3 text-sm text-muted">
+          Everything you make, split three ways. Same shape every person gets — panel of these on Budget Baddies.
+        </p>
+        <IncomeRing slices={moneySlices} income={moneyIncome ?? null} size={300} />
+      </section>
+    );
+  }
+
+  // Fallback for custom pursuits without a hero: a quiet placeholder rather
+  // than nothing. The rest of the page still renders as before.
+  return null;
+}
+
 function PursuitPreview({ pursuit, onJoined }: { pursuit: Pursuit; onJoined: () => void }) {
   const [stats, setStats] = useState<StatSummary[]>([]);
   const [activity, setActivity] = useState<ActivityWeek[]>([]);
@@ -899,6 +1051,13 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
                   {m.role === "owner" && " · owner"}
                   {m.isDemo && " · legend"}
                 </span>
+                {/* who's active vs a ghost — the ONE bit of info a member card
+                    was missing. Tone colours a hot/warm/cold chip. */}
+                {(() => {
+                  const ll = lastLoggedLabel(m.lastLogged, localToday());
+                  const tint = ll.tone === "hot" ? "text-ok" : ll.tone === "warm" ? "text-warn" : "text-faint";
+                  return <span className={`block truncate text-[10px] ${tint}`}>· {ll.text}</span>;
+                })()}
               </span>
             </>
           );
