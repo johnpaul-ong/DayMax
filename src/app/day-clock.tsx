@@ -316,11 +316,16 @@ export default function DayClock({
           }
         }}
       >
-        {/* ring backgrounds, so empty time still reads as time */}
+        {/* Empty-track background rings, at the SAME opacity so an
+            unfilled AM ring reads as the sibling of an unfilled PM
+            ring. The outer used to sit at 0.55 (paler) which paired
+            with the old AM-dim-by-default and made the whole clock
+            look asymmetric. Now both rings are full-tone and both
+            tracks are the same surface. */}
         {mode === "rings" && (
           <>
             <circle cx={C} cy={C} r={(INNER.r0 + INNER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={INNER.r1 - INNER.r0} />
-            <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} opacity={0.55} />
+            <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} />
           </>
         )}
         {/* The AM/PM seam is a SOLID band between the two rings, in the
@@ -364,9 +369,15 @@ export default function DayClock({
           </>
         )}
 
-        {/* base fill layer (rings mode). Spiral mode renders below. */}
+        {/* base fill layer (rings mode). Spiral mode renders below.
+            Both rings render at FULL opacity now -- the old AM at
+            0.72 was there to visually distinguish inner from outer,
+            but the explicit AM/PM chips already carry that identity,
+            so dimming AM just made every morning category look
+            washed out and muddy against a light card ("the circles
+            in AM is ugly in light mode"). */}
         {mode === "rings" && Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
-          const { ring, a0, a1, pm } = geom(s);
+          const { ring, a0, a1 } = geom(s);
           const v = slots.get(s);
           const fill = v ? categoryColor(v.category) : "transparent";
           return (
@@ -375,7 +386,7 @@ export default function DayClock({
               data-slot={s}
               d={wedge(ring.r0, ring.r1, a0, a1)}
               fill={fill}
-              opacity={fill === "transparent" ? 0 : pm ? 1 : 0.72}
+              opacity={fill === "transparent" ? 0 : 1}
               stroke="var(--page)"
               strokeWidth={0.6}
               style={{ cursor: onSelect || onPaint ? "crosshair" : "default" }}
