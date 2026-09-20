@@ -23,8 +23,9 @@ import Recap from "./recap";
 
 const HOME_SECTIONS = [
   { key: "strip", label: "Every day, every 15 minutes" },
-  { key: "today", label: "Today" },
-  { key: "week", label: "This week" },
+  { key: "todayWeek", label: "Today & this week" },
+  { key: "today", label: "Today (legacy — off)" },
+  { key: "week", label: "This week (legacy — off)" },
   { key: "life", label: "Your life" },
 ] as const;
 type HomeKey = (typeof HOME_SECTIONS)[number]["key"];
@@ -40,6 +41,10 @@ function loadLayout(): Array<{ key: HomeKey; visible: boolean }> {
     const raw = localStorage.getItem("daymax-home-layout");
     if (!raw) return [...DEFAULT_LAYOUT];
     const saved = JSON.parse(raw) as Array<{ key: HomeKey; visible: boolean }>;
+    // Migrate: anyone with an old layout that lists 'today'/'week' visible
+    // gets todayWeek in their layout too, once. Existing choices preserved.
+    const hasNew = saved.some((s) => s.key === "todayWeek");
+    if (!hasNew) saved.unshift({ key: "todayWeek", visible: true });
     const known = saved.filter((s) => HOME_SECTIONS.some((h) => h.key === s.key));
     for (const d of DEFAULT_LAYOUT) if (!known.some((s) => s.key === d.key)) known.push(d);
     return known;
@@ -267,22 +272,29 @@ export default function HomePage() {
       .map(([code, hours]) => ({ code: Number(code), hours }));
   }, [todayEntries]);
 
-  function statRow(t: ReturnType<typeof bucketize> | null) {
+  // Each section emits multiple bento tiles as a Fragment: a full-width label
+  // row, then individual Stat tiles spanning 2 or 3 of the 6-track grid. The
+  // stat sizes were chosen so a section fills exactly two rows (2+2+2 then
+  // 3+3), which keeps the bento grid on a clean 6-column beat. Each wrapper is
+  // a flex container so Stat's existing `flex-1` lets the card stretch to the
+  // row's tallest sibling — otherwise tiles with `sub` text tower over plain
+  // ones and the row looks ragged.
+  function statTiles(t: ReturnType<typeof bucketize> | null) {
     return (
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Stat label="Productive" value={`${(t?.productive ?? 0).toFixed(1)}h`} color={colors.productive} />
-        <Stat label="Brainrot" value={`${(t?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} />
-        <Stat label="Other" value={`${(t?.other ?? 0).toFixed(1)}h`} color={colors.other} />
-        <Stat label="Focus score" value={t && focusScore(t) !== null ? `${focusScore(t)}` : "—"} sub="productive ÷ (productive + brainrot) × 100" />
-        <Stat label="WorkMax" value={t && workMax(t) !== null ? `${workMax(t)}` : "—"} sub="focus ÷ 100 × productive hours" />
-      </div>
+      <>
+        <div className="flex sm:col-span-2"><Stat label="Productive" value={`${(t?.productive ?? 0).toFixed(1)}h`} color={colors.productive} /></div>
+        <div className="flex sm:col-span-2"><Stat label="Brainrot" value={`${(t?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} /></div>
+        <div className="flex sm:col-span-2"><Stat label="Other" value={`${(t?.other ?? 0).toFixed(1)}h`} color={colors.other} /></div>
+        <div className="flex sm:col-span-3"><Stat label="Focus score" value={t && focusScore(t) !== null ? `${focusScore(t)}` : "—"} sub="productive ÷ (productive + brainrot) × 100" /></div>
+        <div className="flex sm:col-span-3"><Stat label="WorkMax" value={t && workMax(t) !== null ? `${workMax(t)}` : "—"} sub="focus ÷ 100 × productive hours" /></div>
+      </>
     );
   }
 
   const SECTION_RENDER: Record<HomeKey, () => React.ReactNode> = {
     strip: () => (
-      <section key="strip">
-        <div className="mb-2 flex flex-wrap items-baseline gap-2">
+      <Fragment key="strip">
+        <div className="flex flex-wrap items-baseline gap-2 sm:col-span-6">
           <h2 className="text-sm font-semibold text-muted">Every day, every 15 minutes</h2>
           {allEntries !== null && unloggedDays > 0 && (
             <button
@@ -296,36 +308,64 @@ export default function HomePage() {
             </button>
           )}
         </div>
-        {allEntries === null ? (
-          <p className="text-sm text-faint">Loading your year…</p>
-        ) : (
-          <YearStrip entries={allEntries} showUnlogged={showUnlogged} />
-        )}
-      </section>
+        <div className="sm:col-span-6">
+          {allEntries === null ? (
+            <p className="text-sm text-faint">Loading your year…</p>
+          ) : (
+            <YearStrip entries={allEntries} showUnlogged={showUnlogged} />
+          )}
+        </div>
+      </Fragment>
     ),
-    today: () => (
-      <section key="today">
-        <h2 className="mb-2 text-sm font-semibold text-muted">Today</h2>
-        {statRow(todayTotals)}
-        {todayTopCats.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {todayTopCats.map((c) => (
-              <span key={c.code} className="inline-flex items-center gap-1.5 rounded-full border bg-surface px-3 py-1 text-xs font-medium">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: categoryColor(c.code) }} />
-                {categoryName(c.code)} · {c.hours.toFixed(1)}h
+    todayWeek: () => (
+      <div key="todayweek" className="card p-4 sm:col-span-6">
+        {/* Today AND this week in ONE compact card. The old layout rendered
+            a full 5-tile row twice -- once for Today, once for This week --
+            so WorkMax and Focus each appeared FIVE times down the page. */}
+        <div className="mb-3 flex flex-wrap items-baseline gap-2">
+          <h2 className="font-semibold">Today &amp; this week</h2>
+          <span className="text-xs text-faint">·</span>
+          <span className="text-xs text-muted">from {ws.slice(5)}</span>
+          {todayTopCats.slice(0, 3).map((c) => (
+            <span key={c.code} className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-surface px-2.5 py-0.5 text-xs font-medium last:mr-0">
+              <span className="h-2 w-2 rounded-full" style={{ background: categoryColor(c.code) }} />
+              {categoryName(c.code)} · {c.hours.toFixed(1)}h
+            </span>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+          <span className="text-xs text-faint">Metric</span>
+          <span className="text-right text-xs font-medium uppercase tracking-wider text-faint">Today</span>
+          <span className="text-right text-xs font-medium uppercase tracking-wider text-faint">This week</span>
+
+          {/* one row per metric -- no more parallel columns of five duplicated cards */}
+          {[
+            { label: "Productive", get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.productive.toFixed(1)}h` : "—", color: colors.productive },
+            { label: "Brainrot",   get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.brainrot.toFixed(1)}h` : "—", color: colors.brainrot },
+            { label: "Other",      get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.other.toFixed(1)}h` : "—",   color: colors.other },
+            { label: "Focus",      get: (t: ReturnType<typeof bucketize> | null) => t && focusScore(t) !== null ? `${focusScore(t)}` : "—" },
+            { label: "WorkMax",    get: (t: ReturnType<typeof bucketize> | null) => t && workMax(t) !== null ? `${workMax(t)}` : "—" },
+          ].map((r) => (
+            <Fragment key={r.label}>
+              <span className="flex items-center gap-2 text-muted">
+                {r.color && <span className="h-2 w-2 rounded-full" style={{ background: r.color }} />}
+                {r.label}
               </span>
-            ))}
-          </div>
-        )}
-      </section>
+              <span className="text-right tabular-nums stat-num" style={{ fontSize: "1.15rem" }}>{r.get(todayTotals)}</span>
+              <span className="text-right tabular-nums text-muted">{r.get(weekTotals)}</span>
+            </Fragment>
+          ))}
+        </div>
+      </div>
     ),
-    week: () => (
-      <section key="week">
-        <h2 className="mb-2 text-sm font-semibold text-muted">This week (from {ws.slice(5)})</h2>
-        {statRow(weekTotals)}
-      </section>
-    ),
-    life: () => (life ? <section key="life">{<LifeCard life={life} country={country} />}</section> : null),
+    today: () => null,   // superseded by todayWeek, kept in map for TS exhaustiveness
+    week: () => null,
+    life: () =>
+      life ? (
+        <div key="life" className="sm:col-span-6">
+          <LifeCard life={life} country={country} />
+        </div>
+      ) : null,
   };
 
   return (
@@ -343,13 +383,20 @@ export default function HomePage() {
       {/* only pitch installing once they've actually logged something */}
       <InstallPrompt canPrompt={weekEntries.length > 20} />
 
-      <StreakCard />
-
-      {loading ? (
-        <p className="text-sm text-muted">Loading your day…</p>
-      ) : (
-        layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
-      )}
+      {/* Bento: 6-track grid so tiles can span 2/3/6 for mixed sizes on desktop,
+          collapsing to a single column on mobile. StreakCard sits as a full-
+          width hero; each customizable section unfolds into a header tile plus
+          its own stat tiles, so reorder / hide still works via the layout map. */}
+      <div className="bento">
+        <div className="sm:col-span-6">
+          <StreakCard />
+        </div>
+        {loading ? (
+          <p className="text-sm text-muted sm:col-span-6">Loading your day…</p>
+        ) : (
+          layout.filter((s) => s.visible).map((s) => SECTION_RENDER[s.key]())
+        )}
+      </div>
 
       <Recap />
 

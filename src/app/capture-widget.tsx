@@ -350,8 +350,9 @@ export default function CaptureWidget() {
        ABOVE the tab bar instead of on top of it — the widget is z-50 and
        MobileNav is z-40, so it was covering the navigation. */
     <div
-      className="daymax-reminder fixed z-50 sm:right-4 sm:left-auto sm:w-[360px]
-                 left-2 right-2 bottom-[calc(56px+env(safe-area-inset-bottom)+0.5rem)] sm:bottom-4"
+      className="daymax-reminder fixed z-50 sm:right-6 sm:left-auto sm:bottom-6 sm:w-[380px]
+                 left-2 right-2 bottom-[calc(56px+env(safe-area-inset-bottom)+0.5rem)]
+                 max-h-[calc(100vh-3rem)] overflow-auto"
       role="dialog"
       aria-label="What were you doing?"
       onMouseDown={() => inputRef.current?.focus()}
