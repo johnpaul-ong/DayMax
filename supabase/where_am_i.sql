@@ -57,7 +57,7 @@ select column_name, data_type
 --    challenge_standings/daily/categories = 0038 standings functions
 --    pursuit_member_list = 0039 (member list)
 --    challenge_income = 0036 (Budget Baddies)
-select proname, pg_get_function_arguments(oid) as args
+select proname, pg_get_function_arguments(p.oid) as args
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
  where n.nspname = 'public'
