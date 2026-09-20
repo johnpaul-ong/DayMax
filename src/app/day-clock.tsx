@@ -40,7 +40,13 @@ export interface ClockSlot {
  */
 export type ClockMode = "spiral" | "rings";
 
-const SIZE = 440;
+/**
+ * viewBox size. Grown from 440 to 500 to keep the 1-12 rim numbers INSIDE
+ * the SVG -- at 440, the 12 (top) and 6 (bottom) landed at y = -2 and
+ * y = 442, both outside the frame and both invisible. The rings inside
+ * stay their old size; only the padding grows.
+ */
+const SIZE = 500;
 const C = SIZE / 2;
 /**
  * The two rings are visually separated: a clear gap between AM and PM, plus a
@@ -285,28 +291,30 @@ export default function DayClock({
             <circle cx={C} cy={C} r={OUTER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
             <circle cx={C} cy={C} r={INNER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
             <circle cx={C} cy={C} r={OUTER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-            {/* AM/PM chips on each ring at the 9-o'clock label position --
-                labels sit OUTSIDE their respective circles (per the user's
-                fallback plan: outer rim gets 1-12, each ring gets its own
-                AM/PM label on its outside). 9 o'clock avoids collisions
-                with the "12" and "6" number labels. */}
+            {/* AM/PM chips sit ON their own ring's body at the 9-o'clock
+                position. Previous version put PM at OUTER.r1 + 22 which
+                clipped off the left of the viewBox; the "outside the
+                circle" language reads better when the label ends up ON
+                the ring rather than beyond it, and there's no crowding
+                with the rim numbers. Contrast against the empty-track
+                fill is enough at fontWeight 800. */}
             <text
-              x={C - (OUTER.r1 + 22)}
+              x={C - (OUTER.r0 + OUTER.r1) / 2}
               y={C}
               textAnchor="middle"
               dominantBaseline="central"
               className="fill-muted"
-              style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em" }}
+              style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.18em" }}
             >
               PM
             </text>
             <text
-              x={C - (INNER.r1 + GAP / 2)}
+              x={C - (INNER.r0 + INNER.r1) / 2}
               y={C}
               textAnchor="middle"
               dominantBaseline="central"
-              className="fill-faint"
-              style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em" }}
+              className="fill-muted"
+              style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.18em" }}
             >
               AM
             </text>
@@ -545,19 +553,15 @@ export default function DayClock({
             )}
           </>
         ) : (
-          <>
-            <text x={C} y={C - 10} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              {mode === "spiral" ? "AM inside" : "AM inside"}
+          // The "AM inside / PM outside" centre pair was redundant once the
+          // AM/PM labels moved onto the rings themselves -- the picture
+          // already says what half you're on. Leave the centre clean;
+          // the drag hint is enough context for the paint case.
+          onPaint ? (
+            <text x={C} y={C} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
+              drag to fill
             </text>
-            <text x={C} y={C + 8} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              {mode === "spiral" ? "PM outside" : "PM outside"}
-            </text>
-            {onPaint && (
-              <text x={C} y={C + 28} textAnchor="middle" className="fill-faint" style={{ fontSize: 10 }}>
-                drag to fill
-              </text>
-            )}
-          </>
+          ) : null
         )}
       </svg>
     </div>

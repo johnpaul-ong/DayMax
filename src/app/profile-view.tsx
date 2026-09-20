@@ -591,16 +591,21 @@ const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 function ProfileMoneySummary() {
   const [sum, setSum] = useState<{ total: number; essential: number; nonEssential: number; income: number; nonEssentialPct: number | null } | null>(null);
   const [byCat, setByCat] = useState<Array<{ categoryId: string | null; name: string; essential: boolean; total: number }>>([]);
+  const [rangeLabel, setRangeLabel] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     (async () => {
       try {
         const m = await import("@/lib/money");
         const today = localToday();
-        const month = today.slice(0, 7);
-        const [y, mo] = month.split("-").map(Number);
-        const from = `${month}-01`;
-        const to = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+        // Since the last income row, so the summary matches the pay
+        // period you actually live in. Fall back to the calendar month
+        // when there's no income logged yet (otherwise the range would
+        // be null and the fetch would blow up).
+        const last = await m.lastPaycheckDate().catch(() => null);
+        const from = last ?? `${today.slice(0, 7)}-01`;
+        const to = today;
+        setRangeLabel(last ? `since your last paycheck (${last})` : "this month");
         const [s, cats] = await Promise.all([m.fetchSummary(from, to), m.fetchByCategory(from, to)]);
         setSum(s);
         setByCat(cats);
@@ -609,12 +614,12 @@ function ProfileMoneySummary() {
     })();
   }, []);
   if (!loaded) return null;
-  // Nothing logged this month AND no income -- render a tiny CTA so the
-  // section isn't a dead space, rather than nothing at all.
+  // Nothing logged in this window AND no income -- render a tiny CTA
+  // so the section isn't a dead space, rather than nothing at all.
   if (!sum || (sum.total === 0 && sum.income === 0)) {
     return (
       <section>
-        <h2 className="mb-2 font-semibold">This month, on money</h2>
+        <h2 className="mb-2 font-semibold">Money</h2>
         <p className="card p-4 text-sm text-muted">
           Nothing logged yet. Head to <Link href="/money" className="text-accent hover:underline">Money</Link> to add a spend or your income; the same ring you see on the challenge board will show up here.
         </p>
@@ -623,7 +628,10 @@ function ProfileMoneySummary() {
   }
   return (
     <section>
-      <h2 className="mb-2 font-semibold">This month, on money</h2>
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+        <h2 className="font-semibold">Money</h2>
+        <span className="text-xs text-faint">{rangeLabel}</span>
+      </div>
       <div className="card p-4">
         <IncomeRing
           slices={byCat.map((c) => ({ categoryId: c.categoryId, name: c.name, essential: c.essential, amount: c.total }))}

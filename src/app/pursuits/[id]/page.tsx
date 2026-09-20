@@ -562,13 +562,21 @@ function MyMoney() {
   const [byCat, setByCat] = useState<Array<{ categoryId: string | null; name: string; essential: boolean; total: number }>>([]);
   const [entries, setEntries] = useState<Array<{ id: string; date: string; amount: number; categoryId: string | null; item: string | null }>>([]);
   const [cats, setCats] = useState<Array<{ id: string; name: string; essential: boolean }>>([]);
+  // Window we're actually summarising. "Since last paycheck" is the
+  // pay-period a person lives in; a calendar month is an accountant's
+  // window. If nothing has ever been logged as income, fall back to
+  // this month so the page isn't empty.
+  const [rangeFrom, setRangeFrom] = useState<string | null>(null);
+  const [rangeLabel, setRangeLabel] = useState<string>("");
   useEffect(() => {
     (async () => {
       const m = await import("@/lib/money");
-      const month = localToday().slice(0, 7);
-      const [y, mo] = month.split("-").map(Number);
-      const from = `${month}-01`;
-      const to = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+      const today = localToday();
+      const last = await m.lastPaycheckDate().catch(() => null);
+      const from = last ?? `${today.slice(0, 7)}-01`;
+      const to = today;
+      setRangeFrom(from);
+      setRangeLabel(last ? `since your last paycheck (${last})` : "this month (no income logged yet)");
       m.fetchSummary(from, to).then(setSum).catch(() => {});
       m.fetchByCategory(from, to).then(setByCat).catch(() => {});
       m.fetchSpend(from, to).then((rs) => setEntries(rs.map((r) => ({ id: r.id, date: r.date, amount: r.amount, categoryId: r.categoryId, item: r.item ?? null })))).catch(() => {});
@@ -597,7 +605,10 @@ function MyMoney() {
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold">Your month</h2>
+      <div className="mb-3 flex flex-wrap items-baseline gap-x-2">
+        <h2 className="font-semibold">Your pay period</h2>
+        <span className="text-xs text-faint">{rangeLabel}</span>
+      </div>
 
       {/* The one canonical Money visual. Same shape you show to everyone
           else -- Mine tab and Community tab now speak one language. */}

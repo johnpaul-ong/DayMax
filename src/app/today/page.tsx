@@ -39,23 +39,18 @@ export default function TodayPage() {
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
 
-  // First-run coach. Category defaults to 0, which is a valid category — so
-  // "picked" cannot mean "cat != null". It has to track whether the user
-  // has actually tapped the picker, otherwise the coach reads step 1 as
-  // done before you have done anything.
+  // Category defaults to 0 (a valid code), so "picked" cannot mean
+  // "cat != null". It tracks whether the user has actually tapped the
+  // picker -- otherwise step 1 lights up before anything has happened.
   const [catPicked, setCatPicked] = useState(false);
-  // Start with the coach hidden so returning users never see a flash of
-  // it before localStorage is read; the effect below flips it on for
-  // first-timers.
-  const [coached, setCoached] = useState(true);
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("daymax-today-coached") !== "1") setCoached(false);
-    } catch {}
-  }, []);
+  // Step 3 (Fill) is transient: it flashes green after a successful fill
+  // and then the whole tracker resets to zero. See fill() below.
+  const [justFilled, setJustFilled] = useState(false);
   const hasSelection = from != null && until != null;
   const ready = hasSelection; // cat is always a number, so cat != null is always true
-  const coachStep = !catPicked ? 1 : !hasSelection ? 2 : 3;
+  const step1Done = catPicked;
+  const step2Done = hasSelection;
+  const step3Done = justFilled;
 
   useEffect(() => {
     fetchDayEntries(date, date)
@@ -98,12 +93,15 @@ export default function TodayPage() {
       }
       setCells(next);
       await upsertDayEntries(entries);
-      setFrom(null);
-      setUntil(null);
-      // First successful fill retires the coach. localStorage so returning
-      // users on a fresh reload do not see it again.
-      try { localStorage.setItem("daymax-today-coached", "1"); } catch {}
-      setCoached(true);
+      // Flash step 3 green, then reset the whole tracker: category
+      // un-picked, selection cleared, back to a fresh step-1 state.
+      setJustFilled(true);
+      setTimeout(() => {
+        setJustFilled(false);
+        setCatPicked(false);
+        setFrom(null);
+        setUntil(null);
+      }, 700);
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
@@ -203,20 +201,13 @@ export default function TodayPage() {
         className="mb-3 w-full rounded-lg border px-3 py-2 text-sm"
       />
 
-      <div className="mb-3 flex items-center gap-2 text-sm">
+      <div className="mb-2 flex items-center gap-2 text-sm">
         <span className="w-10 text-muted">{from != null ? slotToTime(from) : "from"}</span>
         <span>→</span>
         <span className="w-10 text-muted">{until != null ? slotToTime(until) : "until"}</span>
-        {ready && (
-          <span className="text-xs font-medium text-accent">→ tap Fill</span>
-        )}
         <button
           onClick={() => void fill()}
           disabled={from == null || until == null || saving}
-          // Ready-state: bright accent + pulsing accent ring on top of the
-          // surface, so the Fill button stops looking like the Clear button
-          // once a selection exists. Ring uses ring-offset in the page
-          // surface colour so it reads as a halo rather than a border.
           className={`ml-auto rounded-lg bg-accent px-4 py-2 font-semibold text-accent-contrast transition disabled:opacity-40 ${
             ready && !saving
               ? "shadow-lg shadow-accent/40 ring-2 ring-accent ring-offset-2 ring-offset-surface animate-pulse"
@@ -230,29 +221,16 @@ export default function TodayPage() {
         </button>
       </div>
 
-      {/* First-run coach. The clock uses onSelect (not onPaint), so the
-          "drag to fill" hint baked into the clock never appears — a first
-          drag releases with no visible commit and the small Fill button
-          in the toolbar goes unnoticed. This numbered strip stands in for
-          that, and each step lights up as its condition is met. Retires
-          after the first successful Fill and stays retired via
-          localStorage `daymax-today-coached`. */}
-      {!coached && (
-        <div className="mb-3 rounded-lg border border-accent bg-accent-soft px-3 py-2.5 text-xs">
-          <div className="mb-1.5 font-semibold text-accent">Log your first slot</div>
-          <ol className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <li className={coachStep === 1 ? "font-semibold text-ink" : "text-faint line-through decoration-1"}>
-              1. Pick a category
-            </li>
-            <li className={coachStep === 2 ? "font-semibold text-ink" : coachStep > 2 ? "text-faint line-through decoration-1" : "text-muted"}>
-              2. Drag on the clock
-            </li>
-            <li className={coachStep === 3 ? "font-semibold text-accent" : "text-muted"}>
-              3. Tap Fill
-            </li>
-          </ol>
-        </div>
-      )}
+      {/* Three-step tracker, always visible. Sits under the from/until
+          readout so it's in the same place your eye lands after a drag.
+          Each step lights up green when its condition is met; Fill
+          flashes green briefly then resets the whole tracker. Replaces
+          the old top-of-page "Log your first slot" card. */}
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+        <StepChip done={step1Done} label="Pick a category" />
+        <StepChip done={step2Done} label="Drag on the clock" />
+        <StepChip done={step3Done} label="Fill" flash={step3Done} />
+      </div>
 
       {/* The day as a clock. 96 slots is exactly 2 rings x 12 hours x 4
           quarters, so it lands on a dial with nothing left over. The hour
@@ -270,19 +248,10 @@ export default function TodayPage() {
             setUntil(b);
           }}
         />
-        {/* "No category selected" is a loud state. The category defaults
-            to 0 (a valid code), so a first-time user can drag and hit Fill
-            without ever noticing the picker at the top. This hint under
-            the clock — where their eyes already are after a drag — points
-            back up at it, then fades once the picker is used. */}
-        <p
-          className={`mt-1 text-center text-xs font-medium text-accent transition-opacity duration-500 ${
-            catPicked ? "pointer-events-none opacity-0" : "opacity-100"
-          }`}
-          aria-hidden={catPicked}
-        >
-          Pick a category first ↑
-        </p>
+        {/* The old "Pick a category first ↑" hint sat here. Retired:
+            the StepChip strip above the clock does that job now, and it
+            lives in the same spot regardless of state so the eye
+            doesn't have to hunt for a hint that appears and disappears. */}
       </div>
 
       {metrics && (
@@ -361,5 +330,29 @@ export default function TodayPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * One chip in the three-step tracker. `done` is the ONLY state that
+ * matters visually -- when it flips true, the chip goes ok-green with
+ * a checkmark; otherwise it's a quiet outline. `flash` briefly cranks
+ * the emphasis for step 3 right after a Fill so the completion reads
+ * as a moment, not a static state.
+ */
+function StepChip({ done, label, flash }: { done: boolean; label: string; flash?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition ${
+        done
+          ? `border-ok bg-ok-soft font-semibold text-ok ${flash ? "scale-105 shadow-md shadow-ok/30" : ""}`
+          : "border-border text-muted"
+      }`}
+    >
+      <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full" style={{ background: done ? "var(--ok)" : "transparent", border: done ? "none" : "1px solid var(--border)", color: done ? "var(--ok-soft)" : "transparent" }}>
+        {done ? "✓" : ""}
+      </span>
+      {label}
+    </span>
   );
 }

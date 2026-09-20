@@ -171,6 +171,26 @@ export async function deleteIncome(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * The date of the user's most recent income entry, or null if they've
+ * never logged income. Callers use this as the "since last paycheck"
+ * lower bound for a summary — the natural pay-period a person actually
+ * lives in, which almost never aligns with a calendar month.
+ */
+export async function lastPaycheckDate(): Promise<string | null> {
+  const supabase = createClient();
+  const user_id = await uid();
+  const { data, error } = await supabase
+    .from("income_entries")
+    .select("date")
+    .eq("user_id", user_id)
+    .order("date", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : null;
+  return row?.date ? String(row.date) : null;
+}
+
 export async function fetchSummary(fromDate: string, toDate: string): Promise<SpendSummary> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("spend_summary", { from_date: fromDate, to_date: toDate });
