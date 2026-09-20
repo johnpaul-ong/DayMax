@@ -71,6 +71,50 @@
   --shadow: 0 2px 3px rgb(90 80 50 / 0.08), 0 8px 20px rgb(90 80 50 / 0.08);
 }
 
+/* Stock Apple. Real iOS system colours (light appearance): systemGroupedBackground
+   for the page, secondarySystemGroupedBackground for cards, label/secondaryLabel/
+   tertiaryLabel for text, separator-weight hairlines, systemBlue as the one
+   accent. Text-carrying tokens (ok/danger/warn) use Apple's own accessible
+   variants, because standard systemGreen/Red/Orange are fill colours and fail
+   contrast as small text on white. Light only — profiles.theme stores a single
+   value per user, so there is nowhere to put a dark twin. */
+[data-theme="ios"] {
+  --page: #f2f2f7;                      /* systemGroupedBackground */
+  --surface: #ffffff;                   /* secondarySystemGroupedBackground */
+  --surface-2: #f2f2f7;                 /* systemGray6 */
+  --border: rgba(60, 60, 67, 0.18);     /* quaternaryLabel — hairline, nearly invisible */
+  --ink: #000000;                       /* label */
+  --muted: rgba(60, 60, 67, 0.6);       /* secondaryLabel */
+  --faint: rgba(60, 60, 67, 0.3);       /* tertiaryLabel */
+  --accent: #007aff;                    /* systemBlue */
+  --accent-hover: #0062cc;              /* systemBlue, pressed (darkened; Apple publishes no hex) */
+  --accent-soft: #e0efff;               /* systemBlue at 12% over white */
+  --accent-contrast: #ffffff;
+  --ok: #248a3d;                        /* systemGreen, accessible variant */
+  --ok-soft: #e7f8eb;                   /* systemGreen at 12% over white */
+  --danger: #d70015;                    /* systemRed, accessible variant */
+  --danger-soft: #ffe7e6;               /* systemRed at 12% over white */
+  --warn: #c93400;                      /* systemOrange, accessible variant */
+  --warn-soft: #fff2e0;                 /* systemOrange at 12% over white */
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 6px 16px rgb(0 0 0 / 0.04);
+}
+
+/* Type and radii, scoped to iOS only — no other theme is touched. SF via the
+   system stack; cards at iOS card radius rather than the app's roomier 1.1rem. */
+[data-theme="ios"] body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: normal;
+  letter-spacing: -0.01em;
+}
+[data-theme="ios"] .card {
+  border-radius: 13px;
+}
+[data-theme="ios"] .btn-primary,
+[data-theme="ios"] .btn-ghost,
+[data-theme="ios"] .field {
+  border-radius: 10px;
+}
+
 @layer base {
   * {
     border-color: var(--border);

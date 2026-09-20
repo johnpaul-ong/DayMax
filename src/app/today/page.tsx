@@ -12,6 +12,14 @@ import { deleteDayEntries, fetchDayEntries, fetchDayMetrics, upsertDayEntries, u
 import type { DayMetrics } from "@/lib/types";
 import { localToday } from "@/lib/dates";
 import ViewZoom from "../view-zoom";
+import DayClock, { type ClockSlot } from "../day-clock";
+
+/** Step a local ISO date by n days without tripping over month ends or DST. */
+function shiftDay(iso: string, n: number): string {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return localToday(d);
+}
 
 export default function TodayPage() {
   const todayISO = localToday();
@@ -19,6 +27,12 @@ export default function TodayPage() {
   const [cells, setCells] = useState<Map<number, { category: number; label: string | null }>>(new Map());
   const [cat, setCat] = useState<number>(0);
   const [label, setLabel] = useState("");
+  const clockSlots = useMemo(() => {
+    const m = new Map<number, ClockSlot>();
+    for (const [slot, v] of cells) m.set(slot, { category: v.category, label: v.label });
+    return m;
+  }, [cells]);
+
   const [from, setFrom] = useState<number | null>(null);
   const [until, setUntil] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,9 +63,11 @@ export default function TodayPage() {
 
   const filled = cells.size;
 
-  async function fill() {
-    if (from == null || until == null) return;
-    const [s0, s1] = from <= until ? [from, until] : [until, from];
+  async function fill(overrideFrom?: number, overrideTo?: number) {
+    const a = overrideFrom ?? from;
+    const b = overrideTo ?? until;
+    if (a == null || b == null) return;
+    const [s0, s1] = a <= b ? [a, b] : [b, a];
     setSaving(true);
     setError(null);
     try {
@@ -112,11 +128,14 @@ export default function TodayPage() {
     }
   }
 
-  const metricFields: Array<{ key: keyof Omit<DayMetrics, "date" | "notes">; label: string }> = [
-    { key: "emotionalScore", label: "Emotional /10" },
-    { key: "tired", label: "Tired /10" },
-    { key: "startFriction", label: "Start friction" },
-    { key: "endBrainFatigue", label: "Brain fatigue" },
+  // `max` marks a 0-10 judgement, which becomes a slider. Start friction and
+  // brain fatigue were unlabelled but are the same kind of thing, so they get
+  // the same instrument and finally say what scale they are on.
+  const metricFields: Array<{ key: keyof Omit<DayMetrics, "date" | "notes">; label: string; max?: number }> = [
+    { key: "emotionalScore", label: "Emotion", max: 10 },
+    { key: "tired", label: "Tired", max: 10 },
+    { key: "startFriction", label: "Start friction", max: 10 },
+    { key: "endBrainFatigue", label: "Brain fatigue", max: 10 },
     { key: "deepTime", label: "Deep time (h)" },
     { key: "weightKg", label: "Weight (kg)" },
   ];
@@ -124,10 +143,21 @@ export default function TodayPage() {
   return (
     <div className="mx-auto max-w-lg">
       <ViewZoom />
-      <div className="mb-3 flex items-center gap-2">
-        <h1 className="text-xl font-bold">Today</h1>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-bold">{date === localToday() ? "Today" : "Day"}</h1>
+        {/* step a day at a time without opening the picker */}
+        <button onClick={() => setDate(shiftDay(date, -1))} aria-label="Previous day" className="rounded-lg border px-2.5 py-1 text-sm hover:bg-surface-2">←</button>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border px-2 py-1 text-sm" />
-        <span className="text-sm text-muted">{filled}/96 filled</span>
+        <button
+          onClick={() => setDate(shiftDay(date, 1))}
+          disabled={date >= localToday()}
+          aria-label="Next day"
+          className="rounded-lg border px-2.5 py-1 text-sm hover:bg-surface-2 disabled:opacity-35"
+        >→</button>
+        {date !== localToday() && (
+          <button onClick={() => setDate(localToday())} className="text-xs font-medium text-accent hover:underline">today</button>
+        )}
+        <span className="ml-auto text-sm text-muted">{filled}/96 filled</span>
       </div>
 
       {error && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
@@ -163,55 +193,79 @@ export default function TodayPage() {
         </button>
       </div>
 
-      <div className="mb-6 grid grid-cols-8 gap-[3px]">
-        {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
-          const c = cells.get(s);
-          const isEdge = s === from || s === until;
-          const inRange = from != null && until != null && s >= Math.min(from, until) && s <= Math.max(from, until);
-          return (
-            <button
-              key={s}
-              onClick={() => {
-                if (from == null || (from != null && until != null)) {
-                  setFrom(s);
-                  setUntil(null);
-                } else setUntil(s);
-              }}
-              title={`${slotToTime(s)}${c ? ` — ${c.category} ${c.label ?? ""}` : ""}`}
-              className={`h-8 rounded-md text-[9px] leading-none ${isEdge ? "ring-2 ring-accent" : inRange ? "ring-1 ring-accent" : ""}`}
-              style={{
-                background: c ? categoryColor(c.category) : "var(--surface-2)",
-                color: c ? "rgba(255,255,255,.95)" : "var(--faint)",
-              }}
-            >
-              {c?.label ? (
-                <span className="block truncate px-0.5 text-[7px] leading-tight">{c.label}</span>
-              ) : s % 4 === 0 ? (
-                slotToTime(s)
-              ) : (
-                ""
-              )}
-            </button>
-          );
-        })}
+      {/* The day as a clock. 96 slots is exactly 2 rings x 12 hours x 4
+          quarters, so it lands on a dial with nothing left over. The hour
+          numbers sit permanently on the rim, which is why a label can no
+          longer push the time out of its own cell. */}
+      <div className="mb-3">
+        <DayClock
+          slots={clockSlots}
+          activeCategory={cat}
+          onPaint={(a, b) => {
+            setFrom(a);
+            setUntil(b);
+            void fill(a, b);
+          }}
+        />
       </div>
 
       {metrics && (
         <div className="card p-4">
           <h2 className="mb-2 font-semibold">Day metrics</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {metricFields.map((f) => (
-              <label key={f.key} className="text-xs text-muted">
-                {f.label}
-                <input
-                  type="number"
-                  step="0.5"
-                  value={metrics[f.key] ?? ""}
-                  onChange={(e) => setMetrics({ ...metrics, [f.key]: e.target.value === "" ? null : Number(e.target.value) })}
-                  className="mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-ink"
-                />
-              </label>
-            ))}
+          {/* Anything scored out of ten is a slider. Typing "7" into a spinner
+              to answer "how tired were you" is the wrong instrument — you are
+              picking a point on a scale, not entering a measurement. Free
+              quantities (deep time, weight) stay as number fields. */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            {metricFields.map((f) => {
+              const scored = f.max != null;
+              const v = metrics[f.key];
+              if (!scored) {
+                return (
+                  <label key={f.key} className="text-xs text-muted">
+                    {f.label}
+                    <input
+                      type="number"
+                      step="0.5"
+                      inputMode="decimal"
+                      value={v ?? ""}
+                      onChange={(e) => setMetrics({ ...metrics, [f.key]: e.target.value === "" ? null : Number(e.target.value) })}
+                      className="mt-0.5 w-full rounded-lg border px-2 py-1.5 text-sm text-ink"
+                    />
+                  </label>
+                );
+              }
+              return (
+                <div key={f.key} className="text-xs text-muted">
+                  <div className="flex items-baseline justify-between">
+                    <span>{f.label}</span>
+                    <span className="tabular-nums font-semibold text-ink">
+                      {v ?? "—"}
+                      {v != null && <span className="font-normal text-faint">/{f.max}</span>}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={f.max}
+                    step={0.5}
+                    // an unset metric must not silently become 0 — it parks at
+                    // the midpoint until you actually touch it
+                    value={v ?? f.max! / 2}
+                    onChange={(e) => setMetrics({ ...metrics, [f.key]: Number(e.target.value) })}
+                    className={`mt-1 w-full accent-accent ${v == null ? "opacity-45" : ""}`}
+                  />
+                  {v != null && (
+                    <button
+                      onClick={() => setMetrics({ ...metrics, [f.key]: null })}
+                      className="text-[10px] text-faint hover:text-danger"
+                    >
+                      clear
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <label className="mt-2 block text-xs text-muted">
             Notes

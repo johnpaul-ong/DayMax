@@ -210,11 +210,11 @@ export default function WelcomePage() {
           <>
             <h2 className="font-semibold">Pick your team</h2>
             <p className="-mt-2 text-sm text-muted">
-              Your theme is your team. Every pursuit keeps score of Light vs Midnight vs Cottage, so this is the only
-              tribal decision you have to make. Changes as you tap.
+              Your theme is your team. Every pursuit keeps score of Light vs Midnight vs Cottage vs iOS, so this is the
+              only tribal decision you have to make. Changes as you tap.
             </p>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {THEMES.map((t) => (
                 <button
                   key={t.name}

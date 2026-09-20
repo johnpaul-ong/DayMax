@@ -34,6 +34,7 @@ import { TeamDot } from "./team-name";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
 import BigThree from "./big-three";
+import DayClock, { type ClockSlot } from "./day-clock";
 
 const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -296,6 +297,8 @@ export default function ProfileView({ userId }: { userId: string }) {
       {/* The signature picture of the app. Standard on every profile now,
           directly under Pursuits, rather than buried four sections down and
           hidden unless the owner had left the "days" section switched on. */}
+      {strip.length > 0 && <TypicalDay strip={strip} name={name} isSelf={isSelf} />}
+
       {strip.length > 0 && <ProfileYearBars strip={strip} name={name} isSelf={isSelf} />}
 
 
@@ -419,6 +422,62 @@ export default function ProfileView({ userId }: { userId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The typical day, as a clock.
+ *
+ * Every logged day collapsed onto one dial: for each quarter hour, the thing
+ * this person does most often at that time, and how often. The year strip
+ * shows every day; this shows the SHAPE all those days have in common, which
+ * is a different question and the more interesting one.
+ */
+function TypicalDay({ strip, name, isSelf }: { strip: DayStripRow[]; name: string; isSelf: boolean }) {
+  const { slots, days, headline } = useMemo(() => {
+    const perSlot = new Map<number, Map<number, number>>();
+    const dates = new Set<string>();
+    for (const r of strip) {
+      dates.add(r.date);
+      if (!perSlot.has(r.slot)) perSlot.set(r.slot, new Map());
+      const m = perSlot.get(r.slot)!;
+      m.set(r.category, (m.get(r.category) ?? 0) + 1);
+    }
+    const out = new Map<number, ClockSlot>();
+    let peak: { slot: number; cat: number; share: number } | null = null;
+    for (const [slot, counts] of perSlot) {
+      const total = [...counts.values()].reduce((a, b) => a + b, 0);
+      const [cat, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      const share = Math.round((n / total) * 100);
+      out.set(slot, { category: cat, hint: `${share}% of days` });
+      // the most predictable moment in the day makes the best headline
+      if (!peak || share > peak.share) peak = { slot, cat, share };
+    }
+    return {
+      slots: out,
+      days: dates.size,
+      headline: peak,
+    };
+  }, [strip]);
+
+  if (slots.size === 0) return null;
+  const who = isSelf ? "You" : name;
+
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">{isSelf ? "Your typical day" : `${name}'s typical day`}</h2>
+      <p className="mb-2 text-sm text-muted">
+        {days.toLocaleString()} days collapsed onto one dial — the most common thing at each quarter hour.
+        {headline && (
+          <>
+            {" "}
+            The most predictable moment is <b>{slotToTime(headline.slot)}</b>: {who.toLowerCase() === "you" ? "you are" : "they are"}{" "}
+            {categoryName(headline.cat).toLowerCase()} on <b>{headline.share}%</b> of days.
+          </>
+        )}
+      </p>
+      <DayClock slots={slots} />
+    </section>
   );
 }
 
