@@ -180,11 +180,39 @@ export default function CaptureWidget() {
   }, [signedIn, settings?.enabled, refresh]);
 
   // --- desktop notification when the tab is in the background -----------------
+  /**
+   * OS notifications.
+   *
+   * The old effect gated on three things and any one killed it silently:
+   *   1. Notification.permission had to be "granted" -- but nothing ever
+   *      REQUESTED it, so it sat at "default" forever.
+   *   2. document.visibilityState had to NOT be "visible", which meant no
+   *      notification ever fired while the tab was focused -- exactly when
+   *      you wanted one if you were on a different app in the same window.
+   *   3. settings.notify had to be true, which it is by default, but if it
+   *      had been switched off there was no visible path to switch it back.
+   *
+   * Now: request permission the first time notify is on, and let the OS
+   * decide whether to show the notification (both macOS and Windows Chrome
+   * show them while the tab is focused, subject to Do Not Disturb).
+   */
   const notified = useRef<number | null>(null);
+  const requestedRef = useRef(false);
+
+  useEffect(() => {
+    if (!settings?.notify) return;
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "default") return;
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+    // must be a user-gesture-friendly moment -- we're inside an effect that
+    // ran because settings.notify became true, which itself came from a click
+    Notification.requestPermission().catch(() => {});
+  }, [settings?.notify]);
+
   useEffect(() => {
     if (!settings?.notify || queue.length === 0) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    if (document.visibilityState === "visible") return;
     const newest = queue[queue.length - 1];
     if (notified.current === newest) return; // one ping per slot, not per tick
     notified.current = newest;
@@ -192,7 +220,11 @@ export default function CaptureWidget() {
       new Notification("DayMax", {
         body: queue.length === 1 ? `What were you doing at ${slotToTime(newest)}?` : `${queue.length} slots to fill in`,
         tag: "daymax-capture",
-      });
+        // renotify: reissue the toast if the tag already exists, so a NEW
+        // slot supersedes the previous notification cleanly
+        // (Chrome ignores it without requireInteraction; harmless)
+        renotify: true,
+      } as NotificationOptions);
     } catch {}
   }, [queue, settings?.notify]);
 

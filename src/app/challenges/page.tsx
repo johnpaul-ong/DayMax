@@ -147,7 +147,36 @@ function spanDays(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000) + 1;
 }
 
-const PRESETS = [7, 30, 90];
+const PRESETS: Array<{ days: number | "open"; label: string }> = [
+  { days: 7, label: "1 week" },
+  { days: 30, label: "1 month" },
+  { days: 90, label: "3 months" },
+  { days: 365, label: "1 year" },
+  { days: "open", label: "No end (goes forever)" },
+];
+
+/**
+ * Turn a metric key into a HUMAN CHALLENGE TITLE, not the raw noun.
+ * The dropdown used to read like a database schema ("Non-essential
+ * spending", "Focus score") — now it reads like the challenge it will
+ * become ("Spend the least", "Sharpest focus").
+ */
+function challengeOptionLabel(m: ChallengeMetric): string {
+  // exhaustive switch; add a case when you add a metric or tsc complains here
+  switch (m) {
+    case "money_nonessential":     return "Spend the least (non-essential)";
+    case "money_nonessential_pct": return "Smallest share of income on fun";
+    case "money_total":            return "Spend the least (everything)";
+    case "life_productive_hours":  return "Most productive hours";
+    case "life_workmax":           return "Highest WorkMax";
+    case "life_focus":             return "Sharpest focus score";
+    case "life_brainrot_hours":    return "Least brainrot";
+    case "life_sleep_hours":       return "Best sleep";
+    case "life_streak":            return "Longest logging streak";
+    case "pursuit_stat":           return "Custom pursuit stat";
+  }
+  return m;
+}
 
 /**
  * Start your own.
@@ -170,7 +199,7 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
   const [metric, setMetric] = useState<ChallengeMetric>("money_nonessential");
   const [direction, setDirection] = useState<ChallengeDirection>("less");
   const [starts, setStarts] = useState(today);
-  const [days, setDays] = useState<number | "custom">(30);
+  const [days, setDays] = useState<number | "custom" | "open">(30);
   const [customEnd, setCustomEnd] = useState(addDays(today, 29));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -220,17 +249,24 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
     if (needsStat && stat) setDirection(stat.direction);
   }, [needsStat, stat]);
 
-  const ends = days === "custom" ? customEnd : addDays(starts, days - 1);
-  const length = spanDays(starts, ends);
+  const OPEN_END = "2999-12-31";  // canonical "forever" marker — schema-safe date
+  const ends =
+    days === "custom" ? customEnd :
+    days === "open"   ? OPEN_END :
+    addDays(starts, (days as number) - 1);
+  const forever = days === "open";
+  const length = forever ? Infinity : spanDays(starts, ends);
   const unit = metricUnit(metric, stat?.unit);
   const label = metricLabel(metric, direction, stat?.name);
   const grouped = useMemo(() => {
+    const order = ["Life", "Money", "Pursuits"];
     const groups: { group: string; items: typeof CHALLENGE_METRICS }[] = [];
     for (const o of CHALLENGE_METRICS) {
       const g = groups.find((x) => x.group === o.group);
       if (g) g.items.push(o);
       else groups.push({ group: o.group, items: [o] });
     }
+    groups.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
     return groups;
   }, []);
   const hint = CHALLENGE_METRICS.find((o) => o.metric === metric)?.hint ?? "";
@@ -238,7 +274,7 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
   const blocked =
     !name.trim() ||
     (needsStat && !statId) ||
-    length < 1;
+    (!forever && length < 1);
 
   return (
     <div className="card mt-2 space-y-4 p-4">
@@ -257,9 +293,12 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
         />
       </div>
 
-      {/* 1. what are we measuring */}
+      {/* 1. what are we measuring — phrased as a CHALLENGE, not as a schema.
+             Life comes first because most challenges people invent are Life
+             ones; the old order led with Money and Life felt like an
+             afterthought. */}
       <div>
-        <label className="text-xs font-medium uppercase tracking-wider text-faint">What decides it</label>
+        <label className="text-xs font-medium uppercase tracking-wider text-faint">What kind of challenge</label>
         <select
           value={metric}
           onChange={(e) => pickMetric(e.target.value as ChallengeMetric)}
@@ -269,7 +308,7 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
             <optgroup key={g.group} label={g.group}>
               {g.items.map((o) => (
                 <option key={o.metric} value={o.metric}>
-                  {o.noun.charAt(0).toUpperCase() + o.noun.slice(1)}
+                  {challengeOptionLabel(o.metric)}
                 </option>
               ))}
             </optgroup>
@@ -361,22 +400,24 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
       <div>
         <label className="text-xs font-medium uppercase tracking-wider text-faint">How long</label>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          {PRESETS.map((d) => (
+          {PRESETS.map((p) => (
             <button
-              key={d}
+              key={p.days}
               type="button"
-              onClick={() => setDays(d)}
+              onClick={() => setDays(p.days)}
               className={`rounded-lg border px-3 py-2 text-sm ${
-                days === d ? "border-accent bg-accent-soft font-semibold text-accent" : "bg-surface"
+                days === p.days ? "border-accent bg-accent-soft font-semibold text-accent" : "bg-surface"
               }`}
             >
-              {d} days
+              {p.label}
             </button>
           ))}
           <button
             type="button"
             onClick={() => {
-              setCustomEnd(ends);
+              // if it was "open", start the custom picker at today+30 so the
+              // date input has a real value to sit on
+              setCustomEnd(days === "open" ? addDays(starts, 30) : ends);
               setDays("custom");
             }}
             className={`rounded-lg border px-3 py-2 text-sm ${
@@ -395,7 +436,9 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
             className="rounded-lg border bg-surface px-2 py-2 text-sm"
           />
           <span className="text-xs text-faint">to</span>
-          {days === "custom" ? (
+          {forever ? (
+            <span className="rounded-lg border bg-surface-2 px-2 py-2 text-sm font-medium text-muted">no end</span>
+          ) : days === "custom" ? (
             <input
               type="date"
               value={customEnd}
@@ -412,8 +455,12 @@ function NewChallenge({ onCreated }: { onCreated: () => void }) {
       {/* the sentence, computed from what's actually set */}
       <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm">
         <b>{label}</b> wins
-        {unit && unit !== "currency" && <span className="text-muted"> (measured in {unit})</span>}, over{" "}
-        {length} {length === 1 ? "day" : "days"}, {starts} → {ends}.
+        {unit && unit !== "currency" && <span className="text-muted"> (measured in {unit})</span>},{" "}
+        {forever ? (
+          <>from <b>{starts}</b> with <b>no end</b> — a rolling standings that never freezes.</>
+        ) : (
+          <>over {length} {length === 1 ? "day" : "days"}, {starts} → {ends}.</>
+        )}
       </p>
 
       <button

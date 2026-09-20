@@ -38,9 +38,10 @@ const C = SIZE / 2;
  * and the layout should say so.
  */
 const INNER = { r0: 62, r1: 118 };
-const GAP = 12;
+const GAP = 20;
 const OUTER = { r0: INNER.r1 + GAP, r1: INNER.r1 + GAP + 82 };
-const LABEL_R = OUTER.r1 + 15;
+const LABEL_R = OUTER.r1 + 22;   /** outside the outer ring, always. */
+const INNER_LABEL_R = INNER.r0 - 22; /** inside the inner ring, always. */
 /** hair-thin ring at noon/midnight for the AM->PM handover */
 const NOON_TICK_R = INNER.r1 + GAP / 2;
 
@@ -200,20 +201,18 @@ export default function DayClock({
         {/* ring backgrounds, so empty time still reads as time */}
         <circle cx={C} cy={C} r={(INNER.r0 + INNER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={INNER.r1 - INNER.r0} />
         <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} opacity={0.55} />
-        {/* the dawn/dusk hairline: the AM->PM seam, so 23:45 stops looking
-            like it flows into 00:00. Dashed to double as a 12-tick guide. */}
-        <circle
-          cx={C}
-          cy={C}
-          r={NOON_TICK_R}
-          fill="none"
-          stroke="var(--faint)"
-          strokeWidth={1}
-          strokeDasharray="1.5 2.5"
-          opacity={0.5}
-        />
-        {/* tiny sun/moon markers at 12: night on the inside, day on the outside */}
-        <text x={C} y={C - INNER.r1 - GAP / 2 + 1} textAnchor="middle" dominantBaseline="central" style={{ fontSize: 8, fill: "var(--faint)" }}>◐</text>
+        {/* The AM/PM seam is a SOLID band between the two rings, in the
+            page colour, so no wedge on the inner touches any wedge on the
+            outer. Wispy dashed lines were not enough. */}
+        <circle cx={C} cy={C} r={NOON_TICK_R} fill="none" stroke="var(--page)" strokeWidth={GAP - 2} />
+        {/* each ring gets its OWN outline so you see the ring itself */}
+        <circle cx={C} cy={C} r={INNER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+        <circle cx={C} cy={C} r={OUTER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+        <circle cx={C} cy={C} r={INNER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+        <circle cx={C} cy={C} r={OUTER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+        {/* AM / PM labels in the seam itself, no more ambiguous ◐ */}
+        <text x={C} y={C - NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
+        <text x={C} y={C + NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
 
         {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
           const { ring, a0, a1, pm } = geom(s);
@@ -244,18 +243,38 @@ export default function DayClock({
           );
         })}
 
-        {/* hour numbers, always visible, never displaced by a label */}
+        {/* Outer ring numbers (PM), around the rim -- always visible. */}
         {Array.from({ length: 12 }, (_, h) => {
           const [x, y] = polar(LABEL_R, h * 30);
           return (
             <text
-              key={h}
+              key={`pm-${h}`}
+              x={x}
+              y={y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-muted"
+              style={{ fontSize: 13, fontWeight: 700 }}
+            >
+              {h === 0 ? "12" : h}
+            </text>
+          );
+        })}
+        {/* Inner ring numbers (AM), inside the inner ring. Same layout. The
+            old version had numbers only on the outside so the AM ring read
+            as unlabelled and the numbers that WERE there looked wrong -- 12
+            was next to a slot that turned out to be PM. */}
+        {Array.from({ length: 12 }, (_, h) => {
+          const [x, y] = polar(INNER_LABEL_R, h * 30);
+          return (
+            <text
+              key={`am-${h}`}
               x={x}
               y={y}
               textAnchor="middle"
               dominantBaseline="central"
               className="fill-faint"
-              style={{ fontSize: 13, fontWeight: 600 }}
+              style={{ fontSize: 10, fontWeight: 600 }}
             >
               {h === 0 ? "12" : h}
             </text>
@@ -310,11 +329,11 @@ export default function DayClock({
           </>
         ) : (
           <>
-            <text x={C} y={C - 10} textAnchor="middle" className="fill-faint" style={{ fontSize: 11 }}>
-              inner = AM
+            <text x={C} y={C - 10} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
+              AM inside
             </text>
-            <text x={C} y={C + 8} textAnchor="middle" className="fill-faint" style={{ fontSize: 11 }}>
-              outer = PM
+            <text x={C} y={C + 8} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
+              PM outside
             </text>
             {onPaint && (
               <text x={C} y={C + 28} textAnchor="middle" className="fill-faint" style={{ fontSize: 10 }}>

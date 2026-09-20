@@ -19,6 +19,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { localToday } from "@/lib/dates";
 import NonEssential from "./non-essential";
 import IncomeView from "./income";
+import BudgetMeter from "./budget-meter";
 import { BoardNotice, ChartEmpty } from "../empty-chart";
 import { categorySwatch, GROUP_COLOR, splitAndColour } from "@/lib/moneyColors";
 import {
@@ -178,8 +179,17 @@ export default function MoneyPage() {
 
       {tab === "insight" && (
         <div className="space-y-6">
-          {/* non-essential first: it is the only spending you can act on, and
-              the only number the challenge ranks */}
+          {/* Meter first: it works with ONE data point, unlike the trend
+              charts. New users have to see something alive. */}
+          <BudgetMeter
+            spend={(entries ?? []).filter((e) => {
+              const c = cats.find((c) => c.id === e.categoryId);
+              return c && !c.essential;
+            }).map((e) => ({ date: e.date, amount: e.amount }))}
+            budget={null}
+            monthlyIncome={summary?.income ?? null}
+            currency={undefined}
+          />
           <IncomeView />
           <NonEssential />
           <Insight byCat={byCat} daily={daily} summary={summary} />
