@@ -77,6 +77,7 @@ import {
 import { teamMeta } from "@/lib/teams";
 import { TeamDot } from "../../team-name";
 import { BoardNotice, ChartEmpty, emptyCause, type EmptyCause } from "../../empty-chart";
+import ChallengeFeed from "./feed";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -622,6 +623,21 @@ export default function ChallengePage() {
           Nobody else has joined yet. Hit <b>Invite friends</b> above — the leaderboard gets a lot more interesting
           with two people on it.
         </p>
+      )}
+
+      {/* Daily feed: one thread per day of the challenge. Only shown
+          once the challenge is joined (non-members see leaderboards
+          only, not the group chat). Runs on Phase 2 tables from
+          migration 0041 (challenge_posts + comments + reactions +
+          storage bucket). */}
+      {challenge.isMember && (
+        <ChallengeFeed
+          challengeId={id}
+          startsOn={challenge.startsOn}
+          endsOn={challenge.endsOn}
+          me={null}
+          isMember={challenge.isMember}
+        />
       )}
     </div>
   );
