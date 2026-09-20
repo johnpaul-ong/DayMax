@@ -233,25 +233,7 @@ export default function ArenaComparePage() {
       </div>
 
       {roster.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setSelected(new Set(roster.map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Everyone</button>
-          <button onClick={() => setSelected(new Set(roster.filter((r) => r.isDemo || r.name.endsWith("(you)")).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">&quot;Avengers Assemble&quot;</button>
-          <button onClick={() => setSelected(new Set(roster.filter((r) => !r.isDemo).map((r) => r.id)))} className="rounded-full border px-2.5 py-1 text-xs text-muted hover:text-ink">Friends</button>
-          <span className="mx-1 text-faint">·</span>
-          {roster.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => {
-                const next = new Set(selected);
-                if (next.has(r.id)) next.delete(r.id); else next.add(r.id);
-                setSelected(next);
-              }}
-              className={`rounded-full border px-2.5 py-1 text-xs ${selected.has(r.id) ? "bg-accent-soft font-semibold text-accent" : "text-faint line-through"}`}
-            >
-              {r.name}
-            </button>
-          ))}
-        </div>
+        <ComparePicker roster={roster} selected={selected} setSelected={setSelected} />
       )}
 
       {loading ? (
@@ -368,6 +350,130 @@ export default function ArenaComparePage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Compare picker: a preset dropdown (Everyone / "Avengers Assemble" /
+ * Friends / Custom) plus a multi-select dropdown of individual people.
+ * Replaces the old chip wall which put ~11 pills across the page and
+ * felt like homework. Preset selection is one click; individual toggle
+ * happens inside a second dropdown so the surface area stays flat.
+ */
+function ComparePicker({
+  roster,
+  selected,
+  setSelected,
+}: {
+  roster: Array<{ id: string; name: string; isDemo: boolean }>;
+  selected: Set<string>;
+  setSelected: (s: Set<string>) => void;
+}) {
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!peopleOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setPeopleOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPeopleOpen(false); };
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [peopleOpen]);
+
+  const presets = useMemo(
+    () => ({
+      everyone: () => new Set(roster.map((r) => r.id)),
+      avengers: () => new Set(roster.filter((r) => r.isDemo || r.name.endsWith("(you)")).map((r) => r.id)),
+      friends: () => new Set(roster.filter((r) => !r.isDemo).map((r) => r.id)),
+    }),
+    [roster]
+  );
+
+  // Which preset (if any) EXACTLY matches the current selection.
+  const activePreset: "everyone" | "avengers" | "friends" | "custom" = (() => {
+    const eq = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
+    if (eq(selected, presets.everyone())) return "everyone";
+    if (eq(selected, presets.avengers())) return "avengers";
+    if (eq(selected, presets.friends())) return "friends";
+    return "custom";
+  })();
+
+  const summary =
+    activePreset === "everyone" ? "Everyone" :
+    activePreset === "avengers" ? '"Avengers Assemble"' :
+    activePreset === "friends" ? "Friends" :
+    `${selected.size} selected`;
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Preset dropdown */}
+      <label className="inline-flex items-center gap-1.5 text-xs text-muted">
+        Group:
+        <select
+          value={activePreset}
+          onChange={(e) => {
+            const v = e.target.value as "everyone" | "avengers" | "friends" | "custom";
+            if (v === "custom") return; // custom is a display-only state
+            setSelected(presets[v]());
+          }}
+          className="rounded-lg border bg-surface px-2 py-1.5 text-sm text-ink"
+        >
+          <option value="everyone">Everyone</option>
+          <option value="avengers">&quot;Avengers Assemble&quot;</option>
+          <option value="friends">Friends</option>
+          {activePreset === "custom" && <option value="custom">Custom</option>}
+        </select>
+      </label>
+
+      {/* Multi-select dropdown for individuals */}
+      <div className="relative" ref={dropRef}>
+        <button
+          onClick={() => setPeopleOpen((o) => !o)}
+          className="inline-flex items-center gap-1.5 rounded-lg border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
+        >
+          {summary}
+          <span className="text-xs text-faint">▾</span>
+        </button>
+
+        {peopleOpen && (
+          <div className="card absolute left-0 top-10 z-40 w-64 max-w-[80vw] p-2 shadow-xl">
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-faint">
+              <button onClick={() => setSelected(presets.everyone())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">All</button>
+              <button onClick={() => setSelected(new Set())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">None</button>
+              <span className="ml-auto normal-case tracking-normal">{selected.size} of {roster.length}</span>
+            </div>
+            <ul className="max-h-64 space-y-0.5 overflow-y-auto">
+              {roster.map((r) => {
+                const on = selected.has(r.id);
+                return (
+                  <li key={r.id}>
+                    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-surface-2">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() => {
+                          const next = new Set(selected);
+                          if (on) next.delete(r.id); else next.add(r.id);
+                          setSelected(next);
+                        }}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      {r.isDemo && <span className="text-[9px] text-faint">legend</span>}
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

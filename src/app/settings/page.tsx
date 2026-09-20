@@ -735,6 +735,8 @@ function UsernameSection() {
       .catch(() => {});
   }, []);
 
+  // Debounced availability check — 250ms (down from 350) so it feels
+  // snappier while typing.
   useEffect(() => {
     if (!handle || handle === original) return void setState("idle");
     if (!/^[a-z0-9_]{3,20}$/.test(handle)) return void setState("invalid");
@@ -744,14 +746,34 @@ function UsernameSection() {
         .then((f) => f.isUsernameAvailable(handle))
         .then((free) => setState(free ? "free" : "taken"))
         .catch(() => setState("idle"));
-    }, 350);
+    }, 250);
     return () => clearTimeout(t);
   }, [handle, original]);
+
+  // Auto-save the moment the handle becomes "free". No Save button:
+  // the name-check IS the save gate. If the check says "taken" or
+  // "invalid" we just don't fire.
+  useEffect(() => {
+    if (state !== "free") return;
+    setBusy(true);
+    setMsg(null);
+    import("@/lib/friends")
+      .then((f) => f.setUsername(handle))
+      .then(() => {
+        setOriginal(handle);
+        setState("idle");
+        setMsg("Saved.");
+        setTimeout(() => setMsg((m) => (m === "Saved." ? null : m)), 1600);
+      })
+      .catch((e) => setMsg(String(e.message ?? e)))
+      .finally(() => setBusy(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   return (
     <div className="card mb-6 p-4">
       <h2 className="mb-1 font-semibold">Username</h2>
-      <p className="mb-3 text-sm text-muted">How friends find you in search. 3–20 characters: letters, numbers, underscores.</p>
+      <p className="mb-3 text-sm text-muted">How friends find you in search. 3–20 characters: letters, numbers, underscores. Saves as soon as the name is free.</p>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 rounded-lg border bg-surface px-3">
           <span className="text-muted">@</span>
@@ -762,34 +784,25 @@ function UsernameSection() {
             className="w-44 bg-transparent py-2 text-sm outline-none"
           />
         </div>
-        <button
-          onClick={() => {
-            setBusy(true);
-            import("@/lib/friends")
-              .then((f) => f.setUsername(handle))
-              .then(() => {
-                setOriginal(handle);
-                setState("idle");
-                setMsg("Saved.");
-              })
-              .catch((e) => setMsg(String(e.message ?? e)))
-              .finally(() => setBusy(false));
-          }}
-          disabled={busy || state !== "free"}
-          className="btn-primary"
-        >
-          {busy ? "Saving…" : "Save"}
-        </button>
         <span className="text-xs">
-          {state === "checking" && <span className="text-faint">checking…</span>}
-          {state === "free" && <span className="text-ok">free ✓</span>}
-          {state === "taken" && <span className="text-danger">taken</span>}
-          {state === "invalid" && <span className="text-warn">3–20 chars, a–z 0–9 _</span>}
+          {busy && <span className="text-faint">saving…</span>}
+          {!busy && state === "checking" && <span className="text-faint">checking…</span>}
+          {!busy && state === "free" && <span className="text-ok">free ✓</span>}
+          {!busy && state === "taken" && <span className="text-danger">taken</span>}
+          {!busy && state === "invalid" && <span className="text-warn">3–20 chars, a–z 0–9 _</span>}
         </span>
       </div>
-      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+      {msg && <p className="mt-2 text-xs text-ok">{msg}</p>}
     </div>
   );
+}
+
+/** Little "Saving… / Saved ✓" chip in a section header. */
+function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" | "error" }) {
+  if (state === "idle") return null;
+  if (state === "saving") return <span className="text-[10px] text-faint">saving…</span>;
+  if (state === "saved") return <span className="text-[10px] font-semibold text-ok">saved ✓</span>;
+  return <span className="text-[10px] font-semibold text-danger">error</span>;
 }
 
 function ProfileSection() {
@@ -798,7 +811,8 @@ function ProfileSection() {
   const [country, setCountry] = useState<string>("");
   const [targetWeight, setTargetWeight] = useState<string>("");
   const [msg, setMsg] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     fetchProfile()
@@ -808,13 +822,42 @@ function ProfileSection() {
         setCountry(p.country ?? "");
         setTargetWeight(p.targetWeightKg != null ? String(p.targetWeightKg) : "");
       })
-      .catch((e) => setMsg(friendlyBackendError(e, "Your profile")));
+      .catch((e) => setMsg(friendlyBackendError(e, "Your profile")))
+      .finally(() => setLoaded(true));
   }, []);
+
+  // Auto-save on change with a 700ms debounce. Fires ONLY after the
+  // initial load (so we don't save the empty values back over the
+  // fetched ones during first paint). Save button gone -- the user
+  // said "too many save buttons" and this is the busiest offender.
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => {
+      setSaveState("saving");
+      setMsg(null);
+      const tw = targetWeight.trim() === "" ? null : Number(targetWeight);
+      updateProfile({
+        displayName: displayName.trim() || null,
+        birthDate: birthDate || null,
+        country: country || null,
+        targetWeightKg: Number.isFinite(tw as number) ? tw : null,
+      })
+        .then(() => {
+          setSaveState("saved");
+          setTimeout(() => setSaveState((s) => (s === "saved" ? "idle" : s)), 1600);
+        })
+        .catch((e) => { setSaveState("error"); setMsg(String(e.message ?? e)); });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [loaded, displayName, birthDate, country, targetWeight]);
 
   return (
     <div className="card mb-6 p-4">
-      <h2 className="mb-1 font-semibold">You</h2>
-      <p className="mb-3 text-sm text-muted">Powers the &ldquo;life lived&rdquo; card on Home. Stays private like everything else.</p>
+      <div className="mb-1 flex items-baseline gap-2">
+        <h2 className="font-semibold">You</h2>
+        <SaveIndicator state={saveState} />
+      </div>
+      <p className="mb-3 text-sm text-muted">Powers the &ldquo;life lived&rdquo; card on Home. Stays private like everything else. Changes save as you make them.</p>
       <div className="flex flex-wrap gap-3">
         <label className="text-xs text-muted">
           Display name (shown to friends and in the Arena)
@@ -850,23 +893,8 @@ function ProfileSection() {
             className="mt-0.5 block w-28 rounded-lg border bg-surface px-2 py-2 text-sm text-ink"
           />
         </label>
-        <button
-          onClick={() => {
-            setSaving(true);
-            setMsg(null);
-            const tw = targetWeight.trim() === "" ? null : Number(targetWeight);
-            updateProfile({ displayName: displayName.trim() || null, birthDate: birthDate || null, country: country || null, targetWeightKg: Number.isFinite(tw as number) ? tw : null })
-              .then(() => setMsg("Saved."))
-              .catch((e) => setMsg(String(e.message ?? e)))
-              .finally(() => setSaving(false));
-          }}
-          disabled={saving}
-          className="self-end rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast disabled:opacity-40"
-        >
-          Save
-        </button>
       </div>
-      {msg && <p className="mt-2 text-sm text-muted">{msg}</p>}
+      {msg && <p className="mt-2 text-sm text-danger">{msg}</p>}
       {birthDate && (() => {
         const life = lifeStats(birthDate, country || null);
         if (!life) return null;

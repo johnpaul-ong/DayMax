@@ -94,6 +94,21 @@ function sentenceCase(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+/**
+ * "Grindset Goblins" -> "Goblins". "Budget Baddies" -> "Baddies".
+ * "Deep Work Demons" -> "Demons". Anything without a plural-looking
+ * last word falls back to "Members".
+ *
+ * Runs on the challenge name so tribes stay self-branded without a
+ * schema change. Deliberately loose: any capitalised word ending in
+ * -s / -es / -ies is treated as a plural noun.
+ */
+function rosterNoun(challengeName: string): string {
+  const last = challengeName.trim().split(/\s+/).pop() ?? "";
+  if (/^[A-Z][a-z]+(s|es|ies)$/.test(last)) return last;
+  return "Members";
+}
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -268,6 +283,33 @@ export default function ChallengePage() {
             </>
           )}
         </div>
+
+        {/* Roster chip strip. Labelled with the last plural word of the
+            challenge name so 'Grindset Goblins' -> Goblins, 'Budget
+            Baddies' -> Baddies, 'Deep Work Demons' -> Demons, fallback
+            'Members'. */}
+        {rows.length > 0 && (
+          <div className="mt-4 border-t pt-3">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
+              {rosterNoun(challenge.name)} · {rows.length}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {rows.map((r) => (
+                <Link
+                  key={r.userId}
+                  href={r.isMe ? "/profile" : `/friends/${r.userId}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border bg-surface px-2.5 py-1 text-xs transition hover:-translate-y-0.5 hover:text-accent ${r.isMe ? "border-accent text-accent" : ""}`}
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: `color-mix(in srgb, var(--accent) 20%, transparent)` }}>
+                    {r.displayName.slice(0, 1).toUpperCase()}
+                  </span>
+                  {r.displayName}
+                  {r.isMe && <span className="text-[9px] text-faint">you</span>}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ONE diagnosis, at the top, for whatever is hollowing out the board.
