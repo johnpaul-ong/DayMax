@@ -26,10 +26,9 @@ export function teamMeta(key: string) {
  * border and a faint tint, not a coloured pill. You should be able to read a
  * leaderboard without the teams shouting over the numbers.
  */
-export function teamTint(team: string): { borderLeft: string; background: string } {
-  const c = teamMeta(team).color;
-  return { borderLeft: `2px solid ${c}`, background: `${c}14` };  // 14 = ~8% alpha
-}
+// teamTint helper removed: unused across src/ (grep -r verified). If a
+// caller ever needs it, use color-mix inline rather than a wrapper that
+// silently produces invalid CSS when passed a var()-based colour.
 
 export interface TeamStanding {
   team: Team;
