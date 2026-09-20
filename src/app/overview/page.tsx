@@ -36,6 +36,7 @@ import {
 import { computeRanking, weekStart } from "@/lib/ranking";
 import { allPairCorrelations, bucketsByPeriod, buildDayPoints, CORRELATION_FIELDS, describeR, pearson, type DayPoint, type Period } from "@/lib/stats";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { chartSeries } from "@/lib/chartColors";
 import type { BucketSettings, DayEntry, DayMetrics, LiftEntry } from "@/lib/types";
 import { localToday } from "@/lib/dates";
 import PursuitSummary from "./pursuit-summary";
@@ -85,7 +86,6 @@ const TREND_FIELDS: Array<{ key: string; label: string }> = [
   { key: "score", label: "Focus score (/100)" },
   ...CORRELATION_FIELDS,
 ];
-const TREND_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#77705a", "#14b8a6"];
 
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
@@ -348,7 +348,7 @@ export default function OverviewPage() {
                 <Tooltip labelFormatter={(d) => String(d)} />
                 <Legend formatter={(v: string) => DAY_METRIC_LINES.find((f) => f.key === v)?.label ?? v} />
                 {DAY_METRIC_LINES.map((f, i) => (
-                  <Line key={f.key} type="monotone" strokeWidth={2.5} dataKey={f.key} name={f.label} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={false} connectNulls />
+                  <Line key={f.key} type="monotone" strokeWidth={2.5} dataKey={f.key} name={f.label} stroke={chartSeries(i)} dot={false} connectNulls />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -372,7 +372,7 @@ export default function OverviewPage() {
                 key={f.key}
                 onClick={() => toggleTrendKey(f.key)}
                 className={`rounded-full border px-3 py-1 text-xs ${trendKeys.includes(f.key) ? "font-semibold" : "text-muted"}`}
-                style={trendKeys.includes(f.key) ? { borderColor: TREND_COLORS[i % TREND_COLORS.length], color: TREND_COLORS[i % TREND_COLORS.length] } : undefined}
+                style={trendKeys.includes(f.key) ? { borderColor: chartSeries(i), color: chartSeries(i) } : undefined}
               >
                 {f.label}
               </button>
@@ -400,7 +400,7 @@ export default function OverviewPage() {
                       key={k}
                       type="monotone" strokeWidth={2.5}
                       dataKey={k}
-                      stroke={TREND_COLORS[TREND_FIELDS.findIndex((f) => f.key === k) % TREND_COLORS.length]}
+                      stroke={chartSeries(TREND_FIELDS.findIndex((f) => f.key === k))}
                       dot={false}
                       connectNulls
                     />
@@ -521,7 +521,7 @@ export default function OverviewPage() {
                 />
                 <Legend />
                 {liftChart.names.map((n, i) => (
-                  <Line key={n.name} type="monotone" strokeWidth={2.5} dataKey={n.name} stroke={TREND_COLORS[i % TREND_COLORS.length]} dot={{ r: 2 }} connectNulls strokeDasharray={n.hasGoal ? undefined : "5 3"} />
+                  <Line key={n.name} type="monotone" strokeWidth={2.5} dataKey={n.name} stroke={chartSeries(i)} dot={{ r: 2 }} connectNulls strokeDasharray={n.hasGoal ? undefined : "5 3"} />
                 ))}
               </LineChart>
             </ResponsiveContainer>

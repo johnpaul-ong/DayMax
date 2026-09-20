@@ -29,6 +29,7 @@ import {
 import { localToday } from "@/lib/dates";
 import { fetchByCategory, fetchSummary, money, type CategoryTotal } from "@/lib/money";
 import { categorySwatch, GROUP_COLOR } from "@/lib/moneyColors";
+import { ChartEmpty } from "../empty-chart";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -99,6 +100,21 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
 
   const spent = rows.reduce((s, r) => s + r.nonEssential, 0);
   const live = rows.filter((r) => r.total > 0);
+  const logged = rows.reduce((s, r) => s + r.total, 0);
+
+  // Nothing at all in six months: the stacked chart below would be an axis grid
+  // with two flat lines through it, which reads as broken rather than empty.
+  if (logged === 0)
+    return (
+      <section>
+        <h2 className="mb-1 font-semibold">Non-essential, last {months} months</h2>
+        <ChartEmpty cause="no-data" noun="non-essential spending">
+          Nothing logged in the last {months} months, so there is no trend to draw. Add a few purchases on the{" "}
+          <b>add</b> tab and this chart starts the moment there are two months with anything in them.
+        </ChartEmpty>
+      </section>
+    );
+
   const avg = live.length ? spent / live.length : 0;
   const thisMonth = rows[rows.length - 1];
   const prior = live.filter((r) => r.ym !== thisMonth.ym);
@@ -112,8 +128,9 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
         <p className="text-sm text-muted">
           {spent === 0 ? (
             <>
-              Nothing non-essential logged in {months} months. Either you are extremely disciplined, or some categories
-              are marked essential that should not be — tap any category below to flip it.
+              Every {money(logged)} you logged in the last {months} months is marked <b>essential</b>, so the
+              non-essential total is {money(0)} and the two lines below sit flat on zero. Either you are extremely
+              disciplined, or a category is filed wrongly — tap one under <b>Categories</b> to flip it.
             </>
           ) : (
             <>
@@ -163,7 +180,11 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
         </ResponsiveContainer>
       </div>
 
-      {ne.length > 0 && (
+      {/* Used to vanish silently when there was nothing non-essential, which
+          left the reader with no idea whether it was empty or broken. */}
+      {ne.length === 0 ? (
+        <ChartEmpty cause="all-essential" noun="non-essential spending" loggedLabel={money(logged)} />
+      ) : (
         <div className="card p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
             What the non-essential actually is

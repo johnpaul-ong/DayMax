@@ -19,6 +19,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { localToday } from "@/lib/dates";
 import NonEssential from "./non-essential";
 import IncomeView from "./income";
+import { BoardNotice, ChartEmpty } from "../empty-chart";
 import { categorySwatch, GROUP_COLOR, splitAndColour } from "@/lib/moneyColors";
 import {
   addIncome,
@@ -67,6 +68,14 @@ export default function MoneyPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"add" | "list" | "insight">("add");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Lifted out of CategoryManager so the "it's all essential" banner can open
+  // the thing it is telling you to go and change.
+  const [catsOpen, setCatsOpen] = useState(false);
+
+  function openCategories() {
+    setCatsOpen(true);
+    setTimeout(() => document.getElementById("categories")?.scrollIntoView({ behavior: "smooth" }), 50);
+  }
 
   function reload() {
     fetchCategories().then(setCats).catch((e) => setError(String(e.message ?? e)));
@@ -110,6 +119,24 @@ export default function MoneyPage() {
               It only changes things for you.
             </li>
           </ol>
+        </div>
+      )}
+
+      {/* ONE banner for the diagnosis that empties every chart below it, rather
+          than the same sentence repeated under each one. This is the state the
+          Budget Baddies board was in: real spending, all of it essential, so
+          non-essential — the only number a budget challenge ranks — is zero. */}
+      {summary && summary.total > 0 && summary.nonEssential === 0 && (
+        <div className="mb-3">
+          <BoardNotice title="Everything you've logged is marked essential">
+            All {money(summary.total)} of it. Non-essential spending is the number the charts plot and the number
+            challenges rank, and yours is {money(0)} — so those charts have nothing to draw. If rent and groceries
+            really are all you logged, nothing is wrong. If not,{" "}
+            <button onClick={openCategories} className="font-medium underline">
+              open Categories
+            </button>{" "}
+            and tap the ones you disagree with. It only changes things for you.
+          </BoardNotice>
         </div>
       )}
 
@@ -159,7 +186,7 @@ export default function MoneyPage() {
         </div>
       )}
 
-      <CategoryManager cats={cats} onChanged={reload} />
+      <CategoryManager cats={cats} open={catsOpen} setOpen={setCatsOpen} onChanged={reload} />
       <IncomeBox today={todayISO} onAdded={reload} />
     </div>
   );
@@ -462,8 +489,15 @@ function Insight({
   daily: DailyTotal[];
   summary: SpendSummary | null;
 }) {
-  if (byCat.length === 0) return <p className="card p-4 text-sm text-faint">Log some spending to see where it goes.</p>;
+  if (byCat.length === 0)
+    return (
+      <ChartEmpty cause="no-data" noun="spending">
+        Nothing logged this month, so there is nothing to break down. Log a purchase on the <b>add</b> tab and both
+        charts here start working.
+      </ChartEmpty>
+    );
   const worst = [...byCat].filter((c) => !c.essential).sort((a, b) => b.total - a.total)[0];
+  const dayCount = daily.filter((d) => d.total > 0).length;
   // colour each category from its OWN group's family, so the pie separates
   // essential from non-essential before you read a single label
   const split = splitAndColour(byCat);
@@ -476,19 +510,13 @@ function Insight({
 
   return (
     <div className="space-y-4">
-      {worst && summary && summary.nonEssential > 0 ? (
+      {/* The all-essential case used to be stated here too. It is now one
+          banner at the top of the page, so it isn't repeated once per chart. */}
+      {worst && summary && summary.nonEssential > 0 && (
         <p className="card p-4 text-sm">
           Your biggest non-essential is <b>{worst.name}</b> at {money(worst.total)} —{" "}
           {Math.round((worst.total / summary.nonEssential) * 100)}% of everything you didn&apos;t strictly need.
         </p>
-      ) : (
-        summary &&
-        summary.total > 0 && (
-          <p className="card p-4 text-sm">
-            Every {money(summary.total)} you logged this month is marked <b>essential</b>, so there is nothing for a
-            budget challenge to rank. If that is not right, tap a category under <b>Categories</b> to flip it.
-          </p>
-        )
       )}
 
       <div className="card p-3">
@@ -509,6 +537,14 @@ function Insight({
 
       <div className="card p-3">
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Day by day</p>
+        {/* One day of data is a single bar and no trend; zero is an axis grid. */}
+        {dayCount < 2 ? (
+          <p className="text-sm text-muted">
+            {dayCount === 1
+              ? "One day logged this month — this fills in once there are two to compare."
+              : "Nothing logged this month, so there is no day-by-day shape yet."}
+          </p>
+        ) : (
         <div className="h-56">
           <ResponsiveContainer>
             <BarChart data={daily}>
@@ -522,13 +558,24 @@ function Insight({
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
       </div>
     </div>
   );
 }
 
 /** Add your own categories, and disagree with our defaults. */
-function CategoryManager({ cats, onChanged }: { cats: SpendCategory[]; onChanged: () => void }) {
+function CategoryManager({
+  cats,
+  open,
+  setOpen,
+  onChanged,
+}: {
+  cats: SpendCategory[];
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  onChanged: () => void;
+}) {
   // Same two families the charts use, so a category's colour here is the
   // colour you will meet again in the pie.
   const chipColour = new Map<string, string>();
@@ -537,13 +584,12 @@ function CategoryManager({ cats, onChanged }: { cats: SpendCategory[]; onChanged
     let n = 0;
     for (const c of cats) chipColour.set(c.id, c.essential ? categorySwatch(true, e++) : categorySwatch(false, n++));
   }
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [grp, setGrp] = useState("Lifestyle");
   const [essential, setEssential] = useState(false);
 
   return (
-    <div className="mt-6">
+    <div id="categories" className="mt-6 scroll-mt-4">
       <button onClick={() => setOpen(!open)} className="text-sm font-medium text-muted hover:text-accent">
         {open ? "▾" : "▸"} Categories
       </button>

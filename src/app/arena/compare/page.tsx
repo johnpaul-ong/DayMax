@@ -22,6 +22,7 @@ import {
 import { weekStart } from "@/lib/ranking";
 import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { CHART_WARN } from "@/lib/chartColors";
 import { localToday } from "@/lib/dates";
 import ArenaModes from "../modes";
 
@@ -343,7 +344,7 @@ export default function ArenaComparePage() {
                   <Bar dataKey="productive" fill={colors.productive} />
                   <Bar dataKey="brainrot" fill={colors.brainrot} />
                   <Bar dataKey="other" fill={colors.other} />
-                  <Bar dataKey="social" fill="#f59e0b" />
+                  <Bar dataKey="social" fill={CHART_WARN} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

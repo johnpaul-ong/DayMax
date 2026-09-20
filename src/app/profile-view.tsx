@@ -30,13 +30,13 @@ import { fetchMemberPursuits, type MemberPursuit } from "@/lib/pursuits";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { blendHex, DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
 import { teamMeta } from "@/lib/teams";
+import { chartSeries } from "@/lib/chartColors";
 import { TeamDot } from "./team-name";
 import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
 import BigThree from "./big-three";
 import DayClock, { type ClockSlot } from "./day-clock";
 
-const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 export default function ProfileView({ userId }: { userId: string }) {
@@ -385,7 +385,7 @@ export default function ProfileView({ userId }: { userId: string }) {
                 <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
                 <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
                 <Tooltip labelFormatter={(d) => String(d)} />
-                <Line type="monotone" strokeWidth={2.5} dataKey="weight" stroke={LINE_COLORS[0]} dot={{ r: 2 }} />
+                <Line type="monotone" strokeWidth={2.5} dataKey="weight" stroke={chartSeries(0)} dot={{ r: 2 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

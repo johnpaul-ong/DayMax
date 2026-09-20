@@ -26,6 +26,24 @@
   --warn: #8a5a00;
   --warn-soft: #fdf3dd;
   --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 16px rgb(16 24 40 / 0.04);
+
+  /* Chart series. One identity colour per line/bar/slice, walked in order.
+     Every value is checked to at least 3:1 against this theme's --surface
+     (WCAG 1.4.11, non-text contrast) and at least dE 25 from every other
+     entry in the same list, so neighbouring series never blur together.
+     --chart-muted is the "everything else" neutral (a real series, hence
+     here and not --faint, which is a de-emphasised *text* token and is
+     close to invisible as a bar fill). */
+  --chart-1: #4f6ef7;   /* indigo — matches --accent */
+  --chart-2: #15803d;   /* green */
+  --chart-3: #dc2626;   /* red */
+  --chart-4: #b45309;   /* amber */
+  --chart-5: #0284c7;   /* sky */
+  --chart-6: #7c3aed;   /* violet */
+  --chart-7: #be185d;   /* pink */
+  --chart-8: #0f766e;   /* teal */
+  --chart-9: #78716c;   /* stone */
+  --chart-muted: #8a94a6;
 }
 
 [data-theme="dark"] {
@@ -47,6 +65,20 @@
   --warn: #fbbf24;
   --warn-soft: #33290f;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+
+  /* Chart series, lifted for a dark surface — the light theme's 600/700
+     shades sit at ~2:1 on #191c22 and read as mud. These are the 300/400
+     end of the same hues: 4.8:1 or better against --surface. */
+  --chart-1: #7c93ff;   /* periwinkle — matches --accent */
+  --chart-2: #4ade80;   /* green */
+  --chart-3: #f87171;   /* red */
+  --chart-4: #fbbf24;   /* amber */
+  --chart-5: #38bdf8;   /* sky */
+  --chart-6: #d8b4fe;   /* violet */
+  --chart-7: #f472b6;   /* pink */
+  --chart-8: #2dd4bf;   /* teal */
+  --chart-9: #a8b3c4;   /* slate */
+  --chart-muted: #7d8899;
 }
 
 /* Soft paper, moss and sky — hand-painted feel. */
@@ -69,6 +101,21 @@
   --warn: #96700f;
   --warn-soft: #f2ead0;
   --shadow: 0 2px 3px rgb(90 80 50 / 0.08), 0 8px 20px rgb(90 80 50 / 0.08);
+
+  /* Chart series, mixed from the same paintbox as the theme: moss, terracotta,
+     slate, ochre, plum, verdigris, rose, cocoa. The lead is the moss --accent,
+     which is why green is slot 1 here and slot 2 elsewhere — a second green
+     next to it would be unreadable. All >= 3.2:1 on --surface, min dE 27. */
+  --chart-1: #5c8a4e;   /* moss — matches --accent */
+  --chart-2: #b3543f;   /* terracotta */
+  --chart-3: #3f6b8a;   /* slate blue */
+  --chart-4: #96700f;   /* ochre */
+  --chart-5: #6f4e7c;   /* plum */
+  --chart-6: #2f7268;   /* verdigris */
+  --chart-7: #a34a6b;   /* rose */
+  --chart-8: #6b4a3a;   /* cocoa */
+  --chart-9: #8f8a76;   /* driftwood */
+  --chart-muted: #7f8a8f;
 }
 
 /* Stock Apple. Real iOS system colours (light appearance): systemGroupedBackground
@@ -97,6 +144,25 @@
   --warn: #c93400;                      /* systemOrange, accessible variant */
   --warn-soft: #fff2e0;                 /* systemOrange at 12% over white */
   --shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 6px 16px rgb(0 0 0 / 0.04);
+
+  /* Chart series: Apple's system palette. Same reasoning as the tokens above —
+     the standard fill variants (systemGreen #34c759, systemOrange #ff9500,
+     systemTeal #30b0c7) sit at 2.0–2.5:1 on white and vanish as a 2px line,
+     so each one here is Apple's published *accessible* variant of that colour.
+     systemBlue is the exception: #007aff already clears 4:1, and it is the
+     accent, so it leads. Slot 4 is accessible systemYellow (#b25000) rather
+     than accessible systemOrange (#c93400), which is only dE 15 from
+     accessible systemRed and would read as a second red. */
+  --chart-1: #007aff;   /* systemBlue — matches --accent */
+  --chart-2: #248a3d;   /* systemGreen, accessible */
+  --chart-3: #d70015;   /* systemRed, accessible */
+  --chart-4: #b25000;   /* systemYellow/Orange, accessible */
+  --chart-5: #8944ab;   /* systemPurple, accessible */
+  --chart-6: #0071a4;   /* systemTeal/Cyan, accessible */
+  --chart-7: #d30f45;   /* systemPink, accessible */
+  --chart-8: #3634a3;   /* systemIndigo, accessible */
+  --chart-9: #7f6545;   /* systemBrown, accessible */
+  --chart-muted: #8e8e93; /* systemGray */
 }
 
 /* Type and radii, scoped to iOS only — no other theme is touched. SF via the

@@ -49,9 +49,9 @@ import {
 } from "@/lib/board";
 import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { DEFAULT_BUCKET_COLORS, loadBucketColors, type BucketColors } from "@/lib/theme";
+import { chartSeries } from "@/lib/chartColors";
 import { localToday } from "@/lib/dates";
 
-const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 const RULE_INFO: Record<ShareRule, string> = {
@@ -729,7 +729,7 @@ function DayCompare({ trackId }: { trackId: string }) {
             <Tooltip labelFormatter={(d) => String(d)} />
             <Legend />
             {chart.names.map((n, i) => (
-              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} connectNulls />
+              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={chartSeries(i)} dot={false} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>
@@ -803,7 +803,7 @@ function LiftsCompare({ trackId }: { trackId: string }) {
             <Tooltip labelFormatter={(d) => String(d)} />
             <Legend />
             {chart.names.map((n, i) => (
-              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+              <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={chartSeries(i)} dot={{ r: 2 }} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>

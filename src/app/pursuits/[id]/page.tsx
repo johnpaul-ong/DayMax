@@ -72,8 +72,8 @@ import { weekStart, workMaxFrom } from "@/lib/ranking";
 import { localToday } from "@/lib/dates";
 import { fetchPursuitTeams, teamMeta, type Team, type TeamStanding } from "@/lib/teams";
 import { loadTheme } from "@/lib/theme";
+import { CHART_DANGER, CHART_OK, chartSeries } from "@/lib/chartColors";
 
-const LINE_COLORS = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 export default function PursuitPage() {
@@ -448,8 +448,8 @@ function MyLife() {
             <YAxis tick={{ fontSize: 10 }} unit="h" />
             <Tooltip />
             <Legend />
-            <Bar dataKey="productive" stackId="a" fill="#16a34a" />
-            <Bar dataKey="brainrot" stackId="a" fill="#dc2626" />
+            <Bar dataKey="productive" stackId="a" fill={CHART_OK} />
+            <Bar dataKey="brainrot" stackId="a" fill={CHART_DANGER} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -551,8 +551,8 @@ function MyMoney() {
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend />
-              <Bar dataKey="essential" stackId="a" name="essential" fill="#16a34a" />
-              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill="#dc2626" />
+              <Bar dataKey="essential" stackId="a" name="essential" fill={CHART_OK} />
+              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill={CHART_DANGER} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -720,7 +720,7 @@ function PursuitPreview({ pursuit, onJoined }: { pursuit: Pursuit; onJoined: () 
                 <Tooltip labelFormatter={(d) => `Week of ${d}`} />
                 <Legend />
                 <Bar dataKey="entries" name="entries" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="activeMembers" name="people" fill="#16a34a" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="activeMembers" name="people" fill={CHART_OK} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1079,7 +1079,7 @@ function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; memberCo
                 <Tooltip labelFormatter={(d) => String(d)} />
                 <Legend />
                 {chart.names.map((n, i) => (
-                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} connectNulls />
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={chartSeries(i)} dot={false} connectNulls />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -1098,7 +1098,7 @@ function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; memberCo
               <Tooltip />
               <Legend />
               <Bar dataKey="productive" fill="var(--accent)" />
-              <Bar dataKey="brainrot" fill="#dc2626" />
+              <Bar dataKey="brainrot" fill={CHART_DANGER} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1216,7 +1216,7 @@ function LiftsCommunity({ pursuitId }: { pursuitId: string }) {
                 <Tooltip labelFormatter={(d) => String(d)} />
                 <Legend />
                 {chart.names.map((n, i) => (
-                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={chartSeries(i)} dot={{ r: 2 }} connectNulls />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -1378,7 +1378,7 @@ function StatSection({ stat, isOwner, isMember, onChanged, mineOnly }: { stat: P
                   label={(p: any) => `${p.name} (${p.value})`}
                 >
                   {perMember.map((_, i) => (
-                    <Cell key={i} fill={LINE_COLORS[i % LINE_COLORS.length]} />
+                    <Cell key={i} fill={chartSeries(i)} />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -1391,7 +1391,7 @@ function StatSection({ stat, isOwner, isMember, onChanged, mineOnly }: { stat: P
                 <Tooltip />
                 <Legend />
                 <Bar dataKey="thisWeek" fill="var(--accent)" />
-                <Bar dataKey="best" fill="#16a34a" />
+                <Bar dataKey="best" fill={CHART_OK} />
               </BarChart>
             ) : (
               <LineChart data={lineData.data}>
@@ -1402,7 +1402,7 @@ function StatSection({ stat, isOwner, isMember, onChanged, mineOnly }: { stat: P
                 {lineData.names.length > 1 && <Legend />}
                 {stat.target != null && <ReferenceLine y={stat.target} strokeDasharray="6 3" stroke="var(--accent)" label={{ value: `target ${stat.target}`, fontSize: 10 }} />}
                 {lineData.names.map((n, i) => (
-                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 2 }} connectNulls />
+                  <Line key={n} type="monotone" strokeWidth={2.5} dataKey={n} stroke={chartSeries(i)} dot={{ r: 2 }} connectNulls />
                 ))}
               </LineChart>
             )}

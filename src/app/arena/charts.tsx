@@ -40,10 +40,9 @@ import { defaultBuckets, SLOTS_PER_DAY, slotToTime } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
 import { workMaxFrom } from "@/lib/ranking";
 import { teamMeta } from "@/lib/teams";
+import { CHART_DANGER, CHART_MUTED, CHART_OK, CHART_WARN, chartSeries } from "@/lib/chartColors";
 
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
-/** Highest-contrast set that still reads on both themes. */
-const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 
 interface Person {
   id: string;
@@ -168,7 +167,7 @@ function Race({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
                 key={p.id}
                 type="monotone"
                 dataKey={p.name}
-                stroke={p.id === me ? "var(--accent)" : SERIES[i % SERIES.length]}
+                stroke={p.id === me ? "var(--accent)" : chartSeries(i)}
                 strokeWidth={p.id === me ? 3.5 : 1.75}
                 dot={false}
               />
@@ -263,10 +262,10 @@ function DayShape({ people, me }: { people: Person[]; me: string | null }) {
             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={92} />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="productive" stackId="a" fill="#16a34a" />
-            <Bar dataKey="social" stackId="a" fill="#f59e0b" />
-            <Bar dataKey="brainrot" stackId="a" fill="#dc2626" />
-            <Bar dataKey="other" stackId="a" fill="#94a3b8" />
+            <Bar dataKey="productive" stackId="a" fill={CHART_OK} />
+            <Bar dataKey="social" stackId="a" fill={CHART_WARN} />
+            <Bar dataKey="brainrot" stackId="a" fill={CHART_DANGER} />
+            <Bar dataKey="other" stackId="a" fill={CHART_MUTED} />
           </BarChart>
         </ResponsiveContainer>
       </div>

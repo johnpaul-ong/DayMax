@@ -13,10 +13,16 @@
 
 export type BigLift = "squat" | "deadlift" | "bench";
 
+/**
+ * Colours come from the theme's chart palette, not literals — these three
+ * lines sit on the profile next to charts that already follow the theme, and
+ * hardcoded light-theme indigo next to a systemBlue UI is the exact seam the
+ * shared palette exists to remove.
+ */
 export const BIG_THREE: Array<{ key: BigLift; label: string; color: string }> = [
-  { key: "squat", label: "Squat", color: "#4f6ef7" },
-  { key: "deadlift", label: "Deadlift", color: "#dc2626" },
-  { key: "bench", label: "Bench", color: "#16a34a" },
+  { key: "squat", label: "Squat", color: "var(--chart-1, #4f6ef7)" },
+  { key: "deadlift", label: "Deadlift", color: "var(--chart-3, #dc2626)" },
+  { key: "bench", label: "Bench", color: "var(--chart-2, #15803d)" },
 ];
 
 /**

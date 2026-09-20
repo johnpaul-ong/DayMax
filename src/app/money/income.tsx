@@ -168,6 +168,13 @@ export default function IncomeView({ months = 6 }: { months?: number }) {
         </ResponsiveContainer>
       </div>
 
+      {sources.length === 1 && (
+        <p className="card border-dashed p-4 text-sm text-muted">
+          Everything came from one source, <b>{sources[0].source}</b> — a breakdown chart of one bar says nothing.
+          Label your income entries (pay, refund, side work) and this splits out.
+        </p>
+      )}
+
       {sources.length > 1 && (
         <div className="card p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">Where it came from</p>
