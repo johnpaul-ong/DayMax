@@ -100,9 +100,30 @@ export default function PursuitsPage() {
       )}
       {error && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>}
 
+      {/* Real empty state: someone landing on Pursuits with no
+          memberships shouldn't just see the bare "Start a pursuit"
+          form -- they need to understand what a pursuit IS first. */}
+      {!loading && mine.length === 0 && (
+        <div className="mb-6 card p-5">
+          <h2 className="text-lg font-semibold">Pursuits are shared trackers.</h2>
+          <p className="mt-1 text-sm text-muted">
+            A pursuit is one thing you and other people are working on together — a habit, a metric, a lift, a
+            budget. Everyone in it logs into the same board and the app compares your progress.
+          </p>
+          <ul className="mt-3 space-y-1.5 text-sm text-muted">
+            <li>• Join a built-in one: <b>Life</b> (your day, 15 minutes at a time), <b>Lifts</b>, or <b>Money</b>.</li>
+            <li>• Or start your own with a custom stat (games played, pages read, calories, anything).</li>
+          </ul>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/pursuits/explore" className="btn-primary">Explore built-ins →</Link>
+            <a href="#new-pursuit" className="btn-ghost">Or start your own ↓</a>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
-      ) : (
+      ) : mine.length === 0 ? null : (
         <div className="mb-6 grid gap-3 sm:grid-cols-2">
           {mine.map((p) => {
             const sp = sparks[p.id];
@@ -153,7 +174,7 @@ export default function PursuitsPage() {
         </div>
       )}
 
-      <div className="card p-4">
+      <div id="new-pursuit" className="card scroll-mt-6 p-4">
         <h2 className="mb-1 font-semibold">Start a pursuit</h2>
         <div className="flex flex-wrap items-end gap-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Chess)" className="w-44 rounded-lg border bg-surface px-2 py-2 text-sm" />

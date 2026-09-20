@@ -215,15 +215,24 @@ export async function fetchStatData(statId: string): Promise<StatEntry[]> {
 export async function fetchMyEntries(statId: string): Promise<MyEntry[]> {
   const supabase = createClient();
   const user_id = await uid();
-  const { data, error } = await supabase
-    .from("pursuit_entries")
-    .select("date, value, note")
-    .eq("stat_id", statId)
-    .eq("user_id", user_id)
-    .order("date", { ascending: false })
-    .limit(1000);
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({ date: String(r.date), value: Number(r.value), note: r.note }));
+  // Was `.limit(1000)` -- silently truncated a >~3-year daily stat.
+  // Paged, same pattern as fetchLifts / fetchAllDayEntries.
+  const all: any[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("pursuit_entries")
+      .select("date, value, note")
+      .eq("stat_id", statId)
+      .eq("user_id", user_id)
+      .order("date", { ascending: false })
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  return all.map((r: any) => ({ date: String(r.date), value: Number(r.value), note: r.note }));
 }
 
 export async function logEntry(statId: string, date: string, value: number, note: string | null): Promise<void> {

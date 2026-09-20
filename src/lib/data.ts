@@ -127,14 +127,23 @@ export async function upsertDayMetrics(metrics: DayMetrics[]): Promise<void> {
 // --- lifts -------------------------------------------------------------------
 
 export async function fetchLifts(): Promise<Array<LiftEntry & { id: number }>> {
+  // Was `.limit(2000)` -- silently truncated for anyone with a real
+  // 2+ year lifting history. Paged, matches fetchAllDayEntries.
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("lift_entries")
-    .select("id, date, exercise, weight_kg, reps, sets, notes")
-    .order("date", { ascending: false })
-    .limit(2000);
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const all: Array<any> = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("lift_entries")
+      .select("id, date, exercise, weight_kg, reps, sets, notes")
+      .order("date", { ascending: false })
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  return all.map((r) => ({
     id: r.id,
     date: String(r.date),
     exercise: r.exercise,

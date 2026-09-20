@@ -370,11 +370,11 @@ export default function HomePage() {
   function statTiles(t: ReturnType<typeof bucketize> | null) {
     return (
       <>
-        <div className="flex sm:col-span-2"><Stat label="Productive" value={`${(t?.productive ?? 0).toFixed(1)}h`} color={colors.productive} /></div>
-        <div className="flex sm:col-span-2"><Stat label="Brainrot" value={`${(t?.brainrot ?? 0).toFixed(1)}h`} color={colors.brainrot} /></div>
+        <div className="flex sm:col-span-2"><Stat label="Focused" value={`${(t?.productive ?? 0).toFixed(1)}h`} sub="work + sports" color={colors.productive} /></div>
+        <div className="flex sm:col-span-2"><Stat label="Downtime" value={`${(t?.brainrot ?? 0).toFixed(1)}h`} sub="leisure + other" color={colors.brainrot} /></div>
         <div className="flex sm:col-span-2"><Stat label="Other" value={`${(t?.other ?? 0).toFixed(1)}h`} color={colors.other} /></div>
-        <div className="flex sm:col-span-3"><Stat label="Focus score" value={t && focusScore(t) !== null ? `${focusScore(t)}` : "—"} sub="productive ÷ (productive + brainrot) × 100" /></div>
-        <div className="flex sm:col-span-3"><Stat label="WorkMax" value={t && workMax(t) !== null ? `${workMax(t)}` : "—"} sub="focus ÷ 100 × productive hours" /></div>
+        <div className="flex sm:col-span-3"><Stat label="Focus %" value={t && focusScore(t) !== null ? `${focusScore(t)}` : "—"} sub="of your logged hours" /></div>
+        <div className="flex sm:col-span-3"><Stat label="WorkMax" value={t && workMax(t) !== null ? `${workMax(t)}` : "—"} sub="focus × productive hours" /></div>
       </>
     );
   }
@@ -428,11 +428,11 @@ export default function HomePage() {
 
           {/* one row per metric -- no more parallel columns of five duplicated cards */}
           {[
-            { label: "Productive", get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.productive.toFixed(1)}h` : "—", color: colors.productive },
-            { label: "Brainrot",   get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.brainrot.toFixed(1)}h` : "—", color: colors.brainrot },
-            { label: "Other",      get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.other.toFixed(1)}h` : "—",   color: colors.other },
-            { label: "Focus",      get: (t: ReturnType<typeof bucketize> | null) => t && focusScore(t) !== null ? `${focusScore(t)}` : "—" },
-            { label: "WorkMax",    get: (t: ReturnType<typeof bucketize> | null) => t && workMax(t) !== null ? `${workMax(t)}` : "—" },
+            { label: "Focused", get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.productive.toFixed(1)}h` : "—", color: colors.productive },
+            { label: "Downtime", get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.brainrot.toFixed(1)}h` : "—", color: colors.brainrot },
+            { label: "Other",    get: (t: ReturnType<typeof bucketize> | null) => t ? `${t.other.toFixed(1)}h` : "—",   color: colors.other },
+            { label: "Focus %",  get: (t: ReturnType<typeof bucketize> | null) => t && focusScore(t) !== null ? `${focusScore(t)}` : "—" },
+            { label: "WorkMax",  get: (t: ReturnType<typeof bucketize> | null) => t && workMax(t) !== null ? `${workMax(t)}` : "—" },
           ].map((r) => (
             <Fragment key={r.label}>
               <span className="flex items-center gap-2 text-muted">

@@ -25,8 +25,10 @@ export interface NavGroup {
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Life",
-    // one destination: the zoom switcher on the page handles day/month/year
+    // Renamed from "Life" -- that group had one destination (Today)
+    // and every user surface for it says "today", not "life". The
+    // sub-row still hides itself when there's only one child.
+    label: "Today",
     subs: [{ href: "/today", label: "Today" }],
   },
   {

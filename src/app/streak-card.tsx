@@ -99,20 +99,12 @@ export default function StreakCard() {
           </p>
           {msg && <p className="mt-0.5 text-xs text-faint">{msg}</p>}
         </div>
-        {/* "30 OF 30" told you nothing. Each number now says what it counts. */}
-        <div className="flex gap-5">
-          <div className="text-center">
-            <p className="text-2xl font-bold tabular-nums">{streak.current}</p>
-            <p className="text-[10px] uppercase tracking-wide text-faint">day streak</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold tabular-nums">{streak.longest}</p>
-            <p className="text-[10px] uppercase tracking-wide text-faint">longest ever</p>
-          </div>
-          <div className="text-center" title={`Days in the last 30 with at least ${DAY_COMPLETE_SLOTS} of 96 slots logged`}>
-            <p className="text-2xl font-bold tabular-nums">{streak.last30}<span className="text-sm font-normal text-faint">/30</span></p>
-            <p className="text-[10px] uppercase tracking-wide text-faint">days logged</p>
-          </div>
+        {/* Just the live streak. 'longest ever' and 'X/30 days logged'
+            were both retrospective stats you don't need on every page
+            load -- the current streak is what changes today. */}
+        <div className="text-center">
+          <p className="text-3xl font-bold tabular-nums">{streak.current}</p>
+          <p className="text-[10px] uppercase tracking-wide text-faint">day streak</p>
         </div>
       </div>
 

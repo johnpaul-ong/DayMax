@@ -137,7 +137,7 @@ export default function MoneyPage() {
 
       {summary && summary.entries > 0 && summary.income === 0 && (
         <p className="mb-3 text-xs text-warn">
-          No income logged — you&apos;ll show <b>unranked</b> in challenges until you add it (bottom of page).
+          Add your income (bottom of page) so leaderboards can compare fairly — a student and a surgeon on the same board.
         </p>
       )}
 

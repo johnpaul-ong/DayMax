@@ -196,22 +196,24 @@ export default function TodayPage() {
           <button
             key={c.code}
             onClick={() => { setCat(c.code); setCatPicked(true); }}
+            title={`${c.name} — Alt+${c.code}`}
             className={`rounded-lg border px-2 py-2.5 text-left text-sm font-semibold text-ink ${cat === c.code && catPicked ? "ring-2 ring-accent" : ""}`}
             /*
              * c.color is now a CSS var() reference (see lib/categories.ts),
              * so the old `c.color + "22"` string concatenation produced
-             * invalid CSS ("var(--cat-0, #94a3b8)22") and the background
-             * fell out entirely -- the buttons went flat with just a
-             * coloured border on midnight. color-mix() blends the theme
-             * variable with transparent at 18%, which works with a var()
-             * on the input side.
+             * invalid CSS. color-mix() blends the theme variable with
+             * transparent at 18%, which works with a var() on the input.
+             *
+             * Digit codes moved from the visible label to the tooltip
+             * so the chips don't read like a numbered list. They stay
+             * live as Alt+digit hotkeys.
              */
             style={{
               background: `color-mix(in srgb, ${c.color} 18%, transparent)`,
               borderColor: `color-mix(in srgb, ${c.color} 70%, transparent)`,
             }}
           >
-            {c.code} {c.name}
+            {c.name}
           </button>
         ))}
       </div>

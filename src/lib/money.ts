@@ -72,18 +72,26 @@ export async function setCategoryPref(categoryId: string, patch: { essential?: b
 }
 
 export async function fetchSpend(fromDate: string, toDate: string): Promise<SpendEntry[]> {
+  // Was `.limit(2000)` -- silently truncated a heavy year. Paged.
   const supabase = createClient();
   const user_id = await uid();
-  const { data, error } = await supabase
-    .from("spend_entries")
-    .select("id, date, amount, category_id, item, note")
-    .eq("user_id", user_id)
-    .gte("date", fromDate)
-    .lte("date", toDate)
-    .order("date", { ascending: false })
-    .limit(2000);
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const all: any[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("spend_entries")
+      .select("id, date, amount, category_id, item, note")
+      .eq("user_id", user_id)
+      .gte("date", fromDate)
+      .lte("date", toDate)
+      .order("date", { ascending: false })
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  return all.map((r: any) => ({
     id: r.id,
     date: String(r.date),
     amount: Number(r.amount),

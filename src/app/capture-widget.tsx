@@ -62,6 +62,16 @@ export default function CaptureWidget() {
   const [lastEntry, setLastEntry] = useState<{ category: number; label: string | null } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const date = localToday();
+  /**
+   * True once we've confirmed the user has EVER logged a day_entry.
+   * Reviewer flagged that a brand-new user with zero data would see
+   * "What were you doing at 09:15?" as their first-ever DayMax
+   * interaction, which reads as an intrusion. Ticker below gates on
+   * this so a first-timer only starts getting prompts AFTER they've
+   * manually logged at least one slot via /today. Flip permanently
+   * on the first save via daymax-day-saved event too.
+   */
+  const [hasEverLogged, setHasEverLogged] = useState<boolean | null>(null);
 
   // Refs mirror the state the ticker reads. Without these the interval effect
   // depends on `filled`/`skipped`, so every single save tore down and rebuilt
@@ -129,9 +139,24 @@ export default function CaptureWidget() {
     const from = new Date();
     from.setDate(from.getDate() - 60);
     fetchDayEntries(localToday(from), date)
-      .then((es) => setMemory(learnLabels(es)))
+      .then((es) => {
+        setMemory(learnLabels(es));
+        // First-timer gate: any entry in the last 60 days means they
+        // are NOT brand-new. Flip the flag on.
+        if (es.length > 0) setHasEverLogged(true);
+        else setHasEverLogged(false);
+      })
       .catch(() => {});
   }, [signedIn, settings?.enabled, refresh, date]);
+
+  // Also flip the flag on when the user saves their first slot from
+  // any surface. Doesn't need to persist -- next mount rechecks
+  // day_entries anyway.
+  useEffect(() => {
+    const onSaved = () => setHasEverLogged(true);
+    window.addEventListener("daymax-day-saved", onSaved);
+    return () => window.removeEventListener("daymax-day-saved", onSaved);
+  }, []);
 
   // Re-read today's slots whenever you come back to the app or navigate. This
   // is the fix for "it asks about a slot I already filled": logging on /today
@@ -158,6 +183,9 @@ export default function CaptureWidget() {
     const tick = async () => {
       const s = settingsRef.current;
       if (!s?.enabled) return;
+      // First-timer gate: don't ping a user who has never logged
+      // anything. `null` = still checking. Once true, this stays true.
+      if (hasEverLogged !== true) return setQueue([]);
       const now = new Date();
       if (inQuietHours(now.getHours(), s.quietFrom, s.quietTo)) return setQueue([]);
       if (isSnoozed()) return setQueue([]);
@@ -189,7 +217,9 @@ export default function CaptureWidget() {
     // wake-ups halves the background work on a phone
     const id = setInterval(() => void tick(), 60_000);
     return () => clearInterval(id);
-  }, [signedIn, settings?.enabled, refresh]);
+    // hasEverLogged in deps so the ticker re-runs (and starts pinging)
+    // the moment a first-timer's flag flips true.
+  }, [signedIn, settings?.enabled, refresh, hasEverLogged]);
 
   // --- desktop notification when the tab is in the background -----------------
   /**
