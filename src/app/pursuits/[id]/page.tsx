@@ -86,18 +86,27 @@ const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
 
 /**
- * "3d ago", "today", "never" — the point is to see who's ACTIVE without
- * doing calendar arithmetic in your head.
+ * "3d ago", "today", "no logs" — the point is to see who's ACTIVE
+ * without doing calendar arithmetic in your head.
+ *
+ * The chip returns a `title` string too, so hovering a member card
+ * on desktop tells you exactly what the label refers to (log dates
+ * on THIS pursuit's tables -- day_entries for Life, spend_entries
+ * for Money, pursuit_entries for custom). The previous "never" was
+ * confusing on a brand-new custom pursuit where nobody has logged
+ * yet: it read as "these people have never logged anything on
+ * DayMax", not "nobody has entered a data point on this pursuit".
  */
-function lastLoggedLabel(iso: string | null, today: string): { text: string; tone: "hot" | "warm" | "cold" | "none" } {
-  if (!iso) return { text: "never", tone: "none" };
+function lastLoggedLabel(iso: string | null, today: string): { text: string; tone: "hot" | "warm" | "cold" | "none"; title: string } {
+  if (!iso) return { text: "no logs here yet", tone: "none", title: "Hasn't logged anything on this pursuit yet" };
   const d = (a: string) => new Date(a + "T00:00:00").getTime();
   const days = Math.max(0, Math.round((d(today) - d(iso)) / 86400000));
-  if (days === 0) return { text: "today", tone: "hot" };
-  if (days === 1) return { text: "yesterday", tone: "hot" };
-  if (days < 7) return { text: `${days}d ago`, tone: "warm" };
-  if (days < 30) return { text: `${Math.round(days / 7)}w ago`, tone: "cold" };
-  return { text: `${Math.round(days / 30)}mo ago`, tone: "cold" };
+  const title = `Last logged on this pursuit ${iso}`;
+  if (days === 0) return { text: "today", tone: "hot", title };
+  if (days === 1) return { text: "yesterday", tone: "hot", title };
+  if (days < 7) return { text: `${days}d ago`, tone: "warm", title };
+  if (days < 30) return { text: `${Math.round(days / 7)}w ago`, tone: "cold", title };
+  return { text: `${Math.round(days / 30)}mo ago`, tone: "cold", title };
 }
 export default function PursuitPage() {
   const params = useParams<{ id: string }>();
@@ -1327,6 +1336,11 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
   if (members.length === 0) return null;
   const shown = expanded ? members : members.slice(0, 12);
   const hidden = total - members.length;
+  // If nobody in the pursuit has logged anything yet, add one line
+  // above the roster explaining what the "no logs here yet" chip
+  // refers to. On a brand-new custom pursuit that's every member and
+  // the pattern reads weird without context.
+  const anyLogged = members.some((m) => m.lastLogged != null);
 
   return (
     <section>
@@ -1337,6 +1351,11 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
           {hidden > 0 && ` · ${hidden} not shown`}
         </span>
       </div>
+      {!anyLogged && (
+        <p className="mb-2 text-xs text-muted">
+          Nobody has logged anything on this pursuit yet — the &ldquo;no logs here yet&rdquo; chip means just that. Be the first.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {shown.map((m) => {
           const inner = (
@@ -1355,11 +1374,14 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
                   {m.isDemo && " · legend"}
                 </span>
                 {/* who's active vs a ghost — the ONE bit of info a member card
-                    was missing. Tone colours a hot/warm/cold chip. */}
+                    was missing. Tone colours a hot/warm/cold chip. Hover /
+                    long-press for the plain-English tooltip ("Hasn't logged
+                    anything on THIS pursuit yet"), which fixes the "what does
+                    'never' mean here" question on fresh custom pursuits. */}
                 {(() => {
                   const ll = lastLoggedLabel(m.lastLogged, localToday());
                   const tint = ll.tone === "hot" ? "text-ok" : ll.tone === "warm" ? "text-warn" : "text-faint";
-                  return <span className={`block truncate text-[10px] ${tint}`}>· {ll.text}</span>;
+                  return <span title={ll.title} className={`block truncate text-[10px] ${tint}`}>· {ll.text}</span>;
                 })()}
               </span>
             </>

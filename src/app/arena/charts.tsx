@@ -118,26 +118,67 @@ export default function ArenaCharts({ rows, me }: { rows: LeaderboardRow[]; me: 
   );
 }
 
-/** Cumulative productive hours over the last 30 days. The overtakes are the point. */
+/**
+ * Cumulative productive hours over the last 30 days. The overtakes are
+ * the point.
+ *
+ * UNLOGGED vs LOGGED-ZERO. The old race summed `?? 0` on every date --
+ * which drew a flat line-at-zero for anyone who hadn't logged, and
+ * that flat line looks IDENTICAL to a person who logged every day and
+ * was purely doing brainrot. Two very different states rendered as
+ * one wrong-looking picture. Fixes here:
+ *
+ *   1. People with NO logged days in the window are dropped from the
+ *      chart entirely. A dead-flat zero line is a lie.
+ *   2. For everyone else, the line only starts at THEIR first-logged
+ *      date -- days before that emit null (Recharts leaves a gap).
+ *   3. After first-logged, a day with 0 productive hours is a real
+ *      data point at whatever the running total is (i.e. the line
+ *      correctly holds flat), so brainrot days still show.
+ */
 function Race({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
   const dates = useMemo(() => lastNDates(rows, 30), [rows]);
+  // Only people who actually logged something in the window. peopleFrom
+  // already excludes rows outside `dates`; the `days > 0` filter drops
+  // anyone whose totals are zero because they never logged (as opposed
+  // to zero because they logged pure brainrot -- days would be > 0).
   const top = useMemo(() => {
     const totals = peopleFrom(rows.filter((r) => dates.includes(r.date)));
-    return totals.sort((a, b) => b.productive - a.productive).slice(0, 8);
+    return totals
+      .filter((p) => p.days > 0)
+      .sort((a, b) => b.productive - a.productive)
+      .slice(0, 8);
   }, [rows, dates]);
+
+  // First-logged date per person, so pre-start days can be null (a
+  // GAP on the line) instead of a fake zero point.
+  const firstLogged = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const prev = map.get(r.memberId);
+      if (prev == null || r.date < prev) map.set(r.memberId, r.date);
+    }
+    return map;
+  }, [rows]);
 
   const data = useMemo(() => {
     const byKey = new Map(rows.map((r) => [`${r.memberId}|${r.date}`, r]));
     const running = new Map(top.map((p) => [p.id, 0]));
     return dates.map((date) => {
-      const point: Record<string, string | number> = { date };
+      const point: Record<string, string | number | null> = { date };
       for (const p of top) {
+        const first = firstLogged.get(p.id);
+        if (first != null && date < first) {
+          // Pre-participation: emit null so recharts shows nothing here.
+          point[p.name] = null;
+          continue;
+        }
         running.set(p.id, (running.get(p.id) ?? 0) + (byKey.get(`${p.id}|${date}`)?.productive ?? 0));
         point[p.name] = Math.round((running.get(p.id) ?? 0) * 10) / 10;
       }
       return point;
     });
-  }, [rows, dates, top]);
+  }, [rows, dates, top, firstLogged]);
 
   const leader = top[0];
   const mine = top.find((p) => p.id === me);
@@ -153,6 +194,7 @@ function Race({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
             {mine && mine.id === leader.id && <> — that&apos;s you</>}.
           </>
         )}
+        <span className="text-faint"> A gap in a line means that person hadn&apos;t logged yet.</span>
       </p>
       <div className="h-72 card p-2">
         <ResponsiveContainer>
@@ -170,6 +212,8 @@ function Race({ rows, me }: { rows: LeaderboardRow[]; me: string | null }) {
                 stroke={p.id === me ? "var(--accent)" : chartSeries(i)}
                 strokeWidth={p.id === me ? 3.5 : 1.75}
                 dot={false}
+                // null values = pre-participation gap; do NOT bridge them
+                connectNulls={false}
               />
             ))}
           </LineChart>
