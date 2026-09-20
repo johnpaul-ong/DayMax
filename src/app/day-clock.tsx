@@ -98,29 +98,48 @@ function geom(slot: number) {
  * a day laid out this way. Adjust STEP if you want a fatter or thinner
  * spiral.
  */
-const SPIRAL_INNER = 60;
-const SPIRAL_OUTER = 195;
-const SPIRAL_TURNS = 1;      // exactly one loop: an intuitive 24h
+/**
+ * Two turns, not one. AM lives on the inner turn, PM on the outer, so 6am
+ * and 6pm are on the same clock position -- exactly the point of a spiral.
+ * The band per slot is (SPIRAL_OUTER - SPIRAL_INNER) / 2, which is a THICK,
+ * clickable ring. The old "one turn" version made every wedge 1/96 of the
+ * ring thick (~1.4 px), which was unhittable and read as a line.
+ */
+const SPIRAL_INNER = 62;
+const SPIRAL_OUTER = 202;
+const SPIRAL_TURNS = 2;
+/**
+ * Two concentric turns: AM (hours 0-11) on the INNER band, PM (hours 12-23)
+ * on the OUTER. Each slot occupies a real quarter-hour wedge with two radii,
+ * so it's a proper hittable annulus not a hairline.
+ *
+ * Turn 1 spans SPIRAL_INNER .. mid; turn 2 spans mid .. SPIRAL_OUTER. Both
+ * are wide bands (~65 px each here), so 6am and 6pm land on the same clock
+ * angle at 3 o'clock -- both are radially clickable and visually paired.
+ */
+const SPIRAL_MID = (SPIRAL_INNER + SPIRAL_OUTER) / 2;
+const SPIRAL_GAP = 4; // tiny visual break between the two turns
 function geomSpiral(slot: number) {
-  const span = SPIRAL_OUTER - SPIRAL_INNER;
-  const t0 = slot / SLOTS_PER_DAY;
-  const t1 = (slot + 1) / SLOTS_PER_DAY;
-  const r0 = SPIRAL_INNER + span * t0;
-  const r1 = SPIRAL_INNER + span * t1;
-  // clockwise from the top; 24 hours across one turn
-  const a0 = -90 + t0 * 360 * SPIRAL_TURNS;
-  const a1 = -90 + t1 * 360 * SPIRAL_TURNS;
-  return { r0, r1, a0: (a0 + 360) % 360, a1: (a1 + 360) % 360, hour: Math.floor(slot / 4) };
+  const hour = Math.floor(slot / 4);
+  const q = slot % 4;
+  const pm = hour >= 12;
+  // ring bounds, with a small gap between them
+  const r0 = pm ? SPIRAL_MID + SPIRAL_GAP / 2 : SPIRAL_INNER;
+  const r1 = pm ? SPIRAL_OUTER : SPIRAL_MID - SPIRAL_GAP / 2;
+  // clockwise from the top, one full turn per 12 hours
+  const h = hour % 12;
+  const a0 = -90 + (h * 60 + q * 15);
+  const a1 = a0 + 15;
+  return { r0, r1, a0: (a0 + 360) % 360, a1: (a1 + 360) % 360, hour, pm };
 }
-/** A wedge that walks OUT along the spiral, so the inside and outside edges
- *  are slightly different radii and the path traces the growing band. */
+/**
+ * A fat quarter-hour wedge: the annulus between r0 and r1 across a 15° arc.
+ * This IS the same shape as `wedge()`, just at spiral coordinates. Having
+ * two functions was a mistake -- the old spiralWedge subtracted a band width
+ * from the outer radius, which is what made the ring paper-thin.
+ */
 function spiralWedge(g: ReturnType<typeof geomSpiral>): string {
-  const [x0, y0] = polar(g.r0, g.a0);
-  const [x1, y1] = polar(g.r1, g.a1);
-  const [x2, y2] = polar(g.r1 - (SPIRAL_OUTER - SPIRAL_INNER) / SLOTS_PER_DAY, g.a1);
-  const [x3, y3] = polar(g.r0 - (SPIRAL_OUTER - SPIRAL_INNER) / SLOTS_PER_DAY, g.a0);
-  const large = 0;
-  return `M${x0},${y0} A${g.r0},${g.r0} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${g.r0 - 0.01},${g.r0 - 0.01} 0 ${large} 0 ${x3},${y3} Z`;
+  return wedge(g.r0, g.r1, g.a0, g.a1);
 }
 
 export default function DayClock({
@@ -305,8 +324,13 @@ export default function DayClock({
             The subtle 12-marker outline is a background hint of a clock. */}
         {mode === "spiral" && (
           <g>
-            {/* background track: one thick ring gradient in ONE colour so
-                the growing spiral reads as a continuous surface */}
+            {/* two solid track rings behind the wedges, so an empty day still
+                shows a proper clock face. Otherwise the spiral looks like
+                nothing until you have data. */}
+            <circle cx={C} cy={C} r={(SPIRAL_INNER + SPIRAL_MID - SPIRAL_GAP / 2) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={(SPIRAL_MID - SPIRAL_GAP / 2) - SPIRAL_INNER} />
+            <circle cx={C} cy={C} r={(SPIRAL_MID + SPIRAL_GAP / 2 + SPIRAL_OUTER) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={SPIRAL_OUTER - (SPIRAL_MID + SPIRAL_GAP / 2)} opacity={0.6} />
+            {/* per-slot base (transparent so tracks show through, but IT is
+                the hit target -- one path per data-slot for elementFromPoint) */}
             {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
               const g = geomSpiral(s);
               return (
@@ -314,9 +338,9 @@ export default function DayClock({
                   key={`bg-${s}`}
                   data-slot={s}
                   d={spiralWedge(g)}
-                  fill="var(--surface-2)"
+                  fill="transparent"
                   stroke="var(--page)"
-                  strokeWidth={0.4}
+                  strokeWidth={0.6}
                   style={{ cursor: onSelect || onPaint ? "crosshair" : "default" }}
                 />
               );
@@ -405,21 +429,25 @@ export default function DayClock({
           return null;
         })()}
 
-        {/* Hour numbers in SPIRAL mode: 24 of them, once around the outside. */}
-        {mode === "spiral" && Array.from({ length: 24 }, (_, h) => {
-          const [x, y] = polar(SPIRAL_OUTER + 14, -90 + (h / 24) * 360 + 360 / 48);
+        {/* Hour numbers in SPIRAL mode.
+            12 clock positions, each stacked "PM / AM" -- so 6am sits DIRECTLY
+            below 18h on the 3-o'clock side. The pairing is the whole point. */}
+        {mode === "spiral" && Array.from({ length: 12 }, (_, h) => {
+          const centre = -90 + h * 30;                        // 12,1,2..11 clock positions
+          const [xPm, yPm] = polar(SPIRAL_OUTER + 14, centre); // outside outer ring
+          const [xAm, yAm] = polar(SPIRAL_INNER - 12, centre); // inside inner ring
+          const pm = (h + 12) % 24;
+          const am = h;
+          const anchor = h === 0 ? "12" : String(h);
           return (
-            <text
-              key={`spiral-h-${h}`}
-              x={x}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              className={h % 3 === 0 ? "fill-muted" : "fill-faint"}
-              style={{ fontSize: h % 6 === 0 ? 12 : 10, fontWeight: h % 6 === 0 ? 700 : 500 }}
-            >
-              {h}
-            </text>
+            <g key={`spiral-h-${h}`}>
+              <text x={xPm} y={yPm} textAnchor="middle" dominantBaseline="central" className="fill-muted" style={{ fontSize: 12, fontWeight: 700 }}>
+                {pm === 0 ? "0" : pm}
+              </text>
+              <text x={xAm} y={yAm} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 10, fontWeight: 600 }}>
+                {am === 0 ? "12" : am}
+              </text>
+            </g>
           );
         })}
 
@@ -506,10 +534,10 @@ export default function DayClock({
         ) : (
           <>
             <text x={C} y={C - 10} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              {mode === "spiral" ? "midnight in" : "AM inside"}
+              {mode === "spiral" ? "AM inside" : "AM inside"}
             </text>
             <text x={C} y={C + 8} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              {mode === "spiral" ? "midnight out" : "PM outside"}
+              {mode === "spiral" ? "PM outside" : "PM outside"}
             </text>
             {onPaint && (
               <text x={C} y={C + 28} textAnchor="middle" className="fill-faint" style={{ fontSize: 10 }}>
