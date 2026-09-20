@@ -148,6 +148,22 @@ export default function MoneyPage() {
         </div>
       )}
 
+      {/* The big radial meter lives here as the first Money element, not
+          buried inside the Insight tab. It's the only thing that works with
+          one data point and colours itself by diagnosis. */}
+      {summary && (
+        <div className="mb-3">
+          <BudgetMeter
+            spend={entries.filter((e) => {
+              const c = cats.find((c) => c.id === e.categoryId);
+              return c && !c.essential;
+            }).map((e) => ({ date: e.date, amount: e.amount }))}
+            budget={null}
+            monthlyIncome={summary.income || null}
+          />
+        </div>
+      )}
+
       {summary && <SummaryBar s={summary} />}
 
       {/* big, thumb-sized tabs rather than a dense toolbar */}

@@ -28,6 +28,16 @@ export interface ClockSlot {
   hint?: string | null;
 }
 
+/**
+ * Two visual modes. Same 96 slots, same hit targets, same drag geometry.
+ *
+ *   "spiral"  one continuous track that starts inside at 12am and unwinds
+ *             once to end outside at midnight. 23:45 flows STRAIGHT into
+ *             00:00 -- you asked for this exact shape.
+ *   "rings"   the older two-ring dial; kept for callers that want it.
+ */
+export type ClockMode = "spiral" | "rings";
+
 const SIZE = 440;
 const C = SIZE / 2;
 /**
@@ -77,6 +87,42 @@ function geom(slot: number) {
   return { ring, a0, a1: a0 + 7.5, pm };
 }
 
+/**
+ * The spiral. Every slot occupies a 24th of a full turn on a radius that
+ * grows LINEARLY with the slot index, so 23:45 (slot 95) sits at 359deg on
+ * the outermost band and 00:00 (slot 0) sits at 0deg on the innermost --
+ * exactly one revolution end-to-end.
+ *
+ * The band width tapers slightly outward so early morning reads a touch
+ * chunkier and evening a touch finer, which is the natural way to look at
+ * a day laid out this way. Adjust STEP if you want a fatter or thinner
+ * spiral.
+ */
+const SPIRAL_INNER = 60;
+const SPIRAL_OUTER = 195;
+const SPIRAL_TURNS = 1;      // exactly one loop: an intuitive 24h
+function geomSpiral(slot: number) {
+  const span = SPIRAL_OUTER - SPIRAL_INNER;
+  const t0 = slot / SLOTS_PER_DAY;
+  const t1 = (slot + 1) / SLOTS_PER_DAY;
+  const r0 = SPIRAL_INNER + span * t0;
+  const r1 = SPIRAL_INNER + span * t1;
+  // clockwise from the top; 24 hours across one turn
+  const a0 = -90 + t0 * 360 * SPIRAL_TURNS;
+  const a1 = -90 + t1 * 360 * SPIRAL_TURNS;
+  return { r0, r1, a0: (a0 + 360) % 360, a1: (a1 + 360) % 360, hour: Math.floor(slot / 4) };
+}
+/** A wedge that walks OUT along the spiral, so the inside and outside edges
+ *  are slightly different radii and the path traces the growing band. */
+function spiralWedge(g: ReturnType<typeof geomSpiral>): string {
+  const [x0, y0] = polar(g.r0, g.a0);
+  const [x1, y1] = polar(g.r1, g.a1);
+  const [x2, y2] = polar(g.r1 - (SPIRAL_OUTER - SPIRAL_INNER) / SLOTS_PER_DAY, g.a1);
+  const [x3, y3] = polar(g.r0 - (SPIRAL_OUTER - SPIRAL_INNER) / SLOTS_PER_DAY, g.a0);
+  const large = 0;
+  return `M${x0},${y0} A${g.r0},${g.r0} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${g.r0 - 0.01},${g.r0 - 0.01} 0 ${large} 0 ${x3},${y3} Z`;
+}
+
 export default function DayClock({
   slots,
   onSelect,
@@ -84,8 +130,10 @@ export default function DayClock({
   title,
   subtitle,
   activeCategory,
+  mode = "spiral",
 }: {
   slots: Map<number, ClockSlot>;
+  mode?: ClockMode;
   /** fires as soon as a drag ends -- range only, no writes yet */
   onSelect?: (from: number, to: number) => void;
   /** kept for programmatic paint (e.g. arrow keys); no longer wired to drag */
@@ -199,42 +247,39 @@ export default function DayClock({
         }}
       >
         {/* ring backgrounds, so empty time still reads as time */}
-        <circle cx={C} cy={C} r={(INNER.r0 + INNER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={INNER.r1 - INNER.r0} />
-        <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} opacity={0.55} />
+        {mode === "rings" && (
+          <>
+            <circle cx={C} cy={C} r={(INNER.r0 + INNER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={INNER.r1 - INNER.r0} />
+            <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} opacity={0.55} />
+          </>
+        )}
         {/* The AM/PM seam is a SOLID band between the two rings, in the
             page colour, so no wedge on the inner touches any wedge on the
             outer. Wispy dashed lines were not enough. */}
-        <circle cx={C} cy={C} r={NOON_TICK_R} fill="none" stroke="var(--page)" strokeWidth={GAP - 2} />
+        {mode === "rings" && <circle cx={C} cy={C} r={NOON_TICK_R} fill="none" stroke="var(--page)" strokeWidth={GAP - 2} />}
         {/* each ring gets its OWN outline so you see the ring itself */}
-        <circle cx={C} cy={C} r={INNER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-        <circle cx={C} cy={C} r={OUTER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-        <circle cx={C} cy={C} r={INNER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-        <circle cx={C} cy={C} r={OUTER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-        {/* AM / PM labels in the seam itself, no more ambiguous ◐ */}
-        <text x={C} y={C - NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
-        <text x={C} y={C + NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
+        {mode === "rings" && (
+          <>
+            <circle cx={C} cy={C} r={INNER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+            <circle cx={C} cy={C} r={OUTER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+            <circle cx={C} cy={C} r={INNER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+            <circle cx={C} cy={C} r={OUTER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
+            <text x={C} y={C - NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
+            <text x={C} y={C + NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
+          </>
+        )}
 
-        {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
+        {/* base fill layer (rings mode). Spiral mode renders below. */}
+        {mode === "rings" && Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
           const { ring, a0, a1, pm } = geom(s);
           const v = slots.get(s);
-          const sel = inSelection(s);
-          const fill = sel
-            ? activeCategory != null
-              ? categoryColor(activeCategory)
-              : "var(--accent)"
-            : v
-              ? categoryColor(v.category)
-              : "transparent";
+          const fill = v ? categoryColor(v.category) : "transparent";
           return (
             <path
-              key={s}
+              key={`base-${s}`}
               data-slot={s}
               d={wedge(ring.r0, ring.r1, a0, a1)}
               fill={fill}
-              // the inner ring is night: darken it so the two halves of the day
-              // are legible before you read a single number
-              // PM sits closer to full colour; AM is a shade lighter so the two
-              // halves are legible before you read a single number
               opacity={fill === "transparent" ? 0 : pm ? 1 : 0.72}
               stroke="var(--page)"
               strokeWidth={0.6}
@@ -243,8 +288,143 @@ export default function DayClock({
           );
         })}
 
-        {/* Outer ring numbers (PM), around the rim -- always visible. */}
-        {Array.from({ length: 12 }, (_, h) => {
+        {/* Selection overlay (rings). */}
+        {mode === "rings" && Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
+          if (!inSelection(s)) return null;
+          const { ring, a0, a1 } = geom(s);
+          const tint = activeCategory != null ? categoryColor(activeCategory) : "var(--accent)";
+          return (
+            <g key={`sel-${s}`} pointerEvents="none">
+              <path d={wedge(ring.r0, ring.r1, a0, a1)} fill={tint} opacity={0.9} />
+              <path d={wedge(ring.r0, ring.r1, a0, a1)} fill="none" stroke="#fff" strokeWidth={1} opacity={0.7} />
+            </g>
+          );
+        })}
+
+        {/* SPIRAL mode -- base track + fills + selection, in one loop.
+            The subtle 12-marker outline is a background hint of a clock. */}
+        {mode === "spiral" && (
+          <g>
+            {/* background track: one thick ring gradient in ONE colour so
+                the growing spiral reads as a continuous surface */}
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
+              const g = geomSpiral(s);
+              return (
+                <path
+                  key={`bg-${s}`}
+                  data-slot={s}
+                  d={spiralWedge(g)}
+                  fill="var(--surface-2)"
+                  stroke="var(--page)"
+                  strokeWidth={0.4}
+                  style={{ cursor: onSelect || onPaint ? "crosshair" : "default" }}
+                />
+              );
+            })}
+            {/* filled slots */}
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
+              const v = slots.get(s);
+              if (!v) return null;
+              const g = geomSpiral(s);
+              return (
+                <path
+                  key={`fill-${s}`}
+                  d={spiralWedge(g)}
+                  fill={categoryColor(v.category)}
+                  opacity={0.95}
+                  pointerEvents="none"
+                />
+              );
+            })}
+            {/* selection overlay + heavy frame around the whole run */}
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
+              if (!inSelection(s)) return null;
+              const g = geomSpiral(s);
+              const tint = activeCategory != null ? categoryColor(activeCategory) : "var(--accent)";
+              return (
+                <g key={`sel-${s}`} pointerEvents="none">
+                  <path d={spiralWedge(g)} fill={tint} opacity={0.9} />
+                  <path d={spiralWedge(g)} fill="none" stroke="#fff" strokeWidth={0.8} opacity={0.5} />
+                </g>
+              );
+            })}
+            {/* selection frame: outlined single path across the whole
+                selected arc so it reads as one picked block */}
+            {(dragging || selection) &&
+              (() => {
+                const r = dragging && anchor !== null && cursor !== null
+                  ? [Math.min(anchor, cursor), Math.max(anchor, cursor)] as const
+                  : selection!;
+                const first = geomSpiral(r[0]);
+                const last = geomSpiral(r[1]);
+                const bandW = (SPIRAL_OUTER - SPIRAL_INNER) / SLOTS_PER_DAY;
+                // outline the growing band: two spirals joined at each end
+                const [x0, y0] = polar(first.r0, first.a0);
+                const [x1, y1] = polar(last.r1, last.a1);
+                const [x2, y2] = polar(last.r1 - bandW, last.a1);
+                const [x3, y3] = polar(first.r0 - bandW, first.a0);
+                const spans = (r[1] - r[0]) / SLOTS_PER_DAY * 360;
+                const large = spans > 180 ? 1 : 0;
+                const outer = `M${x0},${y0} A${first.r0},${first.r0} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${first.r0},${first.r0} 0 ${large} 0 ${x3},${y3} Z`;
+                return <path d={outer} fill="none" stroke="var(--ink)" strokeWidth={2.5} pointerEvents="none" />;
+              })()}
+          </g>
+        )}
+
+        {/* rings mode: heavy outline around each per-ring chunk */}
+        {mode === "rings" && (() => {
+          if (dragging || selection) {
+            const range = dragging && anchor !== null && cursor !== null
+              ? [Math.min(anchor, cursor), Math.max(anchor, cursor)] as const
+              : selection!;
+            // split the range into per-ring runs, since one selection can span
+            // both rings and each needs its own outline
+            const chunks: Array<{ ring: typeof INNER; a0: number; a1: number }> = [];
+            let curChunk: { ring: typeof INNER; a0: number; a1: number } | null = null;
+            for (let s = range[0]; s <= range[1]; s++) {
+              const g = geom(s);
+              if (curChunk && curChunk.ring === g.ring) {
+                curChunk.a1 = g.a1;
+              } else {
+                if (curChunk) chunks.push(curChunk);
+                curChunk = { ring: g.ring, a0: g.a0, a1: g.a1 };
+              }
+            }
+            if (curChunk) chunks.push(curChunk);
+            return chunks.map((c, i) => (
+              <path
+                key={`frame-${i}`}
+                d={wedge(c.ring.r0, c.ring.r1, c.a0, c.a1)}
+                fill="none"
+                stroke="var(--ink)"
+                strokeWidth={2.5}
+                pointerEvents="none"
+              />
+            ));
+          }
+          return null;
+        })()}
+
+        {/* Hour numbers in SPIRAL mode: 24 of them, once around the outside. */}
+        {mode === "spiral" && Array.from({ length: 24 }, (_, h) => {
+          const [x, y] = polar(SPIRAL_OUTER + 14, -90 + (h / 24) * 360 + 360 / 48);
+          return (
+            <text
+              key={`spiral-h-${h}`}
+              x={x}
+              y={y}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className={h % 3 === 0 ? "fill-muted" : "fill-faint"}
+              style={{ fontSize: h % 6 === 0 ? 12 : 10, fontWeight: h % 6 === 0 ? 700 : 500 }}
+            >
+              {h}
+            </text>
+          );
+        })}
+
+        {/* Outer ring numbers (PM), around the rim -- always visible. Rings mode only. */}
+        {mode === "rings" && Array.from({ length: 12 }, (_, h) => {
           const [x, y] = polar(LABEL_R, h * 30);
           return (
             <text
@@ -260,11 +440,7 @@ export default function DayClock({
             </text>
           );
         })}
-        {/* Inner ring numbers (AM), inside the inner ring. Same layout. The
-            old version had numbers only on the outside so the AM ring read
-            as unlabelled and the numbers that WERE there looked wrong -- 12
-            was next to a slot that turned out to be PM. */}
-        {Array.from({ length: 12 }, (_, h) => {
+        {mode === "rings" && Array.from({ length: 12 }, (_, h) => {
           const [x, y] = polar(INNER_LABEL_R, h * 30);
           return (
             <text
@@ -330,10 +506,10 @@ export default function DayClock({
         ) : (
           <>
             <text x={C} y={C - 10} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              AM inside
+              {mode === "spiral" ? "midnight in" : "AM inside"}
             </text>
             <text x={C} y={C + 8} textAnchor="middle" className="fill-faint" style={{ fontSize: 11, fontWeight: 600 }}>
-              PM outside
+              {mode === "spiral" ? "midnight out" : "PM outside"}
             </text>
             {onPaint && (
               <text x={C} y={C + 28} textAnchor="middle" className="fill-faint" style={{ fontSize: 10 }}>

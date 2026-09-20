@@ -261,3 +261,34 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .daymax-reminder { animation: none; }
 }
+
+
+/* Hero numeric: the SF Pro-ish look Apple uses on big dashboard numbers.
+   Any card that wants a stat card look uses <p class="stat-num">. */
+.stat-num {
+  font-family: ui-sans-serif, "SF Pro Display", "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv11", "ss01", "tnum", "cv02";
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  font-weight: 700;
+}
+.stat-num-sm { font-size: 1.5rem; }
+.stat-num-md { font-size: 2.25rem; }
+.stat-num-lg { font-size: 3rem; }
+
+/* Any element that carries a number benefits from tabular figures so
+   things line up as they update. Cheap, non-visual, only helps. */
+.tabular-nums,
+.stat-num { font-variant-numeric: tabular-nums; }
+
+/* Card interaction: a hair of lift on hover, for cards that CHOOSE it. Not
+   on every card by default because Sheets-of-cards is a very common pattern
+   and animating all of them at once is worse, not better. */
+.card-lift {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 12px 32px rgb(16 24 40 / 0.09);
+}

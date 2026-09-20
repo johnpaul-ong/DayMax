@@ -114,7 +114,7 @@ export default function BudgetMeter({ spend, budget, monthlyIncome, currency, to
             <path d={arc(Math.min(0.999, frac - 1))} fill="none" stroke={stroke} strokeWidth={6} strokeLinecap="round" opacity={0.6} />
           )}
           {/* the giant number, iOS-style */}
-          <text x={C} y={C - 6} textAnchor="middle" dominantBaseline="central" className="fill-ink" style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.02em" }}>
+          <text x={C} y={C - 6} textAnchor="middle" dominantBaseline="central" className="fill-ink stat-num" style={{ fontSize: 34, fontWeight: 700 }}>
             {primary}
           </text>
           <text x={C} y={C + 22} textAnchor="middle" dominantBaseline="central" className="fill-muted" style={{ fontSize: 11, fontWeight: 500 }}>
