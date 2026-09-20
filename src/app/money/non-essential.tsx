@@ -177,7 +177,7 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
                 <Tooltip formatter={(v: number) => [money(v), "spent"]} />
                 <Bar dataKey="total" radius={[0, 3, 3, 0]}>
                   {ne.slice(0, 10).map((c, i) => (
-                    <Cell key={c.name} fill={categorySwatch(false, i)} />
+                    <Cell key={c.categoryId ?? c.name} fill={categorySwatch(false, i)} />
                   ))}
                 </Bar>
               </ComposedChart>

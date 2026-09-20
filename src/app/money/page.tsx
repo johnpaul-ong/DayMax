@@ -467,7 +467,12 @@ function Insight({
   // colour each category from its OWN group's family, so the pie separates
   // essential from non-essential before you read a single label
   const split = splitAndColour(byCat);
-  const coloured = new Map([...split.essential, ...split.nonEssential].map((c) => [c.name, c.color]));
+  // keyed by id, not name: two categories can legitimately share a name (a
+  // shared "Coffee" and one you made yourself) and the second would silently
+  // take the first one's colour
+  const coloured = new Map(
+    [...split.essential, ...split.nonEssential].map((c) => [c.categoryId ?? c.name, c.color])
+  );
 
   return (
     <div className="space-y-4">
@@ -493,7 +498,7 @@ function Insight({
             <PieChart>
               <Pie data={byCat} dataKey="total" nameKey="name" label={(p: any) => p.name}>
                 {byCat.map((c: CategoryTotal, i: number) => (
-                  <Cell key={c.name} fill={coloured.get(c.name) ?? CHART_COLORS[i % CHART_COLORS.length]} />
+                  <Cell key={c.categoryId ?? c.name} fill={coloured.get(c.categoryId ?? c.name) ?? CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip formatter={(v: number) => money(Number(v))} />

@@ -6,8 +6,8 @@
  * Income existed only as a box you typed a number into and a single "% of
  * income" figure. Nothing showed whether you earn steadily, what you actually
  * keep, or how the non-essential half moves relative to what you make — which
- * is the only honest way to read spending, since £400 of fun is a different
- * thing on £2k a month than on £6k.
+ * is the only honest way to read spending, since the same night out is a
+ * different thing on a small month than on a big one.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,7 +25,7 @@ import {
 } from "recharts";
 import { localToday } from "@/lib/dates";
 import { fetchIncome, fetchSummary, money } from "@/lib/money";
-import { categorySwatch, GROUP_COLOR } from "@/lib/moneyColors";
+import { GROUP_COLOR, incomeSwatch } from "@/lib/moneyColors";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -138,7 +138,7 @@ export default function IncomeView({ months = 6 }: { months?: number }) {
           {stats.variability <= 8 ? (
             <>Your income is steady — it varies by only {stats.variability}% month to month.</>
           ) : (
-            <>Your income swings {stats.variability}% month to month, so judge spending as a share, not in pounds.</>
+            <>Your income swings {stats.variability}% month to month, so judge spending as a share rather than as a flat amount.</>
           )}
         </p>
       </div>
@@ -180,7 +180,7 @@ export default function IncomeView({ months = 6 }: { months?: number }) {
                 <Tooltip formatter={(v: number) => [money(v), "earned"]} />
                 <Bar dataKey="total" radius={[0, 3, 3, 0]}>
                   {sources.map((s, i) => (
-                    <Cell key={s.source} fill={categorySwatch(true, i)} />
+                    <Cell key={s.source} fill={incomeSwatch(i)} />
                   ))}
                 </Bar>
               </ComposedChart>

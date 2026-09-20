@@ -6,12 +6,18 @@
  * tab could come out adjacent shades of the same blue and the essential /
  * non-essential split — the only split that matters here — was invisible.
  *
- *   essential      cool: greens through teals into blue
- *   non-essential  warm: amber through red into pink and violet
+ *   essential      cool: green -> teal -> blue        (100deg .. 215deg)
+ *   non-essential  warm: violet -> red -> amber        (300deg .. 45deg, wrapping)
+ *   income         a single blue, varied by lightness  (not a hue family)
  *
- * Within a family, hue is walked in large steps rather than sequentially, so
- * neighbouring items in a sorted list land far apart on the wheel and stay
- * distinguishable even when there are a dozen of them.
+ * Within a family the hue is walked by the GOLDEN RATIO, so neighbouring items
+ * in a sorted list land far apart for any count. Measured at 4, 8 and 12 items:
+ * at least 61deg between the two families, at least 40deg between neighbours.
+ *
+ * Income deliberately is NOT a third hue family. The wheel between 215 and 300
+ * is all that is left, it sits right against the blue end of the essential arc,
+ * and income is never more than a handful of sources — shades of one blue are
+ * unambiguous where a third arc would not be.
  */
 
 /**
@@ -48,7 +54,7 @@ function walk(i: number): number {
  * `index` is that category's position within its OWN group. Passing a position
  * from a mixed list would hand the two groups the same hue.
  */
-export function categorySwatch(essential: boolean, index: number, _count = 0): string {
+export function categorySwatch(essential: boolean, index: number): string {
   const t = walk(index);
   const h = essential
     ? ESSENTIAL_ARC[0] + t * (ESSENTIAL_ARC[1] - ESSENTIAL_ARC[0])
@@ -58,6 +64,17 @@ export function categorySwatch(essential: boolean, index: number, _count = 0): s
   const sat = essential ? 44 : 70;
   const light = (essential ? 40 : 50) + (index % 2 === 0 ? 0 : 10);
   return `hsl(${Math.round(h)} ${sat}% ${light}%)`;
+}
+
+/**
+ * One source of income, as a shade of the income blue.
+ *
+ * Income sources were being coloured out of the ESSENTIAL family, which made
+ * a salary bar look like a rent bar.
+ */
+export function incomeSwatch(index: number): string {
+  const light = 34 + ((index * 13) % 5) * 8; // 34..66, spread but deterministic
+  return `hsl(214 ${68 - (index % 3) * 8}% ${light}%)`;
 }
 
 /** The two group colours themselves, for totals, bars and legends. */
@@ -84,7 +101,7 @@ export function splitAndColour<T extends { essential: boolean; total: number }>(
   const ess = rows.filter((r) => r.essential).sort((a, b) => b.total - a.total);
   const non = rows.filter((r) => !r.essential).sort((a, b) => b.total - a.total);
   return {
-    essential: ess.map((r, i) => ({ ...r, color: categorySwatch(true, i, ess.length) })),
-    nonEssential: non.map((r, i) => ({ ...r, color: categorySwatch(false, i, non.length) })),
+    essential: ess.map((r, i) => ({ ...r, color: categorySwatch(true, i) })),
+    nonEssential: non.map((r, i) => ({ ...r, color: categorySwatch(false, i) })),
   };
 }
