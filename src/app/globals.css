@@ -541,3 +541,173 @@ body {
 
 /* Keep app chrome above the scan lines. */
 [data-theme="dark"] body > * { position: relative; z-index: 1; }
+
+
+/* ============================================================================
+   COTTAGE theme: Ghibli-warm parallel to Midnight. Same class of effects
+   (radial vignettes, card top-edge hairline, focus glow, slow ambient
+   drift) but the palette is SUN + MOSS + PAPER instead of cyan LED.
+   The mood: soft afternoon light through leaves, hand-painted paper,
+   nothing sharp. Motion is a couple of leaves drifting across the page.
+
+   All scoped to [data-theme="cottage"]. Nothing else is touched.
+   ============================================================================ */
+
+[data-theme="cottage"] body {
+  /* Sun from the upper-left, moss vignette bottom-right, and a barely-
+     there leaf motif tiled across the whole page. The leaf SVG is
+     inlined as a data URI so there's no image request and it drops
+     out with prefers-reduced-motion untouched (motion is added
+     below, not baked into the pattern). */
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(215, 178, 105, 0.14), transparent 60%),
+    radial-gradient(ellipse at 90% 100%, rgba(92, 138, 78, 0.10), transparent 55%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><g fill='%235c8a4e' fill-opacity='0.06'><path d='M30 40 C 30 22 44 12 62 12 C 62 30 48 42 30 42 Z'/><path d='M30 40 L 62 12' stroke='%235c8a4e' stroke-opacity='0.10' stroke-width='0.6' fill='none'/><path d='M120 130 C 120 118 130 110 144 110 C 144 122 134 132 120 132 Z'/><path d='M120 130 L 144 110' stroke='%235c8a4e' stroke-opacity='0.10' stroke-width='0.6' fill='none'/><path d='M100 60 C 108 52 118 52 128 60 C 120 68 108 68 100 60 Z' fill='%2396700f' fill-opacity='0.05'/></g></svg>") 0 0 / 180px 180px,
+    var(--page);
+  background-attachment: fixed;
+}
+
+/* Cards: paper with a soft moss hairline along the top edge (the
+   Cottage equivalent of Midnight's cyan LED line). Shadow warms to
+   an ochre-tinted brown so it doesn't read as cold Material. */
+[data-theme="cottage"] .card {
+  background:
+    linear-gradient(180deg, rgba(215, 178, 105, 0.05), transparent 40%),
+    var(--surface);
+  border: 1px solid rgba(148, 128, 84, 0.20);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 253, 245, 0.6),
+    0 1px 0 rgba(92, 138, 78, 0.10),
+    0 12px 26px rgba(120, 96, 40, 0.10),
+    0 0 32px rgba(215, 178, 105, 0.06);
+  position: relative;
+}
+
+/* Sun-lit top edge -- a warm ochre wash rather than Midnight's cyan
+   spark. Rendered as ::before so it stays visual-only. */
+[data-theme="cottage"] .card::before {
+  content: "";
+  position: absolute;
+  inset: 0 15% auto 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(215, 178, 105, 0.6), rgba(92, 138, 78, 0.4), transparent);
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* Primary button: warm ochre → moss gradient with a soft sun glow.
+   Ghost button: moss hairline that warms on hover. */
+[data-theme="cottage"] .btn-primary {
+  background: linear-gradient(180deg, #6a9c58, #4a7440);
+  color: #fdfcf7;
+  box-shadow:
+    0 0 0 1px rgba(74, 116, 64, 0.55),
+    0 6px 18px rgba(74, 116, 64, 0.25),
+    inset 0 1px 0 rgba(255, 253, 245, 0.35);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.10);
+}
+[data-theme="cottage"] .btn-primary:hover {
+  background: linear-gradient(180deg, #7cae67, #5c8a4e);
+  box-shadow:
+    0 0 0 1px rgba(92, 138, 78, 0.7),
+    0 8px 22px rgba(74, 116, 64, 0.35),
+    inset 0 1px 0 rgba(255, 253, 245, 0.45);
+}
+[data-theme="cottage"] .btn-ghost {
+  background: rgba(215, 178, 105, 0.06);
+  border: 1px solid rgba(148, 128, 84, 0.30);
+  color: var(--ink);
+}
+[data-theme="cottage"] .btn-ghost:hover {
+  background: rgba(92, 138, 78, 0.10);
+  border-color: rgba(92, 138, 78, 0.5);
+  color: var(--accent);
+}
+
+/* Inputs: warm ochre focus glow rather than the cool default ring. */
+[data-theme="cottage"] .field:focus,
+[data-theme="cottage"] input:focus,
+[data-theme="cottage"] textarea:focus,
+[data-theme="cottage"] select:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(215, 178, 105, 0.8),
+    0 0 16px rgba(215, 178, 105, 0.35);
+  border-color: rgba(148, 116, 30, 0.7);
+}
+
+/* Link hover: warm ochre wash. */
+[data-theme="cottage"] a:hover {
+  text-shadow: 0 0 10px rgba(215, 178, 105, 0.45);
+}
+
+/* Numeric hero: a hint of warm shadow, so big numbers feel painted
+   on paper rather than typeset. */
+[data-theme="cottage"] .stat-num {
+  text-shadow: 0 1px 0 rgba(255, 253, 245, 0.7), 0 0 14px rgba(215, 178, 105, 0.14);
+}
+
+/* Selection: mossy wash. */
+[data-theme="cottage"] ::selection {
+  background: rgba(92, 138, 78, 0.30);
+  color: #3a3628;
+}
+
+/* Scrollbar: moss → ochre gradient, warm and thin. */
+[data-theme="cottage"] * {
+  scrollbar-color: rgba(92, 138, 78, 0.4) transparent;
+  scrollbar-width: thin;
+}
+[data-theme="cottage"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-theme="cottage"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(92, 138, 78, 0.4), rgba(215, 178, 105, 0.4));
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Two leaves drifting across the page: SVG data URIs, animated with
+   simple horizontal translation + a very slow rotation so they don't
+   move in a straight line. Opacity is low enough that they read as
+   ambient light through foliage. Reduced motion turns them off. */
+@keyframes daymax-leaf-drift-1 {
+  0%   { transform: translate(-10vw, 15vh) rotate(0deg);   opacity: 0; }
+  10%  { opacity: 0.35; }
+  50%  { transform: translate(50vw, 45vh) rotate(140deg);  opacity: 0.35; }
+  90%  { opacity: 0.35; }
+  100% { transform: translate(110vw, 75vh) rotate(360deg); opacity: 0; }
+}
+@keyframes daymax-leaf-drift-2 {
+  0%   { transform: translate(110vw, 25vh) rotate(0deg);    opacity: 0; }
+  15%  { opacity: 0.28; }
+  50%  { transform: translate(50vw, 60vh) rotate(-180deg);  opacity: 0.28; }
+  85%  { opacity: 0.28; }
+  100% { transform: translate(-10vw, 88vh) rotate(-360deg); opacity: 0; }
+}
+[data-theme="cottage"] body::before,
+[data-theme="cottage"] body::after {
+  content: "";
+  position: fixed;
+  top: 0; left: 0;
+  width: 42px;
+  height: 42px;
+  pointer-events: none;
+  z-index: 0;
+  background: no-repeat center / contain
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 28 C 4 12 12 4 28 4 C 28 20 20 28 4 28 Z' fill='%235c8a4e'/><path d='M4 28 L 28 4' stroke='%233d5a30' stroke-width='0.8' fill='none'/></svg>");
+}
+[data-theme="cottage"] body::before { animation: daymax-leaf-drift-1 46s linear infinite; }
+[data-theme="cottage"] body::after  {
+  animation: daymax-leaf-drift-2 62s linear infinite;
+  animation-delay: -18s;
+  width: 34px; height: 34px;
+  filter: hue-rotate(30deg) brightness(1.05); /* slightly warmer, second leaf */
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="cottage"] body::before,
+  [data-theme="cottage"] body::after { animation: none; opacity: 0; }
+}
+
+/* Keep app chrome above the leaves. */
+[data-theme="cottage"] body > * { position: relative; z-index: 1; }
