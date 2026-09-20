@@ -132,6 +132,15 @@ export default function TodayPage() {
   }
 
   const [metricsSaved, setMetricsSaved] = useState(false);
+  // Day metrics collapse closed by default -- they're a "sometimes" input
+  // (emotion, tired, deep time), not the main event. Remember the choice
+  // per browser so someone who always logs them gets them open next time.
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("daymax-metrics-open") === "1") setMetricsOpen(true);
+    } catch {}
+  }, []);
 
   async function saveMetrics() {
     if (!metrics) return;
@@ -268,7 +277,33 @@ export default function TodayPage() {
 
       {metrics && (
         <div className="card p-4">
-          <h2 className="mb-2 font-semibold">Day metrics</h2>
+          {/* Header is now a clickable toggle. A filled-count sits next
+              to the chevron so you can see at a glance whether the day
+              already has any metrics logged without opening it. */}
+          <button
+            onClick={() => {
+              const next = !metricsOpen;
+              setMetricsOpen(next);
+              try { localStorage.setItem("daymax-metrics-open", next ? "1" : "0"); } catch {}
+            }}
+            className="mb-2 flex w-full items-center gap-2 text-left"
+            aria-expanded={metricsOpen}
+          >
+            <h2 className="font-semibold">Day metrics</h2>
+            {(() => {
+              const filledMetrics = metricFields.filter((f) => metrics[f.key] != null).length + (metrics.notes ? 1 : 0);
+              return filledMetrics > 0 ? (
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
+                  {filledMetrics} filled
+                </span>
+              ) : (
+                <span className="text-xs text-faint">none logged</span>
+              );
+            })()}
+            <span className="ml-auto text-sm text-faint">{metricsOpen ? "▲" : "▼"}</span>
+          </button>
+          {metricsOpen && (
+          <>
           {/* Anything scored out of ten is a slider. Typing "7" into a spinner
               to answer "how tired were you" is the wrong instrument — you are
               picking a point on a scale, not entering a measurement. Free
@@ -339,6 +374,8 @@ export default function TodayPage() {
             </button>
             {metricsSaved && <span className="text-sm font-medium text-ok">Saved ✓</span>}
           </span>
+          </>
+          )}
         </div>
       )}
     </div>

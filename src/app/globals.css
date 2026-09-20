@@ -313,6 +313,43 @@ body {
   letter-spacing: -0.005em;
 }
 
+/* Text-carrying form controls default to the theme's surface/ink,
+   not the browser's white/black. Previously an <input> without an
+   explicit bg-surface class rendered as a browser-default WHITE box
+   on the midnight theme with near-white placeholder text -- the "words
+   in the white boxes are unreadable" bug. Applies across all themes;
+   any component that wants a custom look overrides it directly (e.g.
+   .btn-primary buttons intentionally set their own background). */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="month"],
+input[type="week"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input:not([type]),
+textarea,
+select {
+  background: var(--surface);
+  color: var(--ink);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+/* Native date/time pickers on webkit invert their glyph on dark. */
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) hue-rotate(180deg) brightness(1.4);
+}
+
 /* Day grid: keep cells tight and Excel-ish */
 .daygrid td,
 .daygrid th {

@@ -176,6 +176,18 @@ export default function DayClock({
   const [selection, setSelection] = useState<[number, number] | null>(null);
   const dragging = anchor !== null;
 
+  /**
+   * Two-tap mode alongside drag: if the pointer goes down and comes up
+   * on the SAME slot (no movement), we treat it as a click. First
+   * click sets the FROM; second click sets the UNTIL and completes
+   * the range. Third click starts a new selection. Any drag that
+   * actually moves takes over and clears the pending tap. Timeout
+   * keeps a lonely first click from sticking around forever.
+   */
+  const pendingTapRef = useRef<{ slot: number; at: number } | null>(null);
+  const TAP_WINDOW_MS = 8000;
+  const downPosRef = useRef<{ slot: number; moved: boolean } | null>(null);
+
   const slotAt = useCallback((clientX: number, clientY: number): number | null => {
     const el = document.elementFromPoint(clientX, clientY);
     const raw = el?.getAttribute?.("data-slot");
@@ -238,24 +250,53 @@ export default function DayClock({
           (e.target as Element).releasePointerCapture?.(e.pointerId);
           setAnchor(s);
           setCursor(s);
+          downPosRef.current = { slot: s, moved: false };
         }}
         onPointerMove={(e) => {
           const s = slotAt(e.clientX, e.clientY);
           setHover(s);
-          if (dragging && s !== null) setCursor(s);
+          if (dragging && s !== null) {
+            setCursor(s);
+            if (downPosRef.current && s !== downPosRef.current.slot) {
+              downPosRef.current.moved = true;
+            }
+          }
         }}
         onPointerUp={() => {
-          // Drag SELECTS a range. The parent's "Fill" button commits it.
-          // Instant-fill on release was destructive and undoable only by
-          // Clear -- one over-drag and you had painted six hours of Sleep.
           if (anchor !== null && cursor !== null) {
-            const a = Math.min(anchor, cursor);
-            const b = Math.max(anchor, cursor);
-            setSelection([a, b]);
-            onSelect?.(a, b);
+            const wasClick = downPosRef.current && !downPosRef.current.moved;
+            const now = Date.now();
+            const pending = pendingTapRef.current;
+
+            if (wasClick) {
+              // TAP branch. First tap: remember it, show a 1-slot
+              // selection so there's feedback. Second tap within the
+              // window: commit the [first, second] range and clear.
+              if (pending && now - pending.at < TAP_WINDOW_MS && pending.slot !== anchor) {
+                const a = Math.min(pending.slot, anchor);
+                const b = Math.max(pending.slot, anchor);
+                setSelection([a, b]);
+                onSelect?.(a, b);
+                pendingTapRef.current = null;
+              } else {
+                // first tap of a pair (or a re-tap on the same slot)
+                pendingTapRef.current = { slot: anchor, at: now };
+                setSelection([anchor, anchor]);
+                onSelect?.(anchor, anchor);
+              }
+            } else {
+              // DRAG branch. Commits the drag range and clears any
+              // half-finished tap sequence.
+              const a = Math.min(anchor, cursor);
+              const b = Math.max(anchor, cursor);
+              setSelection([a, b]);
+              onSelect?.(a, b);
+              pendingTapRef.current = null;
+            }
           }
           setAnchor(null);
           setCursor(null);
+          downPosRef.current = null;
         }}
         onPointerLeave={() => {
           setHover(null);
@@ -267,9 +308,11 @@ export default function DayClock({
               const b = Math.max(anchor, cursor);
               setSelection([a, b]);
               onSelect?.(a, b);
+              pendingTapRef.current = null;
             }
             setAnchor(null);
             setCursor(null);
+            downPosRef.current = null;
           }
         }}
       >
