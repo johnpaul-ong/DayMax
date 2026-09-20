@@ -310,8 +310,14 @@ export default function ProfileView({ userId }: { userId: string }) {
 
       {/* The signature picture of the app. Standard on every profile now,
           directly under Pursuits, rather than buried four sections down and
-          hidden unless the owner had left the "days" section switched on. */}
-      {strip.length > 0 && <TypicalDay strip={strip} name={name} isSelf={isSelf} />}
+          hidden unless the owner had left the "days" section switched on.
+
+          Rendered even while `strip` is still empty -- otherwise the whole
+          page renders, then this section pops in a beat later and pushes
+          Productivity ranking down the screen, which reads clunky. Passing
+          an empty strip shows the DayClock's own empty-state (grey rings,
+          no wedges), and the real day fills in without a layout jump. */}
+      <TypicalDay strip={strip} name={name} isSelf={isSelf} loading={!dataLoaded} />
 
       {strip.length > 0 && <ProfileYearBars strip={strip} name={name} isSelf={isSelf} />}
 
@@ -442,7 +448,7 @@ function SelfEmptyProfile({ colors }: { colors: BucketColors }) {
  * shows every day; this shows the SHAPE all those days have in common, which
  * is a different question and the more interesting one.
  */
-function TypicalDay({ strip, name, isSelf }: { strip: DayStripRow[]; name: string; isSelf: boolean }) {
+function TypicalDay({ strip, name, isSelf, loading }: { strip: DayStripRow[]; name: string; isSelf: boolean; loading?: boolean }) {
   const { slots, days, headline } = useMemo(() => {
     const perSlot = new Map<number, Map<number, number>>();
     const dates = new Set<string>();
@@ -469,14 +475,20 @@ function TypicalDay({ strip, name, isSelf }: { strip: DayStripRow[]; name: strin
     };
   }, [strip]);
 
-  if (slots.size === 0) return null;
+  // Once loading is finished AND there is genuinely no data, hide the
+  // whole section -- an empty clock on a fully-loaded profile reads as
+  // a bug. During loading we render the empty clock so the page has
+  // its final shape immediately and doesn't reflow when data lands.
+  if (!loading && slots.size === 0) return null;
   const who = isSelf ? "You" : name;
 
   return (
     <section>
       <h2 className="mb-1 font-semibold">{isSelf ? "Your typical day" : `${name}'s typical day`}</h2>
       <p className="mb-2 text-sm text-muted">
-        {days.toLocaleString()} days collapsed onto one dial — the most common thing at each quarter hour.
+        {loading && days === 0
+          ? "loading your days…"
+          : `${days.toLocaleString()} days collapsed onto one dial — the most common thing at each quarter hour.`}
         {headline && (
           <>
             {" "}

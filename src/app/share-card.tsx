@@ -13,7 +13,7 @@
  */
 
 import { useRef, useState } from "react";
-import { categoryColor, categoryName, HOURS_PER_SLOT, SLOTS_PER_DAY } from "@/lib/categories";
+import { categoryName, HOURS_PER_SLOT, resolveCategoryColor, SLOTS_PER_DAY } from "@/lib/categories";
 import { fetchAllDayEntries } from "@/lib/data";
 import { localToday } from "@/lib/dates";
 import { bucketize, focusScore, hoursByCategory, workMax } from "@/lib/ranking";
@@ -89,11 +89,17 @@ export default function ShareCard({ displayName }: { displayName?: string | null
       const colW = days.length ? Math.max(1, GRID_W / days.length) : 1;
       const cellH = GRID_H / SLOTS_PER_DAY;
 
+      // categoryColor() now returns a CSS var() reference for theme-
+      // switching in the DOM; canvas.fillStyle CANNOT parse var(), so
+      // we resolve to a concrete hex first. resolveCategoryColor()
+      // reads the computed style off :root and falls back to the light
+      // hex when the DOM isn't available. Without this the whole grid
+      // paints black (previous fillStyle) on the shared PNG.
       days.forEach((d, i) => {
         const slots = byDate.get(d)!;
         for (let s = 0; s < SLOTS_PER_DAY; s++) {
           const cat = slots.get(s);
-          ctx.fillStyle = cat != null ? categoryColor(cat) : "rgba(0,0,0,0.04)";
+          ctx.fillStyle = cat != null ? resolveCategoryColor(cat) : "rgba(0,0,0,0.04)";
           ctx.fillRect(PAD + i * colW, GRID_TOP + s * cellH, Math.max(1, colW - 0.4), cellH);
         }
       });
@@ -108,7 +114,7 @@ export default function ShareCard({ displayName }: { displayName?: string | null
       const logged = Object.values(catHours).reduce((sum, h) => sum + h, 0);
       const unlogged = Math.max(0, days.length * 24 - logged);
       const rows: Array<{ name: string; color: string; hours: number }> = Object.entries(catHours)
-        .map(([code, hours]) => ({ name: categoryName(Number(code)), color: categoryColor(Number(code)), hours }))
+        .map(([code, hours]) => ({ name: categoryName(Number(code)), color: resolveCategoryColor(Number(code)), hours }))
         .filter((c) => c.hours > 0)
         .sort((a, b) => b.hours - a.hours);
       if (unlogged >= 0.25) rows.push({ name: "Unlogged", color: "rgba(128,128,128,0.35)", hours: unlogged });

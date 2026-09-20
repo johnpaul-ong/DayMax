@@ -61,11 +61,20 @@ export interface BigThreePoint {
 }
 
 /**
- * Best weight per lift per day, carried forward, plus the running total.
+ * Best weight per lift per day, PLUS the running total, in a shape that
+ * plots as PROGRESSION rather than a plateau plot.
  *
- * Carry-forward matters: you rarely squat, deadlift and bench on the same day,
- * so a strict per-day total would be null almost always. Each lift holds its
- * last known best until it is beaten, which is how a total is normally quoted.
+ * The old series carried each lift's best forward on every date any of
+ * the three moved, which meant squat sat at 140 as a dead-flat line
+ * from January while bench walked up next to it -- most days on the
+ * chart were empty repetition of "still 140". You spotted this.
+ *
+ * The new shape: each lift's line only has a value on a date where THAT
+ * lift's best actually changed (a session at that weight or heavier).
+ * Recharts renders that as a real trending line -- dots at every PR,
+ * monotone curve between them -- with no artificial flat spans.
+ * `total` still carries forward, because the total IS a running number:
+ * you don't "un-total" between sessions, it's what you'd quote today.
  */
 export function bigThreeSeries(rows: LiftLike[]): BigThreePoint[] {
   const byDate = new Map<string, Partial<Record<BigLift, number>>>();
@@ -82,15 +91,23 @@ export function bigThreeSeries(rows: LiftLike[]): BigThreePoint[] {
   const out: BigThreePoint[] = [];
   for (const date of [...byDate.keys()].sort()) {
     const day = byDate.get(date)!;
+    // Per-lift PR advance: value only appears on the line when it
+    // moves; otherwise null -> connectNulls will curve between real
+    // points so you still get a continuous trend, without a plateau.
+    const change: Partial<Record<BigLift, number>> = {};
     for (const k of ["squat", "deadlift", "bench"] as BigLift[]) {
-      if (day[k] != null) best[k] = Math.max(best[k] ?? 0, day[k]!);
+      if (day[k] != null && day[k]! > (best[k] ?? 0)) {
+        best[k] = day[k]!;
+        change[k] = best[k];
+      }
     }
     const haveAll = best.squat != null && best.deadlift != null && best.bench != null;
     out.push({
       date,
-      squat: best.squat ?? null,
-      deadlift: best.deadlift ?? null,
-      bench: best.bench ?? null,
+      squat: change.squat ?? null,
+      deadlift: change.deadlift ?? null,
+      bench: change.bench ?? null,
+      // total carries forward, because it IS the quoted number today
       total: haveAll ? best.squat! + best.deadlift! + best.bench! : null,
     });
   }
