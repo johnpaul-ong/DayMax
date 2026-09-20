@@ -85,14 +85,26 @@ export async function deleteDayEntries(date: string, slots: number[]): Promise<v
 // --- day metrics -------------------------------------------------------------
 
 export async function fetchDayMetrics(fromDate: string, toDate: string): Promise<DayMetrics[]> {
+  // Paginated: was a bare .from().select() with no limit, which
+  // Supabase silently caps at 1000. A 3+ year window of daily
+  // metrics would truncate. Same range-loop as fetchAllDayEntries.
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("day_metrics")
-    .select("date, emotional_score, tired, start_friction, end_brain_fatigue, deep_time, weight_kg, notes")
-    .gte("date", fromDate)
-    .lte("date", toDate);
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const all: any[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("day_metrics")
+      .select("date, emotional_score, tired, start_friction, end_brain_fatigue, deep_time, weight_kg, notes")
+      .gte("date", fromDate)
+      .lte("date", toDate)
+      .order("date")
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  return all.map((r) => ({
     date: String(r.date),
     emotionalScore: r.emotional_score,
     tired: r.tired,
@@ -198,14 +210,24 @@ export async function upsertDailyMetrics(metrics: DailyMetric[]): Promise<void> 
 }
 
 export async function fetchDailyMetrics(metric: string): Promise<DailyMetric[]> {
+  // Paginated: bodyweight / any long-running daily metric will pass
+  // 1000 rows after ~3 years; was silently truncating.
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("daily_metrics")
-    .select("date, metric, value, text_value")
-    .eq("metric", metric)
-    .order("date");
-  if (error) throw error;
-  return (data ?? []).map((r) => ({
+  const all: any[] = [];
+  const page = 1000;
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from("daily_metrics")
+      .select("date, metric, value, text_value")
+      .eq("metric", metric)
+      .order("date")
+      .range(from, from + page - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  return all.map((r) => ({
     date: String(r.date),
     metric: r.metric,
     value: r.value,
