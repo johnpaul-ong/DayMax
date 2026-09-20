@@ -62,23 +62,9 @@ async function uid(): Promise<string> {
   return user.id;
 }
 
-/**
- * Supabase caps RPC results at 1000 rows just like table queries —
- * a year of 15-minute slots is ~35k rows per person, so ALWAYS page.
- */
-async function rpcAll(fn: string, params: Record<string, unknown> = {}): Promise<any[]> {
-  const supabase = createClient();
-  const all: any[] = [];
-  const page = 1000;
-  for (let from = 0; ; from += page) {
-    const { data, error } = await supabase.rpc(fn, params).range(from, from + page - 1);
-    if (error) throw error;
-    if (!data || (data as any[]).length === 0) break;
-    all.push(...(data as any[]));
-    if ((data as any[]).length < page) break;
-  }
-  return all;
-}
+// rpcAll moved to lib/supabase/rpcAll.ts (was duplicated across
+// friends.ts / pursuits.ts / money.ts).
+import { rpcAll } from "./supabase/rpcAll";
 
 export async function fetchTracks(): Promise<Track[]> {
   const supabase = createClient();

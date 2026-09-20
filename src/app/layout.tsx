@@ -5,7 +5,7 @@ import NavLinks from "./nav-links";
 import NotificationsBell from "./notifications-bell";
 import ThemeSync from "./theme-switcher";
 import WelcomeGate from "./welcome-gate";
-import CaptureWidget from "./capture-widget";
+import CaptureWidgetBoot from "./capture-widget-boot";
 import MobileNav from "./mobile-nav";
 
 export const metadata: Metadata = {
@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </nav>
         <WelcomeGate />
         <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:pb-8">{children}</main>
-        <CaptureWidget />
+        <CaptureWidgetBoot />
         <MobileNav />
       </body>
     </html>

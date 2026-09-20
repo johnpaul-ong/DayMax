@@ -51,19 +51,8 @@ async function uid(): Promise<string> {
   return data.user.id;
 }
 
-async function rpcAll(fn: string, params: Record<string, unknown> = {}): Promise<any[]> {
-  const supabase = createClient();
-  const all: any[] = [];
-  const page = 1000;
-  for (let from = 0; ; from += page) {
-    const { data, error } = await supabase.rpc(fn, params).range(from, from + page - 1);
-    if (error) throw error;
-    if (!data || (data as any[]).length === 0) break;
-    all.push(...(data as any[]));
-    if ((data as any[]).length < page) break;
-  }
-  return all;
-}
+// rpcAll extracted to lib/supabase/rpcAll.ts.
+import { rpcAll } from "./supabase/rpcAll";
 
 export async function fetchDirectory(): Promise<Pursuit[]> {
   const data = await rpcAll("pursuit_directory");
