@@ -94,14 +94,16 @@ export default function ChallengeFeed({
 
   return (
     <section>
-      <div className="mb-3">
-        <h2 className="font-semibold">Daily feed</h2>
-        <p className="text-sm text-muted">One thread per day. Say how it went, drop a photo, egg each other on.</p>
+      <div className="mb-2 flex items-baseline gap-2">
+        <h2 className="font-semibold">Feed</h2>
+        <span className="text-xs text-faint">{date}</span>
       </div>
 
       {/* Day picker: one chip per day of the challenge. Today has an
-          accent ring; days with any posts get a filled dot. */}
-      <div className="mb-3 flex flex-wrap gap-1.5">
+          accent ring; the active day is filled. Wrapped in its own
+          horizontal-scroll container so a 30-day challenge doesn't
+          wrap into six rows. */}
+      <div className="mb-3 flex snap-x snap-mandatory gap-1.5 overflow-x-auto pb-1">
         {days.map((d) => {
           const active = d === date;
           const isToday = d === today;
@@ -109,7 +111,7 @@ export default function ChallengeFeed({
             <button
               key={d}
               onClick={() => setDate(d)}
-              className={`min-w-[3rem] rounded-lg border px-2 py-1 text-center text-xs transition ${
+              className={`min-w-[3rem] shrink-0 snap-start rounded-lg border px-2 py-1 text-center text-xs transition ${
                 active ? "bg-accent text-accent-contrast font-semibold" : "bg-surface hover:bg-surface-2"
               } ${isToday && !active ? "ring-1 ring-accent" : ""}`}
               title={d}
@@ -123,17 +125,22 @@ export default function ChallengeFeed({
 
       {isMember && <PostComposer challengeId={challengeId} date={date} onPosted={refresh} />}
 
-      {loading && posts.length === 0 && <p className="mt-3 text-sm text-faint">Loading…</p>}
-      {!loading && posts.length === 0 && (
-        <p className="mt-3 card p-4 text-center text-sm text-muted">
-          Nothing here yet for {date}. {isMember ? "Be the first to post." : "Members' posts will show here."}
-        </p>
-      )}
-
-      <div className="mt-3 space-y-3">
-        {posts.map((p) => (
-          <PostCard key={p.id} post={p} me={me} onChanged={refresh} />
-        ))}
+      {/* Scrollable feed region -- capped at ~half a viewport so the
+          full challenge page doesn't stretch to the length of the
+          conversation. Interior scroll keeps the day picker and
+          composer visible above. */}
+      <div className="mt-3 max-h-[60vh] overflow-y-auto rounded-xl border border-border/60 bg-surface-2/30 p-2">
+        {loading && posts.length === 0 && <p className="p-2 text-sm text-faint">Loading…</p>}
+        {!loading && posts.length === 0 && (
+          <p className="p-4 text-center text-sm text-muted">
+            Nothing here yet for {date}. {isMember ? "Be the first to post." : "Members' posts will show here."}
+          </p>
+        )}
+        <div className="space-y-2">
+          {posts.map((p) => (
+            <PostCard key={p.id} post={p} me={me} onChanged={refresh} />
+          ))}
+        </div>
       </div>
     </section>
   );

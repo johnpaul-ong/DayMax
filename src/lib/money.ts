@@ -815,6 +815,26 @@ const SYMBOLS: Record<string, string> = {
 
 let cachedCurrency: string | null = null;
 
+/**
+ * Clear the module-scoped currency cache. Wired to Supabase's
+ * SIGNED_OUT event below so the next signed-in user on the same
+ * tab doesn't inherit the previous user's currency preference.
+ */
+export function invalidateCurrencyCache(): void {
+  cachedCurrency = null;
+}
+
+// Register the sign-out listener ONCE per module load. Guarded so
+// hot-reload doesn't stack listeners. Browser only; no-op on server
+// (module resolves without a window).
+if (typeof window !== "undefined") {
+  try {
+    createClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") invalidateCurrencyCache();
+    });
+  } catch { /* SSR safety */ }
+}
+
 export function currencySymbol(code?: string | null): string {
   return SYMBOLS[code ?? cachedCurrency ?? "AUD"] ?? "$";
 }

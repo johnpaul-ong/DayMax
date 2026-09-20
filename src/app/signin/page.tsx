@@ -73,8 +73,14 @@ export default function SignInPage() {
           setMsgTone("err");
           setMsg(error.message);
         } else {
-          const next = new URLSearchParams(location.search).get("next");
-          location.href = next && next.startsWith("/") ? next : "/";
+          // Open-redirect guard: `startsWith("/")` alone accepts
+          // "//attacker.com" and "/\attacker.com" (protocol-relative
+          // and browser-quirk URLs), sending the newly-authenticated
+          // user off-site. Only accept a next that is a plain
+          // same-origin path.
+          const raw = new URLSearchParams(location.search).get("next");
+          const next = raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : "/";
+          location.href = next;
         }
       }
     } finally {

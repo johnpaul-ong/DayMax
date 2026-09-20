@@ -409,6 +409,17 @@ export function invalidateCommunityCache(): void {
   rpcCache.clear();
 }
 
+// Also clear on sign-out so the next user on the same tab doesn't
+// inherit the previous user's leaderboard rows. Guarded to run once
+// in the browser only.
+if (typeof window !== "undefined") {
+  try {
+    createClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") invalidateCommunityCache();
+    });
+  } catch { /* SSR safety */ }
+}
+
 export type ArenaScope = "demo" | "friends" | "everyone" | "track";
 
 /**

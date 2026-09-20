@@ -272,7 +272,18 @@ export default function DayGridPage() {
                         style={{
                           height: CELL_H,
                           maxWidth: CELL_W,
-                          background: c ? categoryColor(c.category) + (sel ? "" : "cc") : sel ? "var(--accent-soft)" : undefined,
+                          // categoryColor() returns var(--cat-N, hex);
+                          // the old `+ "cc"` hex-alpha concatenation produced
+                          // invalid CSS ("var(...)cc") and unselected cells
+                          // rendered with no background at all. color-mix
+                          // works with a var() on the input.
+                          background: c
+                            ? sel
+                              ? categoryColor(c.category)
+                              : `color-mix(in srgb, ${categoryColor(c.category)} 80%, transparent)`
+                            : sel
+                              ? "var(--accent-soft)"
+                              : undefined,
                         }}
                       >
                         {labelsVisible && c ? (

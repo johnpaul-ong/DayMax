@@ -31,7 +31,7 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Area,
@@ -109,6 +109,101 @@ function rosterNoun(challengeName: string): string {
   return "Members";
 }
 
+/**
+ * Plain-English "how this challenge is scored" block. Shows the
+ * formula the SECURITY DEFINER challenge_standings function uses,
+ * so the ranked column isn't a mystery. Rendered under the header
+ * description on every challenge page (asked by the user for
+ * Grindset Goblins; harmless everywhere).
+ */
+function MetricRules({
+  metric,
+  rankLess,
+}: {
+  metric: string;
+  rankLess: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const short = (() => {
+    switch (metric) {
+      case "life_workmax":
+        return "Depth × hours: (productive ÷ (productive + brainrot)) × productive hours.";
+      case "life_focus":
+        return "Focus %: productive ÷ (productive + brainrot) × 100.";
+      case "life_productive_hours":
+        return "Productive hours logged (Work + Sports by default).";
+      case "life_brainrot_hours":
+        return "Brainrot hours logged (Other + Leisure by default).";
+      case "life_sleep_hours":
+        return "Sleep hours logged.";
+      case "life_streak":
+        return "Longest run of consecutive days logged.";
+      case "money_nonessential":
+        return "Sum of non-essential spending in the window.";
+      case "money_nonessential_pct":
+        return "Non-essential ÷ income × 100.";
+      case "money_total":
+        return "Sum of all spending in the window.";
+      case "pursuit_stat":
+        return `Aggregated value of this stat across the window.`;
+      default:
+        return "Server-computed metric.";
+    }
+  })();
+  const long = (() => {
+    switch (metric) {
+      case "life_workmax":
+        return [
+          "WorkMax rewards both DEPTH (what fraction of your logged time was productive vs brainrot) and VOLUME (how many productive hours). A high focus score with tiny hours doesn't beat a solid focus score with real hours, and vice versa.",
+          "The formula: focus × productive hours, where focus = productive ÷ (productive + brainrot).",
+          "'productive' defaults to Work + Sports slots. 'brainrot' defaults to Other + Leisure. Sleep and everything else are ignored in the ratio. You can rebucket categories in Settings; the CHALLENGE OWNER's bucket map is used for ranking so everyone plays by one rulebook.",
+          `${rankLess ? "Lowest" : "Highest"} WorkMax wins. Days you didn't log score NULL, not zero -- otherwise 'log nothing' would beat 'log a real day'.`,
+        ];
+      case "life_focus":
+        return [
+          "Focus = productive ÷ (productive + brainrot) × 100. Range 0–100.",
+          "Defaults: productive = Work + Sports; brainrot = Other + Leisure. Days with no productive OR brainrot logged score NULL.",
+          `${rankLess ? "Lowest" : "Highest"} focus wins.`,
+        ];
+      case "money_nonessential":
+        return [
+          "The sum of all spending in categories YOU marked non-essential, across the challenge window. Essential categories (rent, groceries, bills by default) do not count against you.",
+          "Amounts are hidden from other members unless you turn on 'share amounts' when joining.",
+          `${rankLess ? "Lowest" : "Highest"} non-essential spend wins.`,
+        ];
+      case "money_nonessential_pct":
+        return [
+          "Non-essential spending as a % of your income. A student and a surgeon can compete fairly on the same board.",
+          "Set your income under Money → Income. Percentages update as spending is logged.",
+          `${rankLess ? "Lowest" : "Highest"} % wins.`,
+        ];
+      case "life_streak":
+        return [
+          "Longest unbroken run of days where you logged at least one slot.",
+          "Missing a day resets the current streak but not the historical best.",
+          `${rankLess ? "Shortest" : "Longest"} streak wins.`,
+        ];
+      default:
+        return [short];
+    }
+  })();
+  return (
+    <div className="mt-2 rounded-lg border border-accent-soft bg-accent-soft/30 p-3 text-xs">
+      <p className="text-muted">
+        <b className="text-ink">How it&apos;s scored:</b> {short}{" "}
+        <button onClick={() => setOpen((o) => !o)} className="font-medium text-accent hover:underline">
+          {open ? "less" : "more"}
+        </button>
+      </p>
+      {open && (
+        <div className="mt-2 space-y-1.5 text-muted">
+          {long.map((p, i) => <p key={i}>{p}</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -124,21 +219,40 @@ export default function ChallengePage() {
   const [showInvite, setShowInvite] = useState(false);
   const today = localToday();
 
+  // Ref so `reload()` (invoked from various handlers) sees the
+  // current-challenge alive flag rather than the mount-time one.
+  const aliveRef = useRef({ id, alive: true });
   function reload() {
+    const token = aliveRef.current;
     setWarn(null);
     fetchChallenges()
-      .then((cs) => setChallenge(cs.find((c) => c.id === id) ?? null))
-      .catch((e) => setError(String(e.message ?? e)));
-    fetchStandings(id).then(setRows).catch((e) => { setRows([]); setWarn(String(e.message ?? e)); });
-    // A missing migration used to fail silently here, which read as "no graphs
-    // were updated" rather than "this function does not exist yet".
-    fetchChallengeDaily(id).then(setDaily).catch((e) => { setDaily([]); setWarn(String(e.message ?? e)); });
-    // Empty is the correct, deliberate answer on a non-money challenge — the
-    // spend tables are not read. It is not an error and must not warn.
-    fetchChallengeCategories(id).then(setCats).catch((e) => { setCats([]); setWarn(String(e.message ?? e)); });
-    fetchInvitableFriends(id).then(setFriends).catch(() => setFriends([]));
+      .then((cs) => { if (token.alive) setChallenge(cs.find((c) => c.id === id) ?? null); })
+      .catch((e) => { if (token.alive) setError(String(e.message ?? e)); });
+    fetchStandings(id)
+      .then((r) => { if (token.alive) setRows(r); })
+      .catch((e) => { if (token.alive) { setRows([]); setWarn(String(e.message ?? e)); } });
+    fetchChallengeDaily(id)
+      .then((d) => { if (token.alive) setDaily(d); })
+      .catch((e) => { if (token.alive) { setDaily([]); setWarn(String(e.message ?? e)); } });
+    // Empty is deliberate on a non-money challenge.
+    fetchChallengeCategories(id)
+      .then((c) => { if (token.alive) setCats(c); })
+      .catch((e) => { if (token.alive) { setCats([]); setWarn(String(e.message ?? e)); } });
+    fetchInvitableFriends(id)
+      .then((f) => { if (token.alive) setFriends(f); })
+      .catch(() => { if (token.alive) setFriends([]); });
   }
-  useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // Fresh token each id -- any in-flight fetch from the previous
+    // challenge is discarded when the response finally lands. Was a
+    // race: quick nav between challenges let stale rows/daily/cats
+    // overwrite the new page's state.
+    aliveRef.current = { id, alive: true };
+    reload();
+    const token = aliveRef.current;
+    return () => { token.alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
   useEffect(() => { fetchCurrency().then(setCur).catch(() => {}); }, []);
 
   const me = rows.find((r) => r.isMe);
@@ -274,6 +388,7 @@ export default function ChallengePage() {
         </div>
         <p className="mt-1 text-sm text-muted">{challenge.description}</p>
         <p className="mt-2 text-xs font-medium text-accent">{metricLabel} wins</p>
+        <MetricRules metric={canon} rankLess={rankLess} />
 
         <div className="mt-3">
           <div className="mb-1 flex justify-between text-xs text-faint">

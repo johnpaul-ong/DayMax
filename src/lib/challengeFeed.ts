@@ -46,11 +46,21 @@ async function uid(): Promise<string> {
   return id;
 }
 
-function publicImageUrl(path: string | null): string | null {
+/**
+ * Signed URL for a challenge-image path. Bucket went private in
+ * migration 0042 -- getPublicUrl still returns a URL string but the
+ * object 403s. createSignedUrl respects the storage RLS (only
+ * members of the challenge can generate a signed URL, only for
+ * ~an hour), which is what we want.
+ *
+ * Async, so callers await when mapping feed rows.
+ */
+async function signedImageUrl(path: string | null): Promise<string | null> {
   if (!path) return null;
   const supabase = createClient();
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  return data.publicUrl ?? null;
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+  if (error) return null;
+  return data?.signedUrl ?? null;
 }
 
 /** One day's posts on a challenge, ordered oldest → newest. */
@@ -61,7 +71,10 @@ export async function fetchFeed(challengeId: string, date: string): Promise<Feed
     p_date: date,
   });
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const rows = data ?? [];
+  // Sign every image URL in parallel; null passes through untouched.
+  const signedUrls = await Promise.all(rows.map((r: any) => signedImageUrl(r.image_path)));
+  return rows.map((r: any, i: number) => ({
     id: r.id,
     userId: r.user_id,
     displayName: r.display_name,
@@ -69,7 +82,7 @@ export async function fetchFeed(challengeId: string, date: string): Promise<Feed
     team: r.team,
     body: r.body,
     imagePath: r.image_path,
-    imageUrl: publicImageUrl(r.image_path),
+    imageUrl: signedUrls[i],
     createdAt: r.created_at,
     likeCount: r.like_count,
     commentCount: r.comment_count,
@@ -134,7 +147,15 @@ export async function createPost(
     body: trimmed || null,
     image_path: imagePath,
   });
-  if (error) throw error;
+  if (error) {
+    // Orphan cleanup: if we uploaded an image and the row insert
+    // failed (RLS, unique constraint, network), remove the image so
+    // it doesn't sit in storage forever unlinked to any post.
+    if (imagePath) {
+      await supabase.storage.from(BUCKET).remove([imagePath]).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 export async function deletePost(postId: string): Promise<void> {
@@ -208,13 +229,21 @@ export async function toggleCommentLike(commentId: string, currentlyLiked: boole
  */
 export function subscribeToFeed(challengeId: string, onChange: () => void): () => void {
   const supabase = createClient();
+  // Suffix channel name with a random id so a StrictMode double-mount
+  // doesn't collide with itself (Supabase reuses channels by name).
+  const rand = Math.random().toString(36).slice(2, 8);
   const channel = supabase
-    .channel(`challenge-feed:${challengeId}`)
+    .channel(`challenge-feed:${challengeId}:${rand}`)
     .on(
       "postgres_changes" as any,
       { event: "*", schema: "public", table: "challenge_posts", filter: `challenge_id=eq.${challengeId}` },
       () => onChange(),
     )
+    // Reactions and comments carry only post_id, not challenge_id, so
+    // we can't Postgres-filter them cheaply. Rely on RLS -- the client
+    // will only be delivered rows for challenges it's a member of --
+    // and just refetch on any change. Refetch itself hits the SECURITY
+    // DEFINER RPC which re-checks membership per row.
     .on(
       "postgres_changes" as any,
       { event: "*", schema: "public", table: "challenge_post_reactions" },

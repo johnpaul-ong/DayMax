@@ -19,6 +19,7 @@
 import { useMemo } from "react";
 import { GROUP_COLOR } from "@/lib/moneyColors";
 import { money as fmtMoney } from "@/lib/money";
+import { localToday } from "@/lib/dates";
 
 interface SpendPoint {
   date: string;      // "YYYY-MM-DD"
@@ -64,7 +65,10 @@ function monthLength(iso: string): number {
 }
 
 export default function BudgetMeter({ spend, budget, monthlyIncome, currency, today }: Props) {
-  const now = today ?? new Date().toISOString().slice(0, 10);
+  // localToday() reads local timezone; the previous `new Date().toISOString().slice(0,10)`
+  // returned yesterday's date for anyone east of UTC (Sydney between
+  // midnight and ~10am), breaking paceTarget/runway/"day N of M".
+  const now = today ?? localToday();
   const daysInMonth = monthLength(now);
   const dayNow = dom(now);
   const spent = useMemo(() => spend.reduce((s, p) => s + p.amount, 0), [spend]);
