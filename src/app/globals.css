@@ -60,10 +60,10 @@
      matches this block exactly, so first paint is correct even before
      any stylesheet has applied. */
   --cat-0: #94a3b8;  /* Sleep — slate */
-  --cat-1: #2563eb;  /* Work — blue */
+  --cat-1: #1e40af;  /* Work — deep navy blue */
   --cat-2: #16a34a;  /* Sports — green */
   --cat-3: #f59e0b;  /* Social — amber */
-  --cat-4: #0d9488;  /* Travel — TEAL (was sky #0ea5e9 -- read as Work blue's cousin) */
+  --cat-4: #38bdf8;  /* Travel — light sky blue (Work=dark blue vs Travel=light blue, by luminance not hue) */
   --cat-5: #a78bfa;  /* Misc — violet */
   --cat-6: #ef4444;  /* Other — red */
   --cat-7: #f97316;  /* Eat — orange */
@@ -128,10 +128,10 @@
      that reads at >=4.6:1 on --surface #0b0f18 and stays >=25 dE
      apart. */
   --cat-0: #475569;  /* Sleep — deep slate (quiet, HUD "off") */
-  --cat-1: #22d3ee;  /* Work — cyan signature */
+  --cat-1: #3b82f6;  /* Work — deep royal blue (dark half of the blue pair) */
   --cat-2: #a3e635;  /* Sports — acid lime */
   --cat-3: #fbbf24;  /* Social — neon amber */
-  --cat-4: #2dd4bf;  /* Travel — TEAL (was #38bdf8 azure -- too close to Work cyan) */
+  --cat-4: #67e8f9;  /* Travel — light cyan (light half of the blue pair, luminance separates it from Work) */
   --cat-5: #c084fc;  /* Misc — electric violet */
   --cat-6: #ff5470;  /* Other — magenta-red */
   --cat-7: #fb923c;  /* Eat — burnt neon orange */
@@ -184,10 +184,10 @@
      this widens the reds so they read as distinct at a glance.
      All checked >=3.2:1 on --surface. */
   --cat-0: #a89f85;  /* Sleep — driftwood */
-  --cat-1: #3f6b8a;  /* Work — slate blue (the shared "Work is blue") */
+  --cat-1: #2c4c6b;  /* Work — deep slate blue (dark blue half) */
   --cat-2: #5c8a4e;  /* Sports — moss (the accent) */
   --cat-3: #96700f;  /* Social — ochre */
-  --cat-4: #6f4e7c;  /* Travel — plum */
+  --cat-4: #7fa9c2;  /* Travel — light slate blue (light blue half, luminance-separated from Work) */
   --cat-5: #8f8a76;  /* Misc — stone */
   --cat-6: #b3543f;  /* Other — terracotta (the cottage red) */
   --cat-7: #a34a6b;  /* Eat — rose */
