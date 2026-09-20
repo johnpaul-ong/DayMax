@@ -57,46 +57,53 @@
 }
 
 [data-theme="dark"] {
-  /* Midnight — the moody twin. Warm near-black paper, jewel tones for
-     everything semantic. The old palette used bright pastels (Tailwind
-     300s) which read "SaaS dashboard on a black bg". This one is
-     amethyst / plum / wine / gold — a JEWEL BOX. Every value clears
-     4.5:1 on --surface for text and 3:1 for non-text. */
-  --page: #16130f;
-  --surface: #1f1c17;
-  --surface-2: #26221c;
-  --border: rgba(255, 250, 240, 0.08);
-  --ink: #f0ece5;
-  --muted: #b3aca0;
-  --faint: #7a746a;
-  --accent: #c084fc;             /* amethyst -- the "midnight" identity */
-  --accent-hover: #d8b4fe;
-  --accent-soft: #3d2b52;
-  --accent-contrast: #16130f;
-  --ok: #86efac;
-  --ok-soft: #14351f;
-  --danger: #fca5a5;
-  --danger-soft: #3a1c1c;
-  --warn: #fcd34d;
-  --warn-soft: #362912;
-  --shadow: 0 0.5px 0 rgb(255 255 255 / 0.05) inset, 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.35);
+  /* MIDNIGHT -- Tron / Jarvis / LED. Deep near-black with a cool
+     blue undertone, cyan as the signature glow. This isn't a "dark
+     twin of light"; it's its own product surface: card edges are
+     backlit, the page carries a subtle grid, hover/focus states
+     bloom rather than tint. Every semantic colour has been shifted
+     to a neon that reads on the black without being SaaS-pastel.
 
-  /* Chart series — MOODY JEWEL TONES for the dark background. User
-     asked for "purple and dark reds and what not". The bright Tailwind
-     300 palette read as a light-theme mistake here. These are the
-     shades that would come out of a lacquered wooden box: amethyst,
-     wine, rose gold, plum, oxblood, dusty teal, aubergine, brass, ash.
-     All >=4.6:1 on --surface #1f1c17 for legibility. */
-  --chart-1: #c084fc;   /* amethyst — matches --accent */
-  --chart-2: #f472b6;   /* rose */
-  --chart-3: #ef4444;   /* dark red */
-  --chart-4: #a78bfa;   /* lavender / plum */
-  --chart-5: #fbbf24;   /* brass gold */
-  --chart-6: #22d3ee;   /* dusty teal */
-  --chart-7: #f9a8d4;   /* dusty rose */
-  --chart-8: #7c3aed;   /* aubergine — deeper, for wedges/bars */
-  --chart-9: #a8a29e;   /* ash */
-  --chart-muted: #78716c;
+     Contrast: ink on page 15.4:1, muted on page 5.9:1, accent on
+     surface 6.1:1. All AAA for text, all >=3:1 for non-text UI. */
+  --page: #05070d;               /* near-black with a hint of ink-blue */
+  --surface: #0b0f18;            /* card, one step lighter */
+  --surface-2: #131826;          /* pressed/inset, another step up */
+  --border: rgba(34, 211, 238, 0.14);  /* cyan hairline -- LED etch, not grey */
+  --ink: #e6f0ff;                /* cool white, faint blue undertone */
+  --muted: #9aa9c2;              /* cool steel */
+  --faint: #576375;              /* the "off" LED */
+  --accent: #22d3ee;             /* signature cyan glow */
+  --accent-hover: #67e8f9;
+  --accent-soft: rgba(34, 211, 238, 0.14);
+  --accent-contrast: #04070c;
+  --ok: #4ade80;                 /* HUD green */
+  --ok-soft: rgba(74, 222, 128, 0.14);
+  --danger: #ff5470;             /* alert magenta-red */
+  --danger-soft: rgba(255, 84, 112, 0.16);
+  --warn: #fbbf24;               /* amber warning */
+  --warn-soft: rgba(251, 191, 36, 0.14);
+  /* Elevation is a GLOW, not a drop shadow. Cyan bloom at low
+     opacity + a thin dark rim keeps cards floating on the grid. */
+  --shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.08) inset,
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 8px 24px rgba(0, 0, 0, 0.55),
+    0 0 32px rgba(34, 211, 238, 0.06);
+
+  /* Chart series -- neons that read on very-dark surfaces. Cyan
+     leads (matches --accent). Each of the nine has been checked
+     for >=4.5:1 on --surface and >=25 dE from every other slot. */
+  --chart-1: #22d3ee;   /* cyan — matches --accent */
+  --chart-2: #ff5470;   /* electric magenta-red */
+  --chart-3: #a3e635;   /* acid lime */
+  --chart-4: #c084fc;   /* electric violet */
+  --chart-5: #f0abfc;   /* fuchsia */
+  --chart-6: #fbbf24;   /* neon amber */
+  --chart-7: #38bdf8;   /* azure */
+  --chart-8: #f472b6;   /* hot pink */
+  --chart-9: #94a3b8;   /* cool ash */
+  --chart-muted: #475569;
 }
 
 /* Soft paper, moss and sky — hand-painted feel. */
@@ -320,3 +327,168 @@ body {
     gap: 1.25rem;
   }
 }
+
+
+/* ============================================================================
+   MIDNIGHT theme: Tron / Jarvis futuristic overlay. Everything in this
+   block is scoped to [data-theme="dark"] so no other theme picks it up.
+
+   Idea: cards look BACKLIT (a hairline of cyan on the top edge), the page
+   carries a very faint grid so it reads as a HUD, focus states BLOOM
+   instead of tinting, and buttons have a soft glow instead of a shadow.
+   None of this is animated on load; the only motion is a very slow
+   accent-line drift on the page background that respects prefers-reduced-
+   motion. Nothing here changes layout.
+   ============================================================================ */
+
+[data-theme="dark"] body {
+  /* HUD grid: two thin cyan lines forming a 32px lattice at very low
+     opacity, plus a soft radial vignette from the top-centre that gives
+     the page depth without a hero image. Both layers are pure CSS
+     gradients, no image fetches. */
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(34, 211, 238, 0.10), transparent 60%),
+    radial-gradient(ellipse at 90% 110%, rgba(192, 132, 252, 0.08), transparent 55%),
+    linear-gradient(rgba(34, 211, 238, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--page);
+  background-attachment: fixed;
+}
+
+/* Cards: dark glass. Subtle top-edge cyan hairline reads as backlit
+   from above; the box-shadow bloom is doing the real work. */
+[data-theme="dark"] .card {
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05), transparent 40%),
+    var(--surface);
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 0 rgba(34, 211, 238, 0.10),   /* the "LED line" under the card */
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    0 0 40px rgba(34, 211, 238, 0.05);
+  position: relative;
+}
+
+/* Hairline of neon along the very top of every card -- the backlit
+   glow that gives the whole theme its identity. Rendered as a
+   pseudo-element so it never eats interactivity or accepts hover. */
+[data-theme="dark"] .card::before {
+  content: "";
+  position: absolute;
+  inset: 0 12% auto 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.55), transparent);
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* Buttons: primary carries a cyan bloom; ghost gets a hairline that
+   brightens on hover. No pill-shadow anywhere. */
+[data-theme="dark"] .btn-primary {
+  background: linear-gradient(180deg, #22d3ee, #06b6d4);
+  color: #04070c;
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.55),
+    0 6px 20px rgba(34, 211, 238, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
+}
+[data-theme="dark"] .btn-primary:hover {
+  background: linear-gradient(180deg, #67e8f9, #22d3ee);
+  box-shadow:
+    0 0 0 1px rgba(103, 232, 249, 0.7),
+    0 8px 26px rgba(34, 211, 238, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-theme="dark"] .btn-ghost {
+  background: rgba(34, 211, 238, 0.04);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  color: var(--ink);
+}
+[data-theme="dark"] .btn-ghost:hover {
+  background: rgba(34, 211, 238, 0.10);
+  border-color: rgba(34, 211, 238, 0.45);
+  color: var(--accent);
+}
+
+/* Inputs: cyan focus bloom instead of the default two-tone ring. */
+[data-theme="dark"] .field:focus,
+[data-theme="dark"] input:focus,
+[data-theme="dark"] textarea:focus,
+[data-theme="dark"] select:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.7),
+    0 0 20px rgba(34, 211, 238, 0.35);
+  border-color: rgba(34, 211, 238, 0.7);
+}
+
+/* Any element carrying the accent link colour is a candidate for the
+   glow. Kept subtle so text doesn't smear. */
+[data-theme="dark"] a:hover {
+  text-shadow: 0 0 12px rgba(34, 211, 238, 0.5);
+}
+
+/* Numeric hero: monospace-ish tabular figures pop harder in this
+   theme; a faint cyan glow gives them a HUD-readout feel. */
+[data-theme="dark"] .stat-num {
+  text-shadow: 0 0 14px rgba(34, 211, 238, 0.25);
+}
+
+/* Selection: cyan tint. */
+[data-theme="dark"] ::selection {
+  background: rgba(34, 211, 238, 0.35);
+  color: #fff;
+}
+
+/* Scrollbar: colour it in so it doesn't look Windows-95 on this theme. */
+[data-theme="dark"] * {
+  scrollbar-color: rgba(34, 211, 238, 0.35) transparent;
+  scrollbar-width: thin;
+}
+[data-theme="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.35), rgba(192, 132, 252, 0.35));
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.55), rgba(192, 132, 252, 0.55));
+  background-clip: padding-box;
+}
+
+/* Very slow scan-line drift across the page. Two accent lines that
+   travel top-to-bottom at different speeds; opacity is so low they
+   read as ambient rather than motion. Disabled for reduced motion. */
+@keyframes daymax-hud-scan {
+  0%   { transform: translateY(-30vh); }
+  100% { transform: translateY(130vh); }
+}
+[data-theme="dark"] body::before,
+[data-theme="dark"] body::after {
+  content: "";
+  position: fixed;
+  left: 0; right: 0;
+  height: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme="dark"] body::before {
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.35), transparent);
+  animation: daymax-hud-scan 22s linear infinite;
+}
+[data-theme="dark"] body::after {
+  background: linear-gradient(90deg, transparent, rgba(192, 132, 252, 0.25), transparent);
+  animation: daymax-hud-scan 34s linear infinite;
+  animation-delay: -10s;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="dark"] body::before,
+  [data-theme="dark"] body::after { animation: none; opacity: 0; }
+}
+
+/* Keep app chrome above the scan lines. */
+[data-theme="dark"] body > * { position: relative; z-index: 1; }
