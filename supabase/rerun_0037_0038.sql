@@ -28,10 +28,17 @@
 -- one statement; the bulk of the file is the full text of 0038.
 -- ============================================================================
 
--- ---------- 0037 (idempotent) ----------------------------------------------
--- Keeps the constraint permissive of 'ios' in case any old profile row still
--- carries it. If the constraint already allows all four, this is a no-op.
+-- ---------- 0037 + a self-heal for 0014 (idempotent) ----------------------
+-- If you saw "column theme does not exist" earlier, that means the earlier
+-- migration 0014 (which ADDS profiles.theme) never actually applied. This
+-- block does both jobs in one go: adds the theme+accent columns if they are
+-- missing, backfills nulls, then puts the check constraint on. It is safe
+-- to re-run.
 
+alter table public.profiles add column if not exists theme text;
+alter table public.profiles add column if not exists accent text;
+update public.profiles set theme = 'light' where theme is null or theme not in ('light','dark','cottage','ios');
+alter table public.profiles alter column theme set default 'light';
 alter table public.profiles drop constraint if exists profiles_theme_check;
 alter table public.profiles
   add constraint profiles_theme_check check (theme in ('light', 'dark', 'cottage', 'ios'));
