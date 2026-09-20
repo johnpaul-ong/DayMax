@@ -19,6 +19,14 @@ export interface Category {
   color: string;
 }
 
+/**
+ * The `color` field is the LIGHT-theme value, and doubles as the SSR
+ * fallback and the value baked into `var()` calls below. Runtime colour
+ * comes from `--cat-0` .. `--cat-9` defined per-theme in globals.css, so
+ * Midnight (neon HUD), Cottage (earthy) and Light each get their own
+ * take on the same 10 categories without the day-grid, spiral, year
+ * strip and every legend having to know about themes.
+ */
 export const CATEGORIES: Category[] = [
   { code: 0, name: "Sleep", aliases: ["sleep"], defaultBucket: "other", color: "#94a3b8" },
   { code: 1, name: "Work", aliases: ["work"], defaultBucket: "productive", color: "#2563eb" },
@@ -38,8 +46,37 @@ export function categoryName(code: number): string {
   return CATEGORY_BY_CODE.get(code)?.name ?? `Unknown (${code})`;
 }
 
+/**
+ * A category colour, as a CSS `var()` reference. Every day-grid, spiral,
+ * year strip and legend uses this; because it's a CSS custom property
+ * (with a static hex fallback for SSR), the whole app repaints when
+ * you switch themes without a single component having to know that
+ * themes exist.
+ *
+ * The fallback IS the light theme's value, so first paint before the
+ * stylesheet applies is still correct.
+ */
 export function categoryColor(code: number): string {
-  return CATEGORY_BY_CODE.get(code)?.color ?? "#6b7280";
+  const c = CATEGORY_BY_CODE.get(code);
+  if (!c) return "#6b7280";
+  return `var(--cat-${code}, ${c.color})`;
+}
+
+/**
+ * Same colour as a concrete hex, for canvas / measurement / any API
+ * that parses colour strings itself. Falls back to the static value
+ * on the server or in tests where `document` is absent.
+ */
+export function resolveCategoryColor(code: number): string {
+  const c = CATEGORY_BY_CODE.get(code);
+  const fallback = c?.color ?? "#6b7280";
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") return fallback;
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(`--cat-${code}`).trim();
+    return v || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function defaultBuckets(): Record<number, Bucket> {

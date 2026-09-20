@@ -187,8 +187,20 @@ export default function TodayPage() {
           <button
             key={c.code}
             onClick={() => { setCat(c.code); setCatPicked(true); }}
-            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-medium ${cat === c.code && catPicked ? "ring-2 ring-accent" : ""}`}
-            style={{ background: c.color + "22", borderColor: c.color }}
+            className={`rounded-lg border px-2 py-2.5 text-left text-sm font-semibold text-ink ${cat === c.code && catPicked ? "ring-2 ring-accent" : ""}`}
+            /*
+             * c.color is now a CSS var() reference (see lib/categories.ts),
+             * so the old `c.color + "22"` string concatenation produced
+             * invalid CSS ("var(--cat-0, #94a3b8)22") and the background
+             * fell out entirely -- the buttons went flat with just a
+             * coloured border on midnight. color-mix() blends the theme
+             * variable with transparent at 18%, which works with a var()
+             * on the input side.
+             */
+            style={{
+              background: `color-mix(in srgb, ${c.color} 18%, transparent)`,
+              borderColor: `color-mix(in srgb, ${c.color} 70%, transparent)`,
+            }}
           >
             {c.code} {c.name}
           </button>

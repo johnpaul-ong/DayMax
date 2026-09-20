@@ -54,6 +54,21 @@
   --chart-8: #0f766e;   /* teal */
   --chart-9: #78716c;   /* stone */
   --chart-muted: #8a94a6;
+
+  /* Day-grid categories (0-9). These are the ORIGINAL warm/light hues.
+     Each theme redefines them; the SSR fallback in categoryColor()
+     matches this block exactly, so first paint is correct even before
+     any stylesheet has applied. */
+  --cat-0: #94a3b8;  /* Sleep — slate */
+  --cat-1: #2563eb;  /* Work — blue */
+  --cat-2: #16a34a;  /* Sports — green */
+  --cat-3: #f59e0b;  /* Social — amber */
+  --cat-4: #0ea5e9;  /* Travel — sky */
+  --cat-5: #a78bfa;  /* Misc — violet */
+  --cat-6: #ef4444;  /* Other — red */
+  --cat-7: #f97316;  /* Eat — orange */
+  --cat-8: #ec4899;  /* Family — pink */
+  --cat-9: #dc2626;  /* Leisure — deep red */
 }
 
 [data-theme="dark"] {
@@ -104,6 +119,24 @@
   --chart-8: #f472b6;   /* hot pink */
   --chart-9: #94a3b8;   /* cool ash */
   --chart-muted: #475569;
+
+  /* Day-grid categories, Midnight edition. Neon HUD colours -- the
+     year strip, spiral clock and every legend swap to these when the
+     theme is Midnight, so the categories LOOK futuristic rather than
+     poster-bright Tailwind mid-tones on black. Cyan leads (Work is
+     the "signature" activity), everything else picks a partner-neon
+     that reads at >=4.6:1 on --surface #0b0f18 and stays >=25 dE
+     apart. */
+  --cat-0: #475569;  /* Sleep — deep slate (quiet, HUD "off") */
+  --cat-1: #22d3ee;  /* Work — cyan signature */
+  --cat-2: #a3e635;  /* Sports — acid lime */
+  --cat-3: #fbbf24;  /* Social — neon amber */
+  --cat-4: #38bdf8;  /* Travel — azure */
+  --cat-5: #c084fc;  /* Misc — electric violet */
+  --cat-6: #ff5470;  /* Other — magenta-red */
+  --cat-7: #fb923c;  /* Eat — burnt neon orange */
+  --cat-8: #f0abfc;  /* Family — fuchsia */
+  --cat-9: #f472b6;  /* Leisure — hot pink */
 }
 
 /* Soft paper, moss and sky — hand-painted feel. */
@@ -142,6 +175,22 @@
   --chart-8: #6b4a3a;   /* cocoa */
   --chart-9: #8f8a76;   /* driftwood */
   --chart-muted: #7f8a8f;
+
+  /* Day-grid categories, Cottage edition. Mixed from the same paintbox
+     as the theme -- moss, slate, terracotta, ochre, plum, driftwood.
+     Work is slate-blue (a hand-painted-page blue, not a screen blue),
+     Sports is moss (the accent), Leisure is rust rather than fire-
+     engine red. All checked >=3.2:1 on --surface. */
+  --cat-0: #a89f85;  /* Sleep — driftwood */
+  --cat-1: #3f6b8a;  /* Work — slate blue */
+  --cat-2: #5c8a4e;  /* Sports — moss */
+  --cat-3: #96700f;  /* Social — ochre */
+  --cat-4: #6f4e7c;  /* Travel — plum */
+  --cat-5: #8f8a76;  /* Misc — stone */
+  --cat-6: #b3543f;  /* Other — terracotta */
+  --cat-7: #a34a6b;  /* Eat — rose */
+  --cat-8: #6b4a3a;  /* Family — cocoa */
+  --cat-9: #7a4d3a;  /* Leisure — rust */
 }
 
 /* Stock Apple. Real iOS system colours (light appearance): systemGroupedBackground
