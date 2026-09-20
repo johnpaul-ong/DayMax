@@ -107,21 +107,45 @@ export default function NotificationsBell() {
   }, [open]);
 
   if (!me) return null;
+  // Bell hides itself when there are no unread. It reappears the
+  // moment something lands (realtime subscription). Old notifications
+  // are still readable while the drawer is open, so pinning a
+  // permanent bell just to expose history is dead weight.
+  if (unread === 0 && !open) return null;
 
   return (
-    <div className="relative" ref={drawerRef}>
+    <div className="relative shrink-0" ref={drawerRef}>
       <button
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
-        className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-surface-2"
+        aria-label={`Notifications (${unread} unread)`}
+        // Fixed 32x32 button, matches nav-link sizing so opening the
+        // drawer or the bell appearing/disappearing never shifts nav
+        // height. Drawer is absolute-positioned below, so unfolding
+        // it doesn't push the bar either.
+        className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-2"
         title="Notifications"
       >
-        {/* Simple bell glyph — no external icon dep, works on every theme. */}
-        <span aria-hidden="true">🔔</span>
+        {/* Real SVG bell — one path, currentColor, no external icon
+            library. Sized to sit inside the 32x32 button. */}
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="text-ink"
+        >
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
         {unread > 0 && (
           <span
-            className="absolute -right-0.5 -top-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-tight text-accent-contrast"
-            style={{ height: 18 }}
+            className="absolute -right-1 -top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold leading-none text-accent-contrast"
+            style={{ height: 16 }}
           >
             {unread > 99 ? "99+" : unread}
           </span>

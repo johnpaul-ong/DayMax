@@ -39,9 +39,19 @@ export default function MobileNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-surface sm:hidden"
-      // keep clear of the iPhone home indicator
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed inset-x-0 bottom-0 border-t bg-surface sm:hidden"
+      // Inline position + zIndex so nothing in globals.css can override
+      // them. The user reported the nav "only visible at the bottom of
+      // the page" -- symptom of a theme rule beating Tailwind's z-40
+      // or an ancestor overriding position. Belt and braces.
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 45,
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
       aria-label="Primary"
     >
       <div className="flex items-end">
