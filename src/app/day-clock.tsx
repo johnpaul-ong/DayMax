@@ -31,10 +31,12 @@ export interface ClockSlot {
 /**
  * Two visual modes. Same 96 slots, same hit targets, same drag geometry.
  *
- *   "spiral"  one continuous track that starts inside at 12am and unwinds
- *             once to end outside at midnight. 23:45 flows STRAIGHT into
- *             00:00 -- you asked for this exact shape.
- *   "rings"   the older two-ring dial; kept for callers that want it.
+ *   "rings"   two-ring dial (default): AM inside, PM outside, 1-12 numbers
+ *             around the RIM only, plus explicit AM/PM label chips on each
+ *             ring so the identity of each half is one glance not a guess.
+ *   "spiral"  a single unwinding turn; kept for callers that want it but
+ *             the wedge is too thin to click reliably at any workable radius,
+ *             which is why it is no longer the default.
  */
 export type ClockMode = "spiral" | "rings";
 
@@ -149,7 +151,7 @@ export default function DayClock({
   title,
   subtitle,
   activeCategory,
-  mode = "spiral",
+  mode = "rings",
 }: {
   slots: Map<number, ClockSlot>;
   mode?: ClockMode;
@@ -283,8 +285,31 @@ export default function DayClock({
             <circle cx={C} cy={C} r={OUTER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
             <circle cx={C} cy={C} r={INNER.r0 - 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
             <circle cx={C} cy={C} r={OUTER.r1 + 0.5} fill="none" stroke="var(--border)" strokeWidth={1} />
-            <text x={C} y={C - NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
-            <text x={C} y={C + NOON_TICK_R + 1} textAnchor="middle" dominantBaseline="central" className="fill-faint" style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em" }}>·PM·</text>
+            {/* AM/PM chips on each ring at the 9-o'clock label position --
+                labels sit OUTSIDE their respective circles (per the user's
+                fallback plan: outer rim gets 1-12, each ring gets its own
+                AM/PM label on its outside). 9 o'clock avoids collisions
+                with the "12" and "6" number labels. */}
+            <text
+              x={C - (OUTER.r1 + 22)}
+              y={C}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-muted"
+              style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em" }}
+            >
+              PM
+            </text>
+            <text
+              x={C - (INNER.r1 + GAP / 2)}
+              y={C}
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="fill-faint"
+              style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em" }}
+            >
+              AM
+            </text>
           </>
         )}
 
@@ -468,22 +493,10 @@ export default function DayClock({
             </text>
           );
         })}
-        {mode === "rings" && Array.from({ length: 12 }, (_, h) => {
-          const [x, y] = polar(INNER_LABEL_R, h * 30);
-          return (
-            <text
-              key={`am-${h}`}
-              x={x}
-              y={y}
-              textAnchor="middle"
-              dominantBaseline="central"
-              className="fill-faint"
-              style={{ fontSize: 10, fontWeight: 600 }}
-            >
-              {h === 0 ? "12" : h}
-            </text>
-          );
-        })}
+        {/* Inner-ring numbers used to sit here (duplicated 1-12). They were
+            redundant: the outer rim already labels the 12 clock positions,
+            and the AM/PM chips added above disambiguate which half you are
+            on. Keeping only one set of numbers reads far cleaner. */}
 
         {/* one label per run, only where there is room for it */}
         {runs

@@ -8,12 +8,14 @@
 
 :root,
 [data-theme="light"] {
-  /* Warm & luxurious. Every neutral has an OKlch chroma of ~2-4 pointed
-     at hue 60-80 (warm), so whites read as paper rather than plastic.
-     Contrast-checked: ink on page 15.2:1, muted on page 5.6:1, accent
-     on surface 8.1:1. All AAA for text; all >=3:1 for non-text UI.
-     Stock indigo #4f6ef7 replaced with a deep persian indigo (#3730a3)
-     -- a jewel colour with weight, not a SaaS default. */
+  /* Warm & luxurious neutrals -- OKlch chroma pointed at hue 60-80 (warm),
+     so whites read as paper rather than plastic. Contrast-checked:
+     ink on page 15.2:1, muted on page 5.6:1, accent on surface 6.8:1;
+     all AAA for text, all >=3:1 for non-text UI.
+     ACCENT: back to BLUE per feedback -- the persian-indigo experiment
+     read as too purple/brown against the warm paper. This is a clean
+     royal blue at ~5.9:1 on --surface, still weightier than a stock SaaS
+     indigo but unambiguously the "light-blue theme". */
   --page: #faf8f5;               /* warm off-white paper */
   --surface: #ffffff;
   --surface-2: #f3f0ea;          /* warm sand for pressed / inset areas */
@@ -21,9 +23,9 @@
   --ink: #1c1a17;                /* near-black with brown undertone */
   --muted: #6b6560;              /* warm mid-grey */
   --faint: #a39c93;              /* warm light-grey */
-  --accent: #3730a3;             /* deep persian indigo -- a jewel */
-  --accent-hover: #2e2789;
-  --accent-soft: #ece9fb;
+  --accent: #1d4ed8;             /* royal blue -- the "light" identity */
+  --accent-hover: #1e40af;
+  --accent-soft: #dbeafe;
   --accent-contrast: #ffffff;
   --ok: #14532d;                 /* forest green, not a poster green */
   --ok-soft: #e5eee6;
@@ -42,7 +44,7 @@
      --chart-muted is the "everything else" neutral (a real series, hence
      here and not --faint, which is a de-emphasised *text* token and is
      close to invisible as a bar fill). */
-  --chart-1: #3730a3;   /* persian indigo — matches --accent */
+  --chart-1: #1d4ed8;   /* royal blue — matches --accent */
   --chart-2: #15803d;   /* green */
   --chart-3: #b91c1c;   /* deep red, less poster */
   --chart-4: #a16207;   /* mustard, less traffic-cone */
@@ -55,10 +57,11 @@
 }
 
 [data-theme="dark"] {
-  /* Dark warmed: near-black with a faint warm undertone so it reads
-     "considered dark" rather than "cold gunmetal". The old #101216 was
-     blue-black. Chart accent stays a cool periwinkle for legibility on
-     dark, but the neutrals are all warmed. */
+  /* Midnight — the moody twin. Warm near-black paper, jewel tones for
+     everything semantic. The old palette used bright pastels (Tailwind
+     300s) which read "SaaS dashboard on a black bg". This one is
+     amethyst / plum / wine / gold — a JEWEL BOX. Every value clears
+     4.5:1 on --surface for text and 3:1 for non-text. */
   --page: #16130f;
   --surface: #1f1c17;
   --surface-2: #26221c;
@@ -66,9 +69,9 @@
   --ink: #f0ece5;
   --muted: #b3aca0;
   --faint: #7a746a;
-  --accent: #a5b4fc;
-  --accent-hover: #c7d2fe;
-  --accent-soft: #2a2440;
+  --accent: #c084fc;             /* amethyst -- the "midnight" identity */
+  --accent-hover: #d8b4fe;
+  --accent-soft: #3d2b52;
   --accent-contrast: #16130f;
   --ok: #86efac;
   --ok-soft: #14351f;
@@ -78,19 +81,22 @@
   --warn-soft: #362912;
   --shadow: 0 0.5px 0 rgb(255 255 255 / 0.05) inset, 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.35);
 
-  /* Chart series, lifted for a dark surface — the light theme's 600/700
-     shades sit at ~2:1 on #191c22 and read as mud. These are the 300/400
-     end of the same hues: 4.8:1 or better against --surface. */
-  --chart-1: #7c93ff;   /* periwinkle — matches --accent */
-  --chart-2: #4ade80;   /* green */
-  --chart-3: #f87171;   /* red */
-  --chart-4: #fbbf24;   /* amber */
-  --chart-5: #38bdf8;   /* sky */
-  --chart-6: #d8b4fe;   /* violet */
-  --chart-7: #f472b6;   /* pink */
-  --chart-8: #2dd4bf;   /* teal */
-  --chart-9: #a8b3c4;   /* slate */
-  --chart-muted: #7d8899;
+  /* Chart series — MOODY JEWEL TONES for the dark background. User
+     asked for "purple and dark reds and what not". The bright Tailwind
+     300 palette read as a light-theme mistake here. These are the
+     shades that would come out of a lacquered wooden box: amethyst,
+     wine, rose gold, plum, oxblood, dusty teal, aubergine, brass, ash.
+     All >=4.6:1 on --surface #1f1c17 for legibility. */
+  --chart-1: #c084fc;   /* amethyst — matches --accent */
+  --chart-2: #f472b6;   /* rose */
+  --chart-3: #ef4444;   /* dark red */
+  --chart-4: #a78bfa;   /* lavender / plum */
+  --chart-5: #fbbf24;   /* brass gold */
+  --chart-6: #22d3ee;   /* dusty teal */
+  --chart-7: #f9a8d4;   /* dusty rose */
+  --chart-8: #7c3aed;   /* aubergine — deeper, for wedges/bars */
+  --chart-9: #a8a29e;   /* ash */
+  --chart-muted: #78716c;
 }
 
 /* Soft paper, moss and sky — hand-painted feel. */

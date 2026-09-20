@@ -36,6 +36,7 @@ import { defaultBuckets, HOURS_PER_SLOT } from "@/lib/categories";
 import { localToday } from "@/lib/dates";
 import BigThree from "./big-three";
 import DayClock, { type ClockSlot } from "./day-clock";
+import IncomeRing from "./money/income-ring";
 
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
@@ -334,37 +335,18 @@ export default function ProfileView({ userId }: { userId: string }) {
         </section>
       )}
 
-      {show("hours") && hasDayData && (
-        <section>
-          <div className="mb-2 flex items-center gap-3">
-            <h2 className="font-semibold">Hours per {period}</h2>
-            <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
-              {(["day", "week", "month"] as const).map((p) => (
-                <button key={p} onClick={() => setPeriod(p)} className={`rounded-lg px-3 py-1 capitalize ${period === p ? "bg-surface font-semibold" : "text-muted"}`}>
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="h-64 card p-2">
-            <ResponsiveContainer>
-              <BarChart data={hoursChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: number) => `${Number(v).toFixed(1)}h`} />
-                <Legend />
-                <Bar dataKey="productive" stackId="a" fill={colors.productive} />
-                <Bar dataKey="brainrot" stackId="a" fill={colors.brainrot} />
-                <Bar dataKey="other" stackId="a" fill={colors.other} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
+      {/* The profile used to keep going down the page with a stacked-hours
+          chart, a single-exercise line, and a bodyweight line. That whole
+          strip was cut on request: the ranking cards above already state
+          hours and focus in one glance, and the lifting story is better
+          told by the BigThree donut immediately below. What remains under
+          Productivity ranking now is the two things that ACTUALLY answer
+          "how am I doing" -- lifts (big three) and money (this month). */}
 
-      {/* the big three together, before the single-exercise picker */}
-      {show("lifts") && liftRows.length > 0 && (
+      {/* Lifting signature graph: the big-three donut, standard for every
+          profile that has lifted anything. Not gated on show("lifts") any
+          more -- it IS the lifting summary. */}
+      {liftRows.length > 0 && (
         <BigThree
           rows={liftRows}
           bodyweightKg={bodyweight.length ? bodyweight[bodyweight.length - 1].weightKg : null}
@@ -372,60 +354,11 @@ export default function ProfileView({ userId }: { userId: string }) {
         />
       )}
 
-      {show("lifts") && liftRows.length > 0 && (
-        <section>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">Lifts</h2>
-            <select value={exercise} onChange={(e) => setExercise(e.target.value)} className="rounded-lg border bg-surface px-2 py-1 text-sm">
-              {exerciseNames.map((x) => (
-                <option key={x} value={x}>{x}</option>
-              ))}
-            </select>
-            {isSelf && exercise && exercise !== defaultEx && (
-              <button
-                onClick={() => void setDefaultExercise(exercise).then(() => setDefaultEx(exercise))}
-                className="text-xs font-medium text-accent hover:underline"
-              >
-                make this my default
-              </button>
-            )}
-            {isSelf && exercise && exercise === defaultEx && <span className="text-xs text-faint">your default</span>}
-          </div>
-          <div className="h-56 card p-2">
-            <ResponsiveContainer>
-              <LineChart data={liftChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
-                <Tooltip labelFormatter={(d) => String(d)} />
-                <Line type="monotone" strokeWidth={2.5} dataKey="weight" stroke={chartSeries(0)} dot={{ r: 2 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
-
-      {show("lifts") && bodyweight.length > 1 && (
-        <section>
-          <h2 className="mb-1 font-semibold">Bodyweight</h2>
-          <p className="mb-2 text-sm text-muted">Standard on every profile — the one number every lifter has in common.</p>
-          <div className="h-52 card p-2">
-            <ResponsiveContainer>
-              <LineChart data={bodyweight}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-                <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10 }} unit="kg" />
-                <Tooltip labelFormatter={(d) => String(d)} formatter={(v: number) => [`${v} kg`, "bodyweight"]} />
-                <Line type="monotone" strokeWidth={2.5} dataKey="weightKg" stroke={teamMeta(team).color} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
-
-      {/* "Their days, 15 minutes at a time" (a second month grid) and the
-          year heatmap were both saying what the year strip above already says,
-          three sections further down the page. Gone. */}
+      {/* Money summary -- self-only, because a friend's spending is not
+          published from their profile. The IncomeRing is the signature
+          Money visual and matches the one on /money and on the Money
+          pursuit page, so a user meets the same shape three times. */}
+      {isSelf && <ProfileMoneySummary />}
 
       {dataLoaded && !hasDayData && liftRows.length === 0 && strip.length === 0 && (
         isSelf ? <SelfEmptyProfile colors={colors} /> : (
@@ -646,4 +579,77 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+
+/**
+ * A short money card on your own profile: the current month's IncomeRing
+ * plus the four headline numbers, deep-linking to /money for the full
+ * page. Self-only -- another person's spending is not published from
+ * here (that data lives behind an explicit "share amounts" opt-in on
+ * challenges, not on the profile).
+ */
+function ProfileMoneySummary() {
+  const [sum, setSum] = useState<{ total: number; essential: number; nonEssential: number; income: number; nonEssentialPct: number | null } | null>(null);
+  const [byCat, setByCat] = useState<Array<{ categoryId: string | null; name: string; essential: boolean; total: number }>>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const m = await import("@/lib/money");
+        const today = localToday();
+        const month = today.slice(0, 7);
+        const [y, mo] = month.split("-").map(Number);
+        const from = `${month}-01`;
+        const to = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
+        const [s, cats] = await Promise.all([m.fetchSummary(from, to), m.fetchByCategory(from, to)]);
+        setSum(s);
+        setByCat(cats);
+      } catch { /* no money data yet -- fine */ }
+      setLoaded(true);
+    })();
+  }, []);
+  if (!loaded) return null;
+  // Nothing logged this month AND no income -- render a tiny CTA so the
+  // section isn't a dead space, rather than nothing at all.
+  if (!sum || (sum.total === 0 && sum.income === 0)) {
+    return (
+      <section>
+        <h2 className="mb-2 font-semibold">This month, on money</h2>
+        <p className="card p-4 text-sm text-muted">
+          Nothing logged yet. Head to <Link href="/money" className="text-accent hover:underline">Money</Link> to add a spend or your income; the same ring you see on the challenge board will show up here.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section>
+      <h2 className="mb-2 font-semibold">This month, on money</h2>
+      <div className="card p-4">
+        <IncomeRing
+          slices={byCat.map((c) => ({ categoryId: c.categoryId, name: c.name, essential: c.essential, amount: c.total }))}
+          income={sum.income || null}
+          size={260}
+        />
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          <MoneyMetric label="Spent" value={`$${sum.total.toFixed(0)}`} />
+          <MoneyMetric label="Essential" value={`$${sum.essential.toFixed(0)}`} />
+          <MoneyMetric label="Non-essential" value={`$${sum.nonEssential.toFixed(0)}`} />
+          <MoneyMetric label="% of income" value={sum.nonEssentialPct != null ? `${sum.nonEssentialPct}%` : "—"} />
+        </div>
+        <div className="mt-3 text-center">
+          <Link href="/money" className="text-sm font-medium text-accent hover:underline">Open Money →</Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MoneyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-surface-2 p-3 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
 

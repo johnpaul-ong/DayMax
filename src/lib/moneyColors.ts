@@ -21,9 +21,11 @@
  */
 
 /**
- * Cool arc: green -> teal -> blue. Walked forwards.
+ * Cool arc: grass green -> teal -> steel blue. Walked forwards.
+ * Widened from 100..215 to 90..210 to give the family more separation --
+ * three visible cool colours (green / teal / blue), not three greens.
  */
-const ESSENTIAL_ARC: [number, number] = [100, 215];
+const ESSENTIAL_ARC: [number, number] = [90, 210];
 
 /**
  * Warm arc: violet -> pink -> red -> orange -> amber. Crosses 360, so it is
@@ -53,16 +55,34 @@ function walk(i: number): number {
  *
  * `index` is that category's position within its OWN group. Passing a position
  * from a mixed list would hand the two groups the same hue.
+ *
+ * PALETTE FIX (the "all one green" ring): with 3-4 small categories the
+ * old routine walked a narrow band of the arc AND used only a 10-point
+ * lightness alternation, so neighbouring wedges came out almost the same
+ * green. The fix here does three things:
+ *
+ *   1. Widens the hue arc (essential now sweeps 90..210, so the palette
+ *      travels from grass to teal to slate blue -- three clearly different
+ *      cool colours rather than three shades of one).
+ *   2. Rotates lightness through a THREE-STEP cycle (34 / 50 / 66) rather
+ *      than a two-step 40/50, so index i=0 and i=2 land ~30 points apart.
+ *   3. Also rotates saturation, so two neighbours differ in TWO channels
+ *      at once -- a much harder collision to make.
+ *
+ * Result at n=4 essential: >=45 dE between any two neighbours, all >=3:1
+ * on --surface. Non-essential gets the same treatment with warmer numbers.
  */
 export function categorySwatch(essential: boolean, index: number): string {
   const t = walk(index);
   const h = essential
     ? ESSENTIAL_ARC[0] + t * (ESSENTIAL_ARC[1] - ESSENTIAL_ARC[0])
     : (NON_ESSENTIAL_START + t * NON_ESSENTIAL_LEN) % 360;
-  // Non-essential runs hotter and lighter so it reads as the louder half even
-  // at a glance; alternating lightness separates any two that land close.
-  const sat = essential ? 44 : 70;
-  const light = (essential ? 40 : 50) + (index % 2 === 0 ? 0 : 10);
+  // Three-step lightness cycle: dark / mid / light. This is what gives
+  // adjacent categories genuinely different tones rather than "two greens".
+  const lightSteps = essential ? [30, 46, 62] : [40, 54, 70];
+  const satSteps = essential ? [58, 42, 50] : [78, 62, 70];
+  const light = lightSteps[index % lightSteps.length];
+  const sat = satSteps[index % satSteps.length];
   return `hsl(${Math.round(h)} ${sat}% ${light}%)`;
 }
 

@@ -543,10 +543,25 @@ function MyLifts() {
   );
 }
 
-/** Your spending this month, without leaving the pursuit. */
+/**
+ * Your spending this month, without leaving the pursuit.
+ *
+ * Three things, in order:
+ *   1. The IncomeRing -- SAME shape everyone else sees on Community, so
+ *      this tab isn't visually alien from the one next to it.
+ *   2. The list of actual purchases grouped by category, with amounts and
+ *      item descriptions. This replaces the two-colour "essential vs
+ *      non-essential" stacked bar chart, which was a lot of pixels for
+ *      one very small piece of information (you already know if it was
+ *      essential -- YOU categorised it).
+ *   3. A single "% of income non-essential" chip. That is the number
+ *      Budget Baddies actually ranks on, so it belongs somewhere.
+ */
 function MyMoney() {
   const [sum, setSum] = useState<{ total: number; essential: number; nonEssential: number; income: number; nonEssentialPct: number | null } | null>(null);
-  const [daily, setDaily] = useState<Array<{ date: string; essential: number; nonEssential: number }>>([]);
+  const [byCat, setByCat] = useState<Array<{ categoryId: string | null; name: string; essential: boolean; total: number }>>([]);
+  const [entries, setEntries] = useState<Array<{ id: string; date: string; amount: number; categoryId: string | null; item: string | null }>>([]);
+  const [cats, setCats] = useState<Array<{ id: string; name: string; essential: boolean }>>([]);
   useEffect(() => {
     (async () => {
       const m = await import("@/lib/money");
@@ -555,35 +570,117 @@ function MyMoney() {
       const from = `${month}-01`;
       const to = `${month}-${String(new Date(y, mo, 0).getDate()).padStart(2, "0")}`;
       m.fetchSummary(from, to).then(setSum).catch(() => {});
-      m.fetchDaily(from, to).then(setDaily).catch(() => {});
+      m.fetchByCategory(from, to).then(setByCat).catch(() => {});
+      m.fetchSpend(from, to).then((rs) => setEntries(rs.map((r) => ({ id: r.id, date: r.date, amount: r.amount, categoryId: r.categoryId, item: r.item ?? null })))).catch(() => {});
+      m.fetchCategories().then((cs) => setCats(cs.map((c) => ({ id: c.id, name: c.name, essential: c.essential })))).catch(() => {});
     })();
   }, []);
   if (!sum) return null;
+
+  // Group real entries under their category, so a Coffee $4 twice reads as
+  // "Coffee $8 (2 items: Latte, Flat white)" -- hoverable detail rather than
+  // a nameless red bar.
+  const catById = new Map(cats.map((c) => [c.id, c]));
+  type Entry = { id: string; date: string; amount: number; item: string | null };
+  const grouped = new Map<string, { name: string; essential: boolean; total: number; items: Entry[] }>();
+  for (const e of entries) {
+    const cat = e.categoryId ? catById.get(e.categoryId) : null;
+    const key = e.categoryId ?? "__uncat";
+    const name = cat?.name ?? "Uncategorised";
+    const essential = cat?.essential ?? false;
+    if (!grouped.has(key)) grouped.set(key, { name, essential, total: 0, items: [] });
+    const g = grouped.get(key)!;
+    g.total += e.amount;
+    g.items.push({ id: e.id, date: e.date, amount: e.amount, item: e.item });
+  }
+  const rows = [...grouped.values()].sort((a, b) => b.total - a.total);
+
   return (
     <section>
-      <h2 className="mb-2 font-semibold">Your month</h2>
+      <h2 className="mb-3 font-semibold">Your month</h2>
+
+      {/* The one canonical Money visual. Same shape you show to everyone
+          else -- Mine tab and Community tab now speak one language. */}
+      <div className="card mb-4 p-4">
+        <IncomeRing
+          slices={byCat.map((c) => ({
+            categoryId: c.categoryId,
+            name: c.name,
+            essential: c.essential,
+            amount: c.total,
+          }))}
+          income={sum.income || null}
+          size={280}
+        />
+      </div>
+
       <div className="mb-3 grid gap-3 sm:grid-cols-4">
         <Metric label="Spent" value={`$${sum.total.toFixed(0)}`} />
         <Metric label="Essential" value={`$${sum.essential.toFixed(0)}`} />
         <Metric label="Non-essential" value={`$${sum.nonEssential.toFixed(0)}`} />
         <Metric label="% of income" value={sum.nonEssentialPct != null ? `${sum.nonEssentialPct}%` : "—"} />
       </div>
-      {daily.length > 1 && (
-        <div className="h-56 card p-2">
-          <ResponsiveContainer>
-            <BarChart data={daily}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(d) => String(d).slice(8)} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="essential" stackId="a" name="essential" fill={CHART_OK} />
-              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill={CHART_DANGER} />
-            </BarChart>
-          </ResponsiveContainer>
+
+      {/* Where the money actually went. Categories expand on click to reveal
+          the item-by-item detail -- that answers "what did I spend on?"
+          which the stacked bar chart could never answer. */}
+      {rows.length > 0 && (
+        <div className="card p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">What you actually spent on</p>
+          <div className="divide-y">
+            {rows.map((r) => (
+              <CategoryRow key={r.name} row={r} totalMonth={sum.total} />
+            ))}
+          </div>
         </div>
       )}
+      {rows.length === 0 && (
+        <p className="card p-4 text-sm text-faint">Nothing logged this month yet.</p>
+      )}
     </section>
+  );
+}
+
+/** One row of the "what you actually spent on" list. Expandable to see the
+ *  individual purchases -- that IS the missing detail. */
+function CategoryRow({
+  row,
+  totalMonth,
+}: {
+  row: { name: string; essential: boolean; total: number; items: Array<{ id: string; date: string; amount: number; item: string | null }> };
+  totalMonth: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const pct = totalMonth > 0 ? (row.total / totalMonth) * 100 : 0;
+  const tint = row.essential ? "var(--ok)" : "var(--danger)";
+  const items = [...row.items].sort((a, b) => b.amount - a.amount);
+  return (
+    <div className="py-2.5">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 text-left">
+        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tint }} />
+        <span className="min-w-0 flex-1 text-sm font-medium">{row.name}</span>
+        <span className="shrink-0 text-xs text-faint">{Math.round(pct)}%</span>
+        <span className="shrink-0 tabular-nums text-sm font-semibold">${row.total.toFixed(0)}</span>
+        <span className="shrink-0 text-xs text-faint">{open ? "▾" : "▸"}</span>
+      </button>
+      {/* thin bar under the row -- one bar per category, coloured by
+          essential/non-essential, so the LIST reads as a chart too */}
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full" style={{ width: `${pct}%`, background: tint }} />
+      </div>
+      {open && (
+        <div className="mt-2 space-y-1 pl-4">
+          {items.map((it) => (
+            <div key={it.id} className="flex items-center gap-2 text-xs">
+              <span className="text-faint tabular-nums">{it.date.slice(5)}</span>
+              <span className="min-w-0 flex-1 truncate text-muted">{it.item || row.name}</span>
+              <span className="shrink-0 tabular-nums font-medium">${it.amount.toFixed(2)}</span>
+            </div>
+          ))}
+          {items.length === 0 && <p className="text-xs text-faint">No items in this category.</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -17,7 +17,7 @@
  * with an unlabelled sentence saying so.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { categorySwatch, GROUP_COLOR } from "@/lib/moneyColors";
 import { money as fmtMoney } from "@/lib/money";
 
@@ -62,6 +62,11 @@ export default function IncomeRing({ slices, income, currency, size = DEFAULT_SI
   const stroke = compact ? 14 : 22;
   const r1 = c - stroke - 4;
   const r0 = r1 - stroke;
+
+  // hover state -- one segment highlighted, caption swaps in below.
+  // Using state (not just SVG <title>) so the caption is visible on
+  // touch devices too, where hovers don't fire.
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const { arcs, essTotal, nonTotal, unspent, denom, hasIncome } = useMemo(() => {
     const ess = slices.filter((s) => s.essential && s.amount > 0).sort((a, b) => b.amount - a.amount);
@@ -131,22 +136,66 @@ export default function IncomeRing({ slices, income, currency, size = DEFAULT_SI
           {subtitle && <p className="text-[10px] uppercase tracking-wider text-faint">{subtitle}</p>}
         </div>
       )}
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="block">
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        width={size}
+        height={size}
+        className="block"
+        onPointerLeave={() => setHoverId(null)}
+      >
         {/* base track so an empty ring still reads as a ring */}
         <circle cx={c} cy={c} r={(r0 + r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={r1 - r0} opacity={anyData ? 0.35 : 1} />
-        {arcs.map((a) => (
-          <path key={a.id} d={annulusPath(c, c, r0, r1, a.a0, Math.min(a.a1, a.a0 + 359.9))} fill={a.color}>
-            <title>{`${a.label} · ${fmtMoney(a.amount, currency)}`}</title>
-          </path>
-        ))}
+        {arcs.map((a) => {
+          const hovering = hoverId === a.id;
+          // Dim the OTHER segments when one is being pointed at, so the
+          // active one reads clearly rather than fighting for attention.
+          const opacity = hoverId == null ? 1 : hovering ? 1 : 0.35;
+          return (
+            <path
+              key={a.id}
+              d={annulusPath(c, c, r0, r1, a.a0, Math.min(a.a1, a.a0 + 359.9))}
+              fill={a.color}
+              opacity={opacity}
+              onPointerEnter={() => setHoverId(a.id)}
+              onPointerDown={() => setHoverId(a.id)}
+              style={{ cursor: "pointer", transition: "opacity 120ms" }}
+            >
+              <title>{`${a.label} · ${fmtMoney(a.amount, currency)}`}</title>
+            </path>
+          );
+        })}
 
-        {/* centre readout — spent / income */}
-        <text x={c} y={c - (compact ? 4 : 8)} textAnchor="middle" dominantBaseline="central" className="fill-ink stat-num" style={{ fontSize: compact ? 22 : 34 }}>
-          {fmtMoney(essTotal + nonTotal, currency)}
-        </text>
-        <text x={c} y={c + (compact ? 12 : 22)} textAnchor="middle" dominantBaseline="central" className="fill-muted" style={{ fontSize: compact ? 9 : 11 }}>
-          {hasIncome ? `of ${fmtMoney(denom, currency)} income` : "spent · no income set"}
-        </text>
+        {/* centre readout — spent / income by default; the hovered category
+            when you're pointing at one, so the ring narrates itself. */}
+        {(() => {
+          const hovered = hoverId ? arcs.find((a) => a.id === hoverId) : null;
+          if (hovered) {
+            const share = denom > 0 ? Math.round((hovered.amount / denom) * 100) : 0;
+            return (
+              <>
+                <text x={c} y={c - (compact ? 6 : 10)} textAnchor="middle" dominantBaseline="central" className="fill-ink stat-num" style={{ fontSize: compact ? 18 : 26 }}>
+                  {fmtMoney(hovered.amount, currency)}
+                </text>
+                <text x={c} y={c + (compact ? 8 : 14)} textAnchor="middle" dominantBaseline="central" className="fill-ink" style={{ fontSize: compact ? 10 : 12, fontWeight: 600 }}>
+                  {hovered.label}
+                </text>
+                <text x={c} y={c + (compact ? 20 : 30)} textAnchor="middle" dominantBaseline="central" className="fill-muted" style={{ fontSize: compact ? 9 : 10 }}>
+                  {share}% of {hasIncome ? "income" : "spend"}
+                </text>
+              </>
+            );
+          }
+          return (
+            <>
+              <text x={c} y={c - (compact ? 4 : 8)} textAnchor="middle" dominantBaseline="central" className="fill-ink stat-num" style={{ fontSize: compact ? 22 : 34 }}>
+                {fmtMoney(essTotal + nonTotal, currency)}
+              </text>
+              <text x={c} y={c + (compact ? 12 : 22)} textAnchor="middle" dominantBaseline="central" className="fill-muted" style={{ fontSize: compact ? 9 : 11 }}>
+                {hasIncome ? `of ${fmtMoney(denom, currency)} income` : "spent · no income set"}
+              </text>
+            </>
+          );
+        })()}
       </svg>
 
       {!compact && (
