@@ -18,6 +18,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { localToday } from "@/lib/dates";
 import NonEssential from "./non-essential";
+import IncomeView from "./income";
+import { categorySwatch, GROUP_COLOR, splitAndColour } from "@/lib/moneyColors";
 import {
   addIncome,
   addSpend,
@@ -151,6 +153,7 @@ export default function MoneyPage() {
         <div className="space-y-6">
           {/* non-essential first: it is the only spending you can act on, and
               the only number the challenge ranks */}
+          <IncomeView />
           <NonEssential />
           <Insight byCat={byCat} daily={daily} summary={summary} />
         </div>
@@ -461,6 +464,10 @@ function Insight({
 }) {
   if (byCat.length === 0) return <p className="card p-4 text-sm text-faint">Log some spending to see where it goes.</p>;
   const worst = [...byCat].filter((c) => !c.essential).sort((a, b) => b.total - a.total)[0];
+  // colour each category from its OWN group's family, so the pie separates
+  // essential from non-essential before you read a single label
+  const split = splitAndColour(byCat);
+  const coloured = new Map([...split.essential, ...split.nonEssential].map((c) => [c.name, c.color]));
 
   return (
     <div className="space-y-4">
@@ -486,7 +493,7 @@ function Insight({
             <PieChart>
               <Pie data={byCat} dataKey="total" nameKey="name" label={(p: any) => p.name}>
                 {byCat.map((c: CategoryTotal, i: number) => (
-                  <Cell key={c.name} fill={c.essential ? CHART_COLORS[1] : CHART_COLORS[i % CHART_COLORS.length]} />
+                  <Cell key={c.name} fill={coloured.get(c.name) ?? CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip formatter={(v: number) => money(Number(v))} />
@@ -505,8 +512,8 @@ function Insight({
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip formatter={(v: number) => money(Number(v))} />
               <Legend />
-              <Bar dataKey="essential" stackId="a" name="essential" fill="#16a34a" />
-              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill="#dc2626" />
+              <Bar dataKey="essential" stackId="a" name="essential" fill={GROUP_COLOR.essential} />
+              <Bar dataKey="nonEssential" stackId="a" name="non-essential" fill={GROUP_COLOR.nonEssential} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -517,6 +524,14 @@ function Insight({
 
 /** Add your own categories, and disagree with our defaults. */
 function CategoryManager({ cats, onChanged }: { cats: SpendCategory[]; onChanged: () => void }) {
+  // Same two families the charts use, so a category's colour here is the
+  // colour you will meet again in the pie.
+  const chipColour = new Map<string, string>();
+  {
+    let e = 0;
+    let n = 0;
+    for (const c of cats) chipColour.set(c.id, c.essential ? categorySwatch(true, e++) : categorySwatch(false, n++));
+  }
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [grp, setGrp] = useState("Lifestyle");
@@ -537,6 +552,7 @@ function CategoryManager({ cats, onChanged }: { cats: SpendCategory[]; onChanged
             {cats.map((c) => (
               <button
                 key={c.id}
+                style={{ borderLeft: `4px solid ${chipColour.get(c.id) ?? "var(--border)"}` }}
                 onClick={() => void setCategoryPref(c.id, { essential: !c.essential }).then(onChanged)}
                 className={`rounded-full border px-3 py-1.5 text-xs ${
                   c.essential ? "border-ok/40 bg-ok-soft text-ok" : "text-muted"

@@ -28,6 +28,7 @@ import {
 } from "recharts";
 import { localToday } from "@/lib/dates";
 import { fetchByCategory, fetchSummary, money, type CategoryTotal } from "@/lib/money";
+import { categorySwatch, GROUP_COLOR } from "@/lib/moneyColors";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -153,8 +154,8 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
               }
             />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar yAxisId="l" dataKey="essential" stackId="a" name="essential" fill="#16a34a" />
-            <Bar yAxisId="l" dataKey="nonEssential" stackId="a" name="non-essential" fill="#dc2626" />
+            <Bar yAxisId="l" dataKey="essential" stackId="a" name="essential" fill={GROUP_COLOR.essential} />
+            <Bar yAxisId="l" dataKey="nonEssential" stackId="a" name="non-essential" fill={GROUP_COLOR.nonEssential} />
             {/* the two ratios that matter, on their own axis */}
             <Line yAxisId="r" type="monotone" dataKey="shareOfSpend" name="% of spend" stroke="#f59e0b" strokeWidth={2} connectNulls dot={{ r: 3 }} />
             <Line yAxisId="r" type="monotone" dataKey="shareOfIncome" name="% of income" stroke="#4f6ef7" strokeWidth={2} connectNulls dot={{ r: 3 }} />
@@ -176,7 +177,7 @@ export default function NonEssential({ months = 6 }: { months?: number }) {
                 <Tooltip formatter={(v: number) => [money(v), "spent"]} />
                 <Bar dataKey="total" radius={[0, 3, 3, 0]}>
                   {ne.slice(0, 10).map((c, i) => (
-                    <Cell key={c.name} fill={`hsl(${(i * 37) % 360} 65% 55%)`} />
+                    <Cell key={c.name} fill={categorySwatch(false, i)} />
                   ))}
                 </Bar>
               </ComposedChart>
