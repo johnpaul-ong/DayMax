@@ -124,29 +124,21 @@ export default function MoneyPage() {
         </div>
       )}
 
-      {/* ONE banner for the diagnosis that empties every chart below it, rather
-          than the same sentence repeated under each one. This is the state the
-          Budget Baddies board was in: real spending, all of it essential, so
-          non-essential — the only number a budget challenge ranks — is zero. */}
+      {/* One-line diagnostics; the ring already SHOWS all-essential and no
+          income visually, so the banner is a link, not a lecture. */}
       {summary && summary.total > 0 && summary.nonEssential === 0 && (
-        <div className="mb-3">
-          <BoardNotice title="Everything you've logged is marked essential">
-            All {money(summary.total)} of it. Non-essential spending is the number the charts plot and the number
-            challenges rank, and yours is {money(0)} — so those charts have nothing to draw. If rent and groceries
-            really are all you logged, nothing is wrong. If not,{" "}
-            <button onClick={openCategories} className="font-medium underline">
-              open Categories
-            </button>{" "}
-            and tap the ones you disagree with. It only changes things for you.
-          </BoardNotice>
-        </div>
+        <p className="mb-3 text-xs text-muted">
+          All {money(summary.total)} marked essential.{" "}
+          <button onClick={openCategories} className="font-medium text-accent underline">
+            Change categories
+          </button>
+        </p>
       )}
 
       {summary && summary.entries > 0 && summary.income === 0 && (
-        <div className="mb-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">
-          No income recorded this month — you&apos;ll show as <b>unranked</b> in challenges until you add it. It&apos;s
-          under <b>Income</b> at the bottom of this page.
-        </div>
+        <p className="mb-3 text-xs text-warn">
+          No income logged — you&apos;ll show <b>unranked</b> in challenges until you add it (bottom of page).
+        </p>
       )}
 
       {/* THE canonical Money visual: your income for the month as a full
@@ -169,7 +161,10 @@ export default function MoneyPage() {
         </div>
       )}
 
-      {summary && <SummaryBar s={summary} />}
+      {/* Deleted: <SummaryBar>. The IncomeRing above shows the same four
+          numbers (spent / essential / non-essential / % of income) as
+          numbers under the ring. Two copies of the same summary side by
+          side was the redundancy you flagged. */}
 
       {/* big, thumb-sized tabs rather than a dense toolbar */}
       <div className="my-4 flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">

@@ -74,6 +74,7 @@ import { fetchPursuitTeams, teamMeta, type Team, type TeamStanding } from "@/lib
 import { loadTheme } from "@/lib/theme";
 import { CHART_DANGER, CHART_OK, chartSeries } from "@/lib/chartColors";
 import DayClock, { type ClockSlot } from "../../day-clock";
+import { categoryColor, categoryName } from "@/lib/categories";
 import IncomeRing, { type RingSlice } from "../../money/income-ring";
 import BigThree from "../../big-three";
 import type { DayStripRow } from "@/lib/friends";
@@ -430,56 +431,250 @@ function MineView({
   );
 }
 
-/** Your last 30 days of Life, as numbers rather than a promise of numbers. */
+/**
+ * Life -- Mine tab. This was a single stacked-bar chart which said one
+ * thing ("here are 30 days"). It now goes wide: 90 days of daily hours,
+ * a typical-day clock built from ALL your logged days, a category
+ * breakdown, weekday averages, a focus-score trend, and a streak card.
+ * Every panel is optional and won't render if the underlying data is
+ * absent.
+ */
 function MyLife() {
-  const [rows, setRows] = useState<Array<{ date: string; productive: number; brainrot: number }>>([]);
+  const [entries, setEntries] = useState<Array<{ date: string; slot: number; category: number; label: string | null }>>([]);
+  const [allEntries, setAllEntries] = useState<Array<{ date: string; slot: number; category: number }>>([]);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     (async () => {
       const { fetchDayEntries } = await import("@/lib/data");
-      const { defaultBuckets, HOURS_PER_SLOT } = await import("@/lib/categories");
-      const from = new Date();
-      from.setDate(from.getDate() - 29);
-      const es = await fetchDayEntries(localToday(from), localToday()).catch(() => []);
-      const b = defaultBuckets();
-      const byDate = new Map<string, { productive: number; brainrot: number }>();
-      for (const e of es) {
-        const cur = byDate.get(e.date) ?? { productive: 0, brainrot: 0 };
-        const bucket = b[e.category];
-        if (bucket === "productive") cur.productive += HOURS_PER_SLOT;
-        else if (bucket === "brainrot") cur.brainrot += HOURS_PER_SLOT;
-        byDate.set(e.date, cur);
-      }
-      setRows([...byDate.entries()].sort().map(([date, v]) => ({ date, ...v })));
+      const today = localToday();
+      const from = new Date(today + "T00:00:00");
+      from.setDate(from.getDate() - 89);
+      // last 90 days -- shape charts and metrics
+      const recent = await fetchDayEntries(localToday(from), today).catch(() => []);
+      setEntries(recent.map((e) => ({ date: e.date, slot: e.slot, category: e.category, label: e.label ?? null })));
+      // whole history -- for the typical-day clock. This can be a lot
+      // of rows but goes through the same paginated fetcher; the RPC
+      // caps at 1000 per call and rpcAll keeps paging.
+      const older = new Date(today + "T00:00:00");
+      older.setFullYear(older.getFullYear() - 2);
+      const all = await fetchDayEntries(localToday(older), today).catch(() => []);
+      setAllEntries(all.map((e) => ({ date: e.date, slot: e.slot, category: e.category })));
+      setLoaded(true);
     })();
   }, []);
-  if (rows.length === 0) return <p className="card p-4 text-sm text-faint">Nothing logged in the last 30 days.</p>;
 
-  const p = rows.reduce((s, r) => s + r.productive, 0);
-  const br = rows.reduce((s, r) => s + r.brainrot, 0);
-  const wm = workMaxFrom(p, br);
+  const daily = useMemo(() => {
+    const HOURS_PER_SLOT = 0.25;
+    // default buckets: productive = Work+Sports, brainrot = Leisure+Other,
+    // sleep = Sleep, else other. Kept local so we don't need the async
+    // import in useMemo.
+    const bucket = (c: number): "productive" | "brainrot" | "sleep" | "other" =>
+      c === 1 || c === 2 ? "productive" : c === 6 || c === 9 ? "brainrot" : c === 0 ? "sleep" : "other";
+    const byDate = new Map<string, { productive: number; brainrot: number; sleep: number; other: number }>();
+    for (const e of entries) {
+      const cur = byDate.get(e.date) ?? { productive: 0, brainrot: 0, sleep: 0, other: 0 };
+      cur[bucket(e.category)] += HOURS_PER_SLOT;
+      byDate.set(e.date, cur);
+    }
+    return [...byDate.entries()].sort().map(([date, v]) => ({
+      date,
+      ...v,
+      focus: v.productive + v.brainrot > 0 ? Math.round((v.productive / (v.productive + v.brainrot)) * 1000) / 10 : null,
+    }));
+  }, [entries]);
+
+  // longest run of consecutive days
+  const streak = useMemo(() => {
+    if (daily.length === 0) return { current: 0, best: 0 };
+    const dates = new Set(daily.map((d) => d.date));
+    const today = localToday();
+    let cur = 0;
+    let cursor = new Date(today + "T00:00:00");
+    while (dates.has(localToday(cursor))) {
+      cur++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    // best in the window: walk sorted dates, break on a gap
+    const sorted = [...dates].sort();
+    let best = 0;
+    let run = 0;
+    let prev: string | null = null;
+    for (const d of sorted) {
+      if (prev) {
+        const gap = (new Date(d + "T00:00:00").getTime() - new Date(prev + "T00:00:00").getTime()) / 86400000;
+        run = gap === 1 ? run + 1 : 1;
+      } else run = 1;
+      best = Math.max(best, run);
+      prev = d;
+    }
+    return { current: cur, best };
+  }, [daily]);
+
+  const totals = useMemo(() => {
+    const p = daily.reduce((s, d) => s + d.productive, 0);
+    const b = daily.reduce((s, d) => s + d.brainrot, 0);
+    const sl = daily.reduce((s, d) => s + d.sleep, 0);
+    const o = daily.reduce((s, d) => s + d.other, 0);
+    return { p, b, sl, o, wm: workMaxFrom(p, b) };
+  }, [daily]);
+
+  // per-weekday hours (are Mondays productive; are Saturdays brainrot?)
+  const weekday = useMemo(() => {
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const acc = names.map((n) => ({ day: n, productive: 0, brainrot: 0, count: 0 }));
+    for (const d of daily) {
+      const dow = new Date(d.date + "T00:00:00").getDay();
+      acc[dow].productive += d.productive;
+      acc[dow].brainrot += d.brainrot;
+      acc[dow].count += 1;
+    }
+    return acc.map((a) => ({
+      day: a.day,
+      productive: a.count > 0 ? Math.round((a.productive / a.count) * 10) / 10 : 0,
+      brainrot: a.count > 0 ? Math.round((a.brainrot / a.count) * 10) / 10 : 0,
+    }));
+  }, [daily]);
+
+  // category breakdown in hours across the window
+  const catBreakdown = useMemo(() => {
+    const HOURS_PER_SLOT = 0.25;
+    const totalsPerCat = new Map<number, number>();
+    for (const e of entries) totalsPerCat.set(e.category, (totalsPerCat.get(e.category) ?? 0) + HOURS_PER_SLOT);
+    return [...totalsPerCat.entries()]
+      .map(([cat, h]) => ({ cat, name: categoryName(cat), color: categoryColor(cat), hours: Math.round(h * 10) / 10 }))
+      .sort((a, b) => b.hours - a.hours);
+  }, [entries]);
+
+  // typical-day clock built from every day the user has ever logged
+  const typicalSlots = useMemo(() => {
+    const perSlot = new Map<number, Map<number, number>>();
+    for (const e of allEntries) {
+      if (!perSlot.has(e.slot)) perSlot.set(e.slot, new Map());
+      const m = perSlot.get(e.slot)!;
+      m.set(e.category, (m.get(e.category) ?? 0) + 1);
+    }
+    const out = new Map<number, ClockSlot>();
+    for (const [slot, counts] of perSlot) {
+      const total = [...counts.values()].reduce((a, b) => a + b, 0);
+      const [cat, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      out.set(slot, { category: cat, hint: `${Math.round((n / total) * 100)}% of days` });
+    }
+    return out;
+  }, [allEntries]);
+  const typicalDays = useMemo(() => new Set(allEntries.map((e) => e.date)).size, [allEntries]);
+
+  if (!loaded) return <p className="text-sm text-muted">Loading your Life…</p>;
+  if (daily.length === 0) return <p className="card p-4 text-sm text-faint">Nothing logged in the last 90 days.</p>;
+
   return (
-    <section>
-      <h2 className="mb-2 font-semibold">Your last 30 days</h2>
-      <div className="mb-3 grid gap-3 sm:grid-cols-4">
-        <Metric label="Productive" value={`${p.toFixed(0)}h`} />
-        <Metric label="Brainrot" value={`${br.toFixed(0)}h`} />
-        <Metric label="WorkMax" value={`${wm ?? "—"}`} />
-        <Metric label="Days logged" value={String(rows.length)} />
-      </div>
-      <div className="h-56 card p-2">
-        <ResponsiveContainer>
-          <BarChart data={rows}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
-            <YAxis tick={{ fontSize: 10 }} unit="h" />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="productive" stackId="a" fill={CHART_OK} />
-            <Bar dataKey="brainrot" stackId="a" fill={CHART_DANGER} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
+    <div className="space-y-6">
+      <section>
+        <h2 className="mb-2 font-semibold">Last 90 days</h2>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Metric label="Productive" value={`${totals.p.toFixed(0)}h`} />
+          <Metric label="Brainrot" value={`${totals.b.toFixed(0)}h`} />
+          <Metric label="WorkMax" value={`${totals.wm ?? "—"}`} />
+          <Metric label="Days logged" value={String(daily.length)} />
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <Metric label="Sleep" value={`${totals.sl.toFixed(0)}h`} />
+          <Metric label="Current streak" value={`${streak.current}d`} />
+          <Metric label="Best streak (in window)" value={`${streak.best}d`} />
+        </div>
+      </section>
+
+      {typicalDays > 0 && (
+        <section>
+          <h2 className="mb-1 font-semibold">Your typical day</h2>
+          <p className="mb-2 text-sm text-muted">{typicalDays.toLocaleString()} days collapsed onto one dial — the most common thing at each quarter hour.</p>
+          <div className="card p-3">
+            <DayClock slots={typicalSlots} />
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-1 font-semibold">Hours per day</h2>
+        <div className="h-56 card p-2">
+          <ResponsiveContainer>
+            <BarChart data={daily}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+              <YAxis tick={{ fontSize: 10 }} unit="h" />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="productive" stackId="a" name="productive" fill={CHART_OK} />
+              <Bar dataKey="brainrot" stackId="a" name="brainrot" fill={CHART_DANGER} />
+              <Bar dataKey="sleep" stackId="a" name="sleep" fill="var(--chart-5)" />
+              <Bar dataKey="other" stackId="a" name="other" fill="var(--chart-9)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {daily.length > 3 && (
+        <section>
+          <h2 className="mb-1 font-semibold">Focus score</h2>
+          <p className="mb-2 text-sm text-muted">Productive ÷ (productive + brainrot) × 100, per day.</p>
+          <div className="h-52 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={daily}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tickDate} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Line type="monotone" dataKey="focus" stroke="var(--accent)" strokeWidth={2.5} dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 className="mb-1 font-semibold">Average by weekday</h2>
+        <p className="mb-2 text-sm text-muted">Do your Mondays look like your Saturdays? (h per day of week.)</p>
+        <div className="h-52 card p-2">
+          <ResponsiveContainer>
+            <BarChart data={weekday}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} unit="h" />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="productive" fill={CHART_OK} />
+              <Bar dataKey="brainrot" fill={CHART_DANGER} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {catBreakdown.length > 0 && (
+        <section>
+          <h2 className="mb-1 font-semibold">Where the hours went</h2>
+          <p className="mb-2 text-sm text-muted">Every logged 15 minutes, bucketed. Colours match the day-grid.</p>
+          <div className="card divide-y">
+            {catBreakdown.map((c) => {
+              const pct = totals.p + totals.b + totals.sl + totals.o > 0
+                ? (c.hours / (totals.p + totals.b + totals.sl + totals.o)) * 100
+                : 0;
+              return (
+                <div key={c.cat} className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                    <span className="flex-1 text-sm font-medium">{c.name}</span>
+                    <span className="text-xs text-faint tabular-nums">{Math.round(pct)}%</span>
+                    <span className="w-14 text-right tabular-nums text-sm font-semibold">{c.hours}h</span>
+                  </div>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
+                    <div className="h-full" style={{ width: `${pct}%`, background: c.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -1333,6 +1528,13 @@ function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; memberCo
         />
       </section>
 
+      {/* One typical-day clock per person, side by side. Same rule as the
+          hero on Community: every logged day collapsed onto a single dial,
+          so at a glance you can SEE whose days look like whose. Limited to
+          the same set of people we already fetched (top-N by activity) so
+          we don't fire dozens of extra queries. */}
+      <PeopleClocksGrid pursuitId={pursuitId} members={people.slice(0, 8).map((p) => ({ id: p.id, name: p.name }))} />
+
       {chart.data.length > 1 && (
         <section>
           <h2 className="mb-1 font-semibold">Daily focus score</h2>
@@ -1354,23 +1556,130 @@ function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; memberCo
         </section>
       )}
 
+      {/* Hours this week -- LOLLIPOP, not a paired bar chart. Two thin
+          rails per person (productive + brainrot) with a fat dot at the
+          end of each: same information, one third the ink, ranks by
+          productive-hours descending so the pecking order is obvious. */}
       <section>
         <h2 className="mb-1 font-semibold">Hours this week</h2>
-        <div className="h-64 card p-2">
-          <ResponsiveContainer>
-            <BarChart data={[...people].sort((a, b) => b.weekP - a.weekP).slice(0, 8).map((p) => ({ name: p.name, productive: Math.round(p.weekP * 10) / 10, brainrot: Math.round(p.weekB * 10) / 10 }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 10 }} unit="h" />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="productive" fill="var(--accent)" />
-              <Bar dataKey="brainrot" fill={CHART_DANGER} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <HoursLollipop rows={[...people].sort((a, b) => b.weekP - a.weekP).slice(0, 8).map((p) => ({ name: p.name, productive: Math.round(p.weekP * 10) / 10, brainrot: Math.round(p.weekB * 10) / 10 }))} />
       </section>
     </>
+  );
+}
+
+/**
+ * A row of one typical-day clock per member. Each clock is small (fixed
+ * viewBox in DayClock so it just scales) and shows the most common
+ * activity at each quarter hour across every day that member has
+ * logged. Fetches each member's strip in parallel; bails per-member on
+ * error rather than failing the whole grid.
+ */
+function PeopleClocksGrid({ pursuitId: _pid, members }: { pursuitId: string; members: Array<{ id: string; name: string }> }) {
+  const [strips, setStrips] = useState<Map<string, DayStripRow[]>>(new Map());
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { fetchMemberDayStrip } = await import("@/lib/friends");
+      const results = await Promise.all(
+        members.map(async (m) => {
+          try {
+            const rs = await fetchMemberDayStrip(m.id);
+            return [m.id, rs] as const;
+          } catch {
+            return [m.id, [] as DayStripRow[]] as const;
+          }
+        })
+      );
+      if (!alive) return;
+      setStrips(new Map(results));
+      setLoaded(true);
+    })();
+    return () => { alive = false; };
+  }, [members]);
+
+  if (!loaded) return null;
+  const withData = members.filter((m) => (strips.get(m.id)?.length ?? 0) > 0);
+  if (withData.length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="mb-1 font-semibold">Everyone&apos;s typical day</h2>
+      <p className="mb-2 text-sm text-muted">One dial per person — every day they&apos;ve logged, collapsed onto a clock. Neighbours show whose days rhyme.</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {withData.map((m) => {
+          const strip = strips.get(m.id)!;
+          // per-quarter-hour mode: pick the most common category
+          const perSlot = new Map<number, Map<number, number>>();
+          for (const r of strip) {
+            if (!perSlot.has(r.slot)) perSlot.set(r.slot, new Map());
+            const mm = perSlot.get(r.slot)!;
+            mm.set(r.category, (mm.get(r.category) ?? 0) + 1);
+          }
+          const clockSlots = new Map<number, ClockSlot>();
+          for (const [slot, counts] of perSlot) {
+            const [cat] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+            clockSlots.set(slot, { category: cat });
+          }
+          const days = new Set(strip.map((r) => r.date)).size;
+          return (
+            <div key={m.id} className="card p-3">
+              <div className="mb-1 flex items-baseline justify-between">
+                <p className="truncate text-sm font-semibold">{m.name}</p>
+                <p className="text-[10px] text-faint">{days} day{days === 1 ? "" : "s"}</p>
+              </div>
+              <DayClock slots={clockSlots} />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Lollipop plot: name on the left, two thin rails (productive + brainrot)
+ * with a dot at the end of each. Same data as the old paired bar chart,
+ * a lot less pigment. Scaled to the largest single value across both
+ * series so the two rails share an axis.
+ */
+function HoursLollipop({ rows }: { rows: Array<{ name: string; productive: number; brainrot: number }> }) {
+  if (rows.length === 0) return <p className="card p-4 text-sm text-faint">Nothing logged this week yet.</p>;
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.productive, r.brainrot)));
+  return (
+    <div className="card p-4">
+      <div className="mb-2 flex items-center gap-4 text-xs text-muted">
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--accent)" }} /> productive</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: CHART_DANGER }} /> brainrot</span>
+        <span className="ml-auto text-faint tabular-nums">scale 0 – {Math.ceil(max)}h</span>
+      </div>
+      <div className="space-y-2.5">
+        {rows.map((r) => (
+          <div key={r.name} className="grid grid-cols-[7rem_1fr] items-center gap-3">
+            <p className="truncate text-sm font-medium">{r.name}</p>
+            <div className="space-y-1.5">
+              <Lollipop value={r.productive} max={max} color="var(--accent)" />
+              <Lollipop value={r.brainrot} max={max} color={CHART_DANGER} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Lollipop({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.max(0.5, (value / max) * 100) : 0;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative h-3 flex-1">
+        <div className="absolute top-1/2 h-[2px] -translate-y-1/2 rounded-full" style={{ width: `${pct}%`, background: color, opacity: 0.55 }} />
+        <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full" style={{ left: `calc(${pct}% - 6px)`, background: color, boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
+      </div>
+      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-muted">{value.toFixed(1)}h</span>
+    </div>
   );
 }
 
