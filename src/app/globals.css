@@ -724,6 +724,14 @@ textarea::placeholder {
   85%  { opacity: 0.28; }
   100% { transform: translate(-10vw, 88vh) rotate(-360deg); opacity: 0; }
 }
+/*
+ * The drifting leaves are drawn with a MASK, not a solid-fill SVG.
+ * The SVG shape (solid black) becomes the alpha; the background is
+ * `var(--accent)`, so the leaf takes whatever accent colour the user
+ * has picked. Pick a pink accent -> pink leaves. Default moss stays
+ * moss because that's the cottage default accent. Both -webkit- and
+ * unprefixed mask-* are set for Safari + everyone else.
+ */
 [data-theme="cottage"] body::before,
 [data-theme="cottage"] body::after {
   content: "";
@@ -733,15 +741,19 @@ textarea::placeholder {
   height: 42px;
   pointer-events: none;
   z-index: 0;
-  background: no-repeat center / contain
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 28 C 4 12 12 4 28 4 C 28 20 20 28 4 28 Z' fill='%235c8a4e'/><path d='M4 28 L 28 4' stroke='%233d5a30' stroke-width='0.8' fill='none'/></svg>");
+  background-color: var(--accent);
+  -webkit-mask: no-repeat center / contain
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 28 C 4 12 12 4 28 4 C 28 20 20 28 4 28 Z' fill='black'/></svg>");
+          mask: no-repeat center / contain
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 28 C 4 12 12 4 28 4 C 28 20 20 28 4 28 Z' fill='black'/></svg>");
+  opacity: 0.6;
 }
 [data-theme="cottage"] body::before { animation: daymax-leaf-drift-1 46s linear infinite; }
 [data-theme="cottage"] body::after  {
   animation: daymax-leaf-drift-2 62s linear infinite;
   animation-delay: -18s;
   width: 34px; height: 34px;
-  filter: hue-rotate(30deg) brightness(1.05); /* slightly warmer, second leaf */
+  opacity: 0.45; /* second leaf, a little lighter */
 }
 @media (prefers-reduced-motion: reduce) {
   [data-theme="cottage"] body::before,

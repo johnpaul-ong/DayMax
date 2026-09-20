@@ -241,6 +241,30 @@ export default function ChallengePage() {
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
       {warn && <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{warn}</p>}
 
+      {/* Roster at the VERY top, before the header card, so who's in
+          is the first thing you land on. Feedback: "at the very top
+          have the members in the challenge". */}
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-faint">
+            {rosterNoun(challenge.name)} · {rows.length}
+          </span>
+          {rows.map((r) => (
+            <Link
+              key={r.userId}
+              href={r.isMe ? "/profile" : `/friends/${r.userId}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border bg-surface px-2.5 py-1 text-xs transition hover:-translate-y-0.5 hover:text-accent ${r.isMe ? "border-accent text-accent" : ""}`}
+            >
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: `color-mix(in srgb, var(--accent) 20%, transparent)` }}>
+                {r.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              {r.displayName}
+              {r.isMe && <span className="text-[9px] text-faint">you</span>}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {/* header */}
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -284,32 +308,6 @@ export default function ChallengePage() {
           )}
         </div>
 
-        {/* Roster chip strip. Labelled with the last plural word of the
-            challenge name so 'Grindset Goblins' -> Goblins, 'Budget
-            Baddies' -> Baddies, 'Deep Work Demons' -> Demons, fallback
-            'Members'. */}
-        {rows.length > 0 && (
-          <div className="mt-4 border-t pt-3">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-faint">
-              {rosterNoun(challenge.name)} · {rows.length}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {rows.map((r) => (
-                <Link
-                  key={r.userId}
-                  href={r.isMe ? "/profile" : `/friends/${r.userId}`}
-                  className={`inline-flex items-center gap-1.5 rounded-full border bg-surface px-2.5 py-1 text-xs transition hover:-translate-y-0.5 hover:text-accent ${r.isMe ? "border-accent text-accent" : ""}`}
-                >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: `color-mix(in srgb, var(--accent) 20%, transparent)` }}>
-                    {r.displayName.slice(0, 1).toUpperCase()}
-                  </span>
-                  {r.displayName}
-                  {r.isMe && <span className="text-[9px] text-faint">you</span>}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ONE diagnosis, at the top, for whatever is hollowing out the board.
@@ -400,7 +398,7 @@ export default function ChallengePage() {
 
       {/* your own numbers */}
       {challenge.isMember && me && isMoney && (
-        <YouCard challengeId={id} me={me} currency={currency} metricLabel={metricLabel} unit={unit} onChanged={reload} />
+        <YouCard challengeId={id} me={me} rows={rows} currency={currency} metricLabel={metricLabel} unit={unit} onChanged={reload} />
       )}
       {challenge.isMember && me && !isMoney && (
         <YouScore me={me} rank={rows.findIndex((r) => r.isMe) + 1} metricLabel={metricLabel} fmt={fmt} unit={unit} logHref={logHref} />
@@ -458,6 +456,20 @@ export default function ChallengePage() {
             </div>
           </section>
 
+          {/* GRAPHS -- horizontal swipe carousel. Each chart is a full-
+              width snap card; scroll sideways to move between them.
+              Replaces the tall vertical stack, and matches how graph
+              carousels work on other social apps. Wheel + touch swipe
+              + arrow keys all scroll. */}
+          <section>
+            <h2 className="mb-1 font-semibold">Graphs</h2>
+            <p className="mb-2 text-sm text-muted">Swipe or scroll sideways to move between graphs.</p>
+            <div
+              className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
+              style={{ scrollbarWidth: "thin" }}
+            >
+              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+
           {/* the race */}
           <Guarded
             title="The race"
@@ -492,8 +504,9 @@ export default function ChallengePage() {
             </div>
           </Guarded>
 
-          {/* side by side, and — on money only — the same thing over income */}
-          <section className={isMoney ? "grid gap-4 sm:grid-cols-2" : ""}>
+              </div>{/* /race slide */}
+
+              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
             <Guarded
               small
               title={unit === "currency" ? "In dollars" : sentenceCase(noun)}
@@ -526,10 +539,12 @@ export default function ChallengePage() {
               </div>
             </Guarded>
 
+              </div>{/* /bar slide */}
+
             {/* % of income only exists for money challenges — challenge_income()
                 is not even consulted for the others. */}
             {isMoney && (
-              <div>
+              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
                 <Guarded
                   small
                   title="As a share of income"
@@ -565,14 +580,13 @@ export default function ChallengePage() {
                 )}
               </div>
             )}
-          </section>
 
           {/* What the group is spending on. challenge_categories() returns
               nothing at all for a non-money challenge, by design — joining a
               sleep challenge must not publish your spending — so this section
               is absent rather than empty for those. */}
           {isMoney && (
-            <section>
+            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
               <h2 className="mb-1 font-semibold">What the group is spending on</h2>
               {cats.length > 0 && (
                 <p className="mb-2 text-sm text-muted">
@@ -618,10 +632,11 @@ export default function ChallengePage() {
                   </div>
                 </div>
               )}
-            </section>
+            </div>
           )}
 
           {/* group pace over time */}
+          <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
           <Guarded
             title={isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}
             cause={emptyCause({
@@ -657,6 +672,10 @@ export default function ChallengePage() {
               </ResponsiveContainer>
             </div>
           </Guarded>
+          </div>{/* /daily slide */}
+
+            </div>{/* /carousel scroll container */}
+          </section>{/* /Graphs */}
         </>
       )}
 
@@ -775,19 +794,11 @@ function BoardDiagnosis({
       </BoardNotice>
     );
 
-  // The case that produced six blank grids.
-  if (allEssential)
-    return (
-      <BoardNotice
-        title="Everything you've logged is marked essential"
-        action={{ href: "/money", label: "Open Money → Categories →" }}
-      >
-        {loggedLabel ? <>All {loggedLabel} of it.</> : null} This challenge ranks{" "}
-        <b>non-essential</b> spending, and yours comes to zero — which is why the charts below have nothing in them.
-        If rent and groceries really are all you logged, that&apos;s a clean scoreboard. If not, flip the categories
-        you disagree with: it only changes things for you.
-      </BoardNotice>
-    );
+  // The "everything you've logged is marked essential" branch used to
+  // print a big yellow banner here. It duplicated the same warning in
+  // YouCard AND the visibly-empty charts already imply the state, so
+  // the banner was dead weight. Killed on feedback.
+  if (allEssential) return null;
 
   if (scored === 0)
     return (
@@ -865,6 +876,7 @@ function YouScore({
 function YouCard({
   challengeId,
   me,
+  rows,
   currency,
   metricLabel,
   unit,
@@ -872,6 +884,7 @@ function YouCard({
 }: {
   challengeId: string;
   me: Standing;
+  rows: Standing[];
   currency?: string;
   metricLabel: string;
   unit: string;
@@ -880,64 +893,78 @@ function YouCard({
   const [income, setIncome] = useState(me.income != null ? String(me.income) : "");
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  // the field was initialised once and then ignored whatever the server said,
-  // so a saved value never appeared and it looked like nothing had happened
   useEffect(() => {
     setIncome(me.income != null ? String(me.income) : "");
   }, [me.income]);
 
   const m = (v: number | null | undefined) => money(v, currency);
-  const pctOf = (v: number | null) =>
-    me.income != null && me.income > 0 && v != null ? Math.round((v / me.income) * 1000) / 10 : null;
-  const essPct = pctOf(me.essential);
-  const totPct = pctOf(me.total);
+  const pctOf = (v: number | null, base: number | null) =>
+    base != null && base > 0 && v != null ? Math.round((v / base) * 1000) / 10 : null;
+
+  // Average of everyone with logged data. Excludes null (unlogged)
+  // so a member who hasn't posted doesn't drag the mean to zero.
+  const avg = (pick: (r: Standing) => number | null): number | null => {
+    const xs = rows.map(pick).filter((v): v is number => v != null);
+    if (xs.length === 0) return null;
+    return xs.reduce((s, v) => s + v, 0) / xs.length;
+  };
+  const avgNon = avg((r) => r.nonEssential);
+  const avgEss = avg((r) => r.essential);
+  const avgTot = avg((r) => r.total);
+  const avgPerDay = avg((r) => r.perDay);
+
   const left = me.income != null && me.total != null ? me.income - me.total : null;
-  const noEssentialAtAll = (me.total ?? 0) > 0 && (me.nonEssential ?? 0) === 0;
+
+  // Row for either You or Average -- same shape either way.
+  const Row = ({
+    label,
+    tone,
+    ne, es, tot, perDay, income,
+  }: {
+    label: string;
+    tone: "you" | "avg";
+    ne: number | null;
+    es: number | null;
+    tot: number | null;
+    perDay: number | null;
+    income: number | null;
+  }) => (
+    <div className={`rounded-lg ${tone === "you" ? "bg-accent-soft/30" : "bg-surface-2"} p-3`}>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-faint">{label}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+        <div>
+          <p className="text-xl font-bold tabular-nums">{m(ne)}</p>
+          <p className="text-[10px] text-muted">non-essential{income != null && income > 0 && ne != null && <> · {pctOf(ne, income)}%</>}</p>
+        </div>
+        <div>
+          <p className="text-xl font-bold tabular-nums">{m(es)}</p>
+          <p className="text-[10px] text-muted">essential{income != null && income > 0 && es != null && <> · {pctOf(es, income)}%</>}</p>
+        </div>
+        <div>
+          <p className="text-xl font-bold tabular-nums">{m(tot)}</p>
+          <p className="text-[10px] text-muted">all spending</p>
+        </div>
+        <div>
+          <p className="text-xl font-bold tabular-nums">{m(perDay)}</p>
+          <p className="text-[10px] text-muted">a day</p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="card p-4">
-      <h2 className="mb-2 font-semibold">You</h2>
-      {/* Income was only ever divided into non-essential spend, so with £0 of
-          non-essential it showed "0% of income" and looked like the income
-          setting did nothing. It works; it was multiplying zero. Income now
-          appears against every figure, and the bar shows what is left of it. */}
-      <div className="flex flex-wrap gap-6">
-        <div>
-          <p className="text-3xl font-bold tabular-nums">{m(me.nonEssential)}</p>
-          <p className="text-xs text-muted">
-            non-essential{me.pct != null && <> · <b>{me.pct}%</b> of income</>}
-          </p>
-        </div>
-        <div>
-          <p className="text-3xl font-bold tabular-nums">{m(me.essential)}</p>
-          <p className="text-xs text-muted">
-            essential{essPct != null && <> · {essPct}% of income</>}
-          </p>
-        </div>
-        <div>
-          <p className="text-3xl font-bold tabular-nums">{m(me.total)}</p>
-          <p className="text-xs text-muted">
-            all spending{totPct != null && <> · {totPct}% of income</>}
-          </p>
-        </div>
-        <div>
-          <p className="text-3xl font-bold tabular-nums">{m(me.perDay)}</p>
-          <p className="text-xs text-muted">a day</p>
-        </div>
-        {left != null && (
-          <div>
-            <p className="text-3xl font-bold tabular-nums text-ok">{m(left)}</p>
-            <p className="text-xs text-muted">still unspent</p>
-          </div>
+      <div className="space-y-2">
+        <Row label="You" tone="you" ne={me.nonEssential} es={me.essential} tot={me.total} perDay={me.perDay} income={me.income} />
+        {rows.length > 1 && (
+          <Row label={`Average of ${rows.length}`} tone="avg" ne={avgNon} es={avgEss} tot={avgTot} perDay={avgPerDay} income={null} />
         )}
       </div>
 
-      {noEssentialAtAll && (
-        <p className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
-          All of it is filed essential, so your ranked score is {formatScore(0, unit, currency)}. Tap a category under{" "}
-          <Link href="/money" className="font-medium underline">Money → Categories</Link> to move something across.
-        </p>
-      )}
+      {/* Old "All of it is filed essential" warning removed on feedback --
+          the You card already shows non-essential at $0 with the label
+          right there, and the ranking column shows "–", so saying it a
+          third time in a big yellow box was noise. */}
 
       {me.income != null && me.income > 0 && (
         <div className="mt-3">
