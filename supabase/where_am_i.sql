@@ -96,5 +96,5 @@ select * from (
     ('08. challenges.direction column', (select v from has_dir)),
     ('09. challenge_metric_label() exists (0038)', (select v from has_ml)),
     ('10. pursuit_member_list() exists (0039)',    (select v from has_pml))
-) as x(check, result)
-order by check;
+) as x(item, result)
+order by item;
