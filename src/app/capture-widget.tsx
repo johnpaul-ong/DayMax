@@ -373,17 +373,22 @@ export default function CaptureWidget() {
      * isn't in the foreground.
      */
     <div
-      className="daymax-reminder fixed z-50 overflow-auto"
+      className="daymax-reminder overflow-auto"
       role="dialog"
       aria-label="What were you doing?"
       style={{
-        // Two variants: <= 767px = full-width bottom sheet above the tab
-        // bar; >= 768px = bottom-right 380px card, floating.
-        right: "clamp(8px, calc(50vw - 380px), 24px)",
-        left: "auto",
-        bottom: "calc(env(safe-area-inset-bottom) + 24px)",
-        width: "min(380px, calc(100vw - 16px))",
+        // Bottom-right anchored, always. Uses inset shorthand with
+        // auto on top/left so nothing in globals can hijack the
+        // sides. Previous clamp-on-right version was landing on the
+        // left of the viewport on some window sizes -- likely a
+        // theme rule fighting Tailwind's `fixed`. Belt and braces:
+        // explicit position + z-index inline, plus insets nailed
+        // to bottom-right with margins for the safe area.
+        position: "fixed",
+        inset: "auto 24px calc(env(safe-area-inset-bottom, 0px) + 24px) auto",
+        width: "min(380px, calc(100vw - 32px))",
         maxHeight: "calc(100vh - 3rem)",
+        zIndex: 55,
       }}
       onMouseDown={() => inputRef.current?.focus()}
     >
