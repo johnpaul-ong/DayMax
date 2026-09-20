@@ -51,8 +51,13 @@ export default function CaptureWidget() {
   const [cat, setCat] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Closed by hand: stay closed until there is genuinely something new. */
+  /** Closed by hand: silences the CURRENT slot only. When the ticker
+   *  sees a slot boundary that wasn't in the queue at dismiss-time it
+   *  clears this so the next 15-minute mark can ping again. See the
+   *  slot-boundary re-arm in the ticker below. */
   const dismissedRef = useRef(false);
+  /** Newest queued slot at the moment we set dismissedRef. */
+  const dismissedAtSlot = useRef<number | null>(null);
   const [justSaved, setJustSaved] = useState<number | null>(null);
   const [lastEntry, setLastEntry] = useState<{ category: number; label: string | null } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -167,8 +172,15 @@ export default function CaptureWidget() {
         skipped: skippedRef.current,
       });
       setQueue(q);
-      // Only auto-open. Never re-open something the person just closed —
-      // setOpen(true) on every tick meant the x bought you 60 seconds.
+      // Re-arm on a NEW slot boundary: if a slot has come up that
+      // didn't exist when the user dismissed, clear the dismissal.
+      // Otherwise 'x' silenced Quick Capture until page refresh, which
+      // is what made it feel broken.
+      const newest = q.length > 0 ? q[q.length - 1] : null;
+      if (dismissedRef.current && newest !== null && newest !== dismissedAtSlot.current) {
+        dismissedRef.current = false;
+        dismissedAtSlot.current = null;
+      }
       if (q.length > 0 && !dismissedRef.current) setOpen(true);
     };
 
@@ -389,6 +401,9 @@ export default function CaptureWidget() {
           <button
             onClick={() => {
               dismissedRef.current = true;
+              // remember which slot we dismissed at, so the ticker
+              // re-arms on the NEXT boundary rather than staying quiet.
+              dismissedAtSlot.current = queue.length > 0 ? queue[queue.length - 1] : null;
               setOpen(false);
             }}
             aria-label="Close"

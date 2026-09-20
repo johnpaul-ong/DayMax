@@ -26,7 +26,7 @@ import {
   type ThemeName,
 } from "@/lib/theme";
 import type { BucketSettings } from "@/lib/types";
-import { loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "@/lib/capture";
+import { clearSnooze, inQuietHours, isSnoozed, loadCaptureSettings, saveCaptureSettings, type CaptureSettings } from "@/lib/capture";
 import { CURRENCIES, fetchCurrency, setCurrency } from "@/lib/money";
 import { disablePush, enablePush, fetchPushPrefs, pushSupport, savePushPrefs, type PushPrefs } from "@/lib/push";
 
@@ -199,6 +199,11 @@ function CaptureSection() {
         <input type="checkbox" checked={s.enabled} onChange={(e) => update({ ...s, enabled: e.target.checked })} className="mt-0.5" />
         <span><b>Enabled</b> — show the capture box</span>
       </label>
+
+      {/* Live diagnostic + a "show it now" button. Answers the "is
+          this thing working" question directly instead of leaving you
+          to guess why the popup went quiet. */}
+      {s.enabled && <CaptureStatus s={s} />}
 
       {s.enabled && (
         <div className="mt-3 space-y-3 border-t pt-3">
@@ -803,6 +808,55 @@ function SaveIndicator({ state }: { state: "idle" | "saving" | "saved" | "error"
   if (state === "saving") return <span className="text-[10px] text-faint">saving…</span>;
   if (state === "saved") return <span className="text-[10px] font-semibold text-ok">saved ✓</span>;
   return <span className="text-[10px] font-semibold text-danger">error</span>;
+}
+
+/**
+ * "Is Quick Capture actually working right now?" -- ticks every 15s,
+ * reports the four things that can silence it (disabled / quiet hours /
+ * snoozed / nothing to catch up on). Has a 'Show it now' button that
+ * clears the snooze and dispatches the same custom event a save fires,
+ * which triggers the widget's tick to run.
+ */
+function CaptureStatus({ s }: { s: CaptureSettings }) {
+  const [now, setNow] = useState(new Date());
+  const [snooze, setSnooze] = useState(false);
+  useEffect(() => {
+    const tick = () => { setNow(new Date()); setSnooze(isSnoozed()); };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const quiet = inQuietHours(now.getHours(), s.quietFrom, s.quietTo);
+  const okState = !quiet && !snooze;
+  return (
+    <div className="mt-3 rounded-lg border bg-surface-2 px-3 py-2 text-xs">
+      <p className="mb-1 font-semibold text-muted">Status</p>
+      <ul className="space-y-0.5">
+        <li className={s.enabled ? "text-ok" : "text-warn"}>
+          {s.enabled ? "✓ Enabled" : "✗ Disabled (tick the box above)"}
+        </li>
+        <li className={quiet ? "text-warn" : "text-muted"}>
+          {s.quietFrom === s.quietTo
+            ? "✓ Quiet hours off — will prompt at any hour"
+            : quiet
+              ? `✗ In quiet hours (${String(s.quietFrom).padStart(2, "0")}:00 → ${String(s.quietTo).padStart(2, "0")}:00) — silent until it ends`
+              : `✓ Outside quiet hours (${String(s.quietFrom).padStart(2, "0")}:00 → ${String(s.quietTo).padStart(2, "0")}:00)`}
+        </li>
+        <li className={snooze ? "text-warn" : "text-muted"}>
+          {snooze ? "✗ Snoozed — you tapped Later or Not today" : "✓ Not snoozed"}
+        </li>
+        <li className="text-faint">Ticker wakes every 60s. Also try ⌘/Ctrl+J to open on demand.</li>
+      </ul>
+      {(snooze || !okState) && (
+        <button
+          onClick={() => { clearSnooze(); window.dispatchEvent(new Event("daymax-day-saved")); setSnooze(false); }}
+          className="mt-2 rounded-lg border border-accent bg-accent-soft px-3 py-1 text-xs font-medium text-accent hover:bg-accent"
+        >
+          Clear snooze &amp; try now
+        </button>
+      )}
+    </div>
+  );
 }
 
 function ProfileSection() {
