@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import NavLinks from "./nav-links";
+import NotificationsBell from "./notifications-bell";
 import ThemeSync from "./theme-switcher";
 import WelcomeGate from "./welcome-gate";
 import CaptureWidget from "./capture-widget";
@@ -57,6 +58,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               Day<span className="text-accent">Max</span>
             </Link>
             <NavLinks />
+            {/* Bell sits after nav links, before ThemeSync -- the
+                right-hand corner of the nav bar. Renders nothing when
+                signed out. */}
+            <div className="ml-auto flex items-center">
+              <NotificationsBell />
+            </div>
             <ThemeSync />
           </div>
         </nav>

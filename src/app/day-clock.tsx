@@ -560,14 +560,26 @@ export default function DayClock({
             and the AM/PM chips added above disambiguate which half you are
             on. Keeping only one set of numbers reads far cleaner. */}
 
-        {/* one label per run, only where there is room for it */}
+        {/* One label per labeled run. Previous threshold was runs of
+            3+ slots (45+ min), which hid short labels entirely --
+            you'd type 'Chess' for one 30-min block and never see the
+            word. Threshold is now 2 slots (30 min); character count
+            scales with the run length so a 30-min block gets a short
+            abbreviation and a 3-hour block gets the full word. Small
+            font (9px) and heavy black stroke so the text reads on
+            any of the theme category colours. */}
         {runs
-          .filter((r) => r.label && r.to - r.from >= 3)
+          .filter((r) => r.label && r.to - r.from >= 1)
           .map((r) => {
             const { ring } = geom(r.from);
             const a = (geom(r.from).a0 + geom(r.to).a1) / 2;
             const [x, y] = polar((ring.r0 + ring.r1) / 2, a);
             const rot = a > 180 ? a + 90 : a - 90;
+            const slots = r.to - r.from + 1;
+            // ~1 char per slot; 2 slots -> 2 chars, 4 -> 4, 8+ -> full
+            const maxLen = Math.min(18, Math.max(3, slots * 2));
+            const label = r.label!.length > maxLen ? r.label!.slice(0, maxLen - 1) + "…" : r.label!;
+            const fontSize = slots <= 2 ? 8 : slots <= 4 ? 9 : 10;
             return (
               <text
                 key={`${r.from}-${r.to}`}
@@ -576,11 +588,11 @@ export default function DayClock({
                 textAnchor="middle"
                 dominantBaseline="central"
                 transform={`rotate(${rot} ${x} ${y})`}
-                style={{ fontSize: 10, fontWeight: 600, pointerEvents: "none", fill: "#fff", paintOrder: "stroke" }}
-                stroke="rgba(0,0,0,0.35)"
+                style={{ fontSize, fontWeight: 700, pointerEvents: "none", fill: "#fff", paintOrder: "stroke" }}
+                stroke="rgba(0,0,0,0.55)"
                 strokeWidth={2}
               >
-                {r.label!.length > 14 ? r.label!.slice(0, 13) + "…" : r.label}
+                {label}
               </text>
             );
           })}

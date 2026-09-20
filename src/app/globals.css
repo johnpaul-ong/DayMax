@@ -63,7 +63,7 @@
   --cat-1: #2563eb;  /* Work — blue */
   --cat-2: #16a34a;  /* Sports — green */
   --cat-3: #f59e0b;  /* Social — amber */
-  --cat-4: #0ea5e9;  /* Travel — sky */
+  --cat-4: #0d9488;  /* Travel — TEAL (was sky #0ea5e9 -- read as Work blue's cousin) */
   --cat-5: #a78bfa;  /* Misc — violet */
   --cat-6: #ef4444;  /* Other — red */
   --cat-7: #f97316;  /* Eat — orange */
@@ -131,7 +131,7 @@
   --cat-1: #22d3ee;  /* Work — cyan signature */
   --cat-2: #a3e635;  /* Sports — acid lime */
   --cat-3: #fbbf24;  /* Social — neon amber */
-  --cat-4: #38bdf8;  /* Travel — azure */
+  --cat-4: #2dd4bf;  /* Travel — TEAL (was #38bdf8 azure -- too close to Work cyan) */
   --cat-5: #c084fc;  /* Misc — electric violet */
   --cat-6: #ff5470;  /* Other — magenta-red */
   --cat-7: #fb923c;  /* Eat — burnt neon orange */
