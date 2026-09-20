@@ -176,21 +176,23 @@
   --chart-9: #8f8a76;   /* driftwood */
   --chart-muted: #7f8a8f;
 
-  /* Day-grid categories, Cottage edition. Mixed from the same paintbox
-     as the theme -- moss, slate, terracotta, ochre, plum, driftwood.
-     Work is slate-blue (a hand-painted-page blue, not a screen blue),
-     Sports is moss (the accent), Leisure is rust rather than fire-
-     engine red. All checked >=3.2:1 on --surface. */
+  /* Day-grid categories, Cottage edition. Mixed from the paintbox but
+     with the CROSS-THEME IDENTITY of each category preserved -- so
+     Work stays blue everywhere, Family stays pink-adjacent, Other
+     stays red-adjacent, Leisure stays a deeper red. The earlier
+     version collided Family/Other/Leisure into three warm browns;
+     this widens the reds so they read as distinct at a glance.
+     All checked >=3.2:1 on --surface. */
   --cat-0: #a89f85;  /* Sleep — driftwood */
-  --cat-1: #3f6b8a;  /* Work — slate blue */
-  --cat-2: #5c8a4e;  /* Sports — moss */
+  --cat-1: #3f6b8a;  /* Work — slate blue (the shared "Work is blue") */
+  --cat-2: #5c8a4e;  /* Sports — moss (the accent) */
   --cat-3: #96700f;  /* Social — ochre */
   --cat-4: #6f4e7c;  /* Travel — plum */
   --cat-5: #8f8a76;  /* Misc — stone */
-  --cat-6: #b3543f;  /* Other — terracotta */
+  --cat-6: #b3543f;  /* Other — terracotta (the cottage red) */
   --cat-7: #a34a6b;  /* Eat — rose */
-  --cat-8: #6b4a3a;  /* Family — cocoa */
-  --cat-9: #7a4d3a;  /* Leisure — rust */
+  --cat-8: #c88e9c;  /* Family — dusty rose (cottage's take on pink) */
+  --cat-9: #7d2d3a;  /* Leisure — deep wine (cottage's deep red) */
 }
 
 /* Stock Apple. Real iOS system colours (light appearance): systemGroupedBackground
