@@ -403,12 +403,53 @@ export default function CaptureWidget() {
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
+            /*
+             * Keyboard shortcuts on the capture field, in order of precedence:
+             *   Alt+0..9  pick that category (0 Sleep, 1 Work, ..., 9 Leisure)
+             *             Alt because bare digits are legitimate text (e.g.
+             *             "5km run"), so we must not eat them.
+             *   ArrowLeft / ArrowRight  step the current category selection.
+             *             Cycles, so ← from Sleep lands on Leisure.
+             *   Enter     save. If Enter is pressed AND no category is picked
+             *             yet (either explicitly or by guessCategory), focus
+             *             the CURRENT best category and require a second Enter
+             *             to actually save -- so "Enter chooses the category"
+             *             becomes literal: first Enter picks, second Enter
+             *             commits.
+             *   Escape    skip.
+             *   ArrowUp   repeat last entry.
+             */
             if (e.key === "Enter") {
               e.preventDefault();
+              // If nothing is selected yet, first Enter locks in whatever
+              // the guess/best category is and waits for a second Enter.
+              // Otherwise saves immediately.
+              if (cat === null && effectiveCat !== null) {
+                setCat(effectiveCat);
+                return;
+              }
               void save(effectiveCat, label);
             } else if (e.key === "Escape") {
               e.preventDefault();
               skipOne();
+            } else if (e.altKey && e.key >= "0" && e.key <= "9") {
+              // Alt+digit picks the category directly, without any
+              // interference with typing "5km" etc.
+              e.preventDefault();
+              setCat(Number(e.key));
+            } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+              // step through categories. Only when the cursor is at the
+              // end/start of the input so arrows still edit text mid-word.
+              const el = e.currentTarget;
+              const dir = e.key === "ArrowRight" ? 1 : -1;
+              const atEdge = (dir === 1 && el.selectionEnd === el.value.length) ||
+                             (dir === -1 && el.selectionStart === 0);
+              if (atEdge) {
+                e.preventDefault();
+                const cur = effectiveCat ?? 0;
+                const next = (cur + dir + CATEGORIES.length) % CATEGORIES.length;
+                setCat(next);
+              }
             } else if (e.key === "ArrowUp" && !label && lastEntry) {
               // repeat the previous slot without typing
               e.preventDefault();
@@ -484,7 +525,11 @@ export default function CaptureWidget() {
           {justSaved !== null ? (
             <span className="text-ok">Saved {slotToTime(justSaved)} ✓</span>
           ) : (
-            <>⌘/Ctrl+J anywhere · Enter saves · Esc skips{effectiveCat !== null && guessed !== null && cat === null && <> · category guessed from your history</>}</>
+            <>
+              ⌘/Ctrl+J anywhere · Enter saves · Esc skips ·{" "}
+              <span title="Alt+0..9 picks a category directly, or use ←/→ to step">Alt+0-9 or ←/→ for category</span>
+              {effectiveCat !== null && guessed !== null && cat === null && <> · category guessed from your history</>}
+            </>
           )}
         </p>
       </div>

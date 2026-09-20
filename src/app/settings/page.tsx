@@ -229,16 +229,41 @@ function CaptureSection() {
             </label>
           </div>
 
+          {/* Quiet hours can be turned OFF now via an explicit toggle.
+              inQuietHours() already returns false when from === to
+              (see lib/capture.ts and its tests), so the OFF state is
+              simply setting both to 0 -- no schema change needed. */}
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            Quiet hours
-            <select value={s.quietFrom} onChange={(e) => update({ ...s, quietFrom: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
-              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
-            </select>
-            to
-            <select value={s.quietTo} onChange={(e) => update({ ...s, quietTo: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
-              {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
-            </select>
-            <span className="text-faint">— no prompts while you&apos;re asleep</span>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={s.quietFrom !== s.quietTo}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // re-enable at sensible defaults
+                    update({ ...s, quietFrom: 22, quietTo: 7 });
+                  } else {
+                    update({ ...s, quietFrom: 0, quietTo: 0 });
+                  }
+                }}
+              />
+              <b>Quiet hours</b>
+            </label>
+            {s.quietFrom !== s.quietTo && (
+              <>
+                <select value={s.quietFrom} onChange={(e) => update({ ...s, quietFrom: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+                </select>
+                to
+                <select value={s.quietTo} onChange={(e) => update({ ...s, quietTo: Number(e.target.value) })} className="rounded-lg border bg-surface px-2 py-1 text-sm text-ink">
+                  {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+                </select>
+                <span className="text-faint">— no prompts while you&apos;re asleep</span>
+              </>
+            )}
+            {s.quietFrom === s.quietTo && (
+              <span className="text-faint">— off (Quick Capture prompts at any hour)</span>
+            )}
           </div>
 
           <label className="flex items-start gap-2 text-sm">
