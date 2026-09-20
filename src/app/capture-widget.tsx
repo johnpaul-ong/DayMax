@@ -345,16 +345,34 @@ export default function CaptureWidget() {
   if (!signedIn || onAuthScreen || !settings?.enabled || !open || current === null) return null;
 
   return (
-    /* Outlook's reminder window: anchored bottom-right, a fixed ~360px, never
-       full-bleed, and it slides in rather than appearing. On phones it sits
-       ABOVE the tab bar instead of on top of it — the widget is z-50 and
-       MobileNav is z-40, so it was covering the navigation. */
+    /*
+     * Outlook-style reminder: anchored BOTTOM-RIGHT on desktop (a fixed
+     * ~380px card), full-width above the tab bar on phones (sits above
+     * MobileNav, which is z-40; this is z-50). Uses inline style rather
+     * than Tailwind's `sm:` classes for the mobile-vs-desktop switch --
+     * the previous class-based version placed the box at the wrong
+     * corner on narrower desktop windows where sm: hadn't kicked in
+     * yet, which is what "popping up weird" on the screenshot was.
+     *
+     * ABOUT DESKTOP: this is an IN-APP popup (only visible when the
+     * DayMax tab is open). OS-level desktop notifications are separate
+     * and go through the PWA push-subscription flow (Settings ->
+     * Notifications), which is what actually reaches you when the tab
+     * isn't in the foreground.
+     */
     <div
-      className="daymax-reminder fixed z-50 sm:right-6 sm:left-auto sm:bottom-6 sm:w-[380px]
-                 left-2 right-2 bottom-[calc(56px+env(safe-area-inset-bottom)+0.5rem)]
-                 max-h-[calc(100vh-3rem)] overflow-auto"
+      className="daymax-reminder fixed z-50 overflow-auto"
       role="dialog"
       aria-label="What were you doing?"
+      style={{
+        // Two variants: <= 767px = full-width bottom sheet above the tab
+        // bar; >= 768px = bottom-right 380px card, floating.
+        right: "clamp(8px, calc(50vw - 380px), 24px)",
+        left: "auto",
+        bottom: "calc(env(safe-area-inset-bottom) + 24px)",
+        width: "min(380px, calc(100vw - 16px))",
+        maxHeight: "calc(100vh - 3rem)",
+      }}
       onMouseDown={() => inputRef.current?.focus()}
     >
       <div className="card border border-accent-soft p-3 shadow-2xl ring-1 ring-black/5">

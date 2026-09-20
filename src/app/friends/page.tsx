@@ -75,7 +75,9 @@ export default function FriendsPage() {
     fetchTracks()
       .then((ts) => {
         setTracks(ts);
-        if (ts.length && !open) setOpen(ts[0].id);
+        // Tracks now start COLLAPSED by default -- the old auto-open
+        // of ts[0] made a page of 3+ tracks feel like a wall of
+        // dropdown-charts as soon as you landed. Tap a track to open it.
       })
       .catch((e) =>
         setError(

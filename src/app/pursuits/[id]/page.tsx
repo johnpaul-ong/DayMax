@@ -1608,7 +1608,11 @@ function PeopleClocksGrid({ pursuitId: _pid, members }: { pursuitId: string; mem
     <section>
       <h2 className="mb-1 font-semibold">Everyone&apos;s typical day</h2>
       <p className="mb-2 text-sm text-muted">One dial per person — every day they&apos;ve logged, collapsed onto a clock. Neighbours show whose days rhyme.</p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Denser grid: 2 cols on phones, 4 on tablet, 6 on desktop. Each
+          clock is capped narrower via max-w on the wrapper, so a member
+          panel takes about a third of the space it used to and you can
+          fit six side-by-side without side-scrolling. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {withData.map((m) => {
           const strip = strips.get(m.id)!;
           // per-quarter-hour mode: pick the most common category
@@ -1625,12 +1629,17 @@ function PeopleClocksGrid({ pursuitId: _pid, members }: { pursuitId: string; mem
           }
           const days = new Set(strip.map((r) => r.date)).size;
           return (
-            <div key={m.id} className="card p-3">
-              <div className="mb-1 flex items-baseline justify-between">
-                <p className="truncate text-sm font-semibold">{m.name}</p>
-                <p className="text-[10px] text-faint">{days} day{days === 1 ? "" : "s"}</p>
+            <div key={m.id} className="card p-2">
+              <div className="mb-1 flex items-baseline justify-between gap-1">
+                <p className="truncate text-xs font-semibold">{m.name}</p>
+                <p className="shrink-0 text-[9px] text-faint">{days}d</p>
               </div>
-              <DayClock slots={clockSlots} />
+              {/* DayClock's SVG has a fixed viewBox and w-full max-w on
+                  the img, so putting it in a small wrapper just makes
+                  it render smaller -- no size prop needed. */}
+              <div className="mx-auto max-w-[160px]">
+                <DayClock slots={clockSlots} />
+              </div>
             </div>
           );
         })}
