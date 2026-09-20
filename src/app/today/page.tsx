@@ -201,10 +201,12 @@ export default function TodayPage() {
         <DayClock
           slots={clockSlots}
           activeCategory={cat}
-          onPaint={(a, b) => {
+          onSelect={(a, b) => {
+            // Drag SELECTS. The existing Fill/Clear buttons below commit.
+            // The old handler filled on release, so an over-drag painted
+            // six hours of Sleep and left you to Clear it.
             setFrom(a);
             setUntil(b);
-            void fill(a, b);
           }}
         />
       </div>

@@ -11,7 +11,9 @@
   --page: #f7f7f8;
   --surface: #ffffff;
   --surface-2: #f1f2f4;
-  --border: #e6e7ea;
+  /* Hairline: iOS-style, lighter than a 1px CSS border reads. The old
+     #e6e7ea was heavier than the shadow. */
+  --border: rgba(23, 27, 33, 0.09);
   --ink: #1a1d21;
   --muted: #5f6672;
   --faint: #9aa1ac;
@@ -25,7 +27,9 @@
   --danger-soft: #fdeeec;
   --warn: #8a5a00;
   --warn-soft: #fdf3dd;
-  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 16px rgb(16 24 40 / 0.04);
+  /* Elevation, not outline: closer to Apple's near-flat cards.
+     0.5px hairline top edge for the "material" hint. */
+  --shadow: 0 0.5px 0 rgb(16 24 40 / 0.05) inset, 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px rgb(16 24 40 / 0.05);
 
   /* Chart series. One identity colour per line/bar/slice, walked in order.
      Every value is checked to at least 3:1 against this theme's --surface
@@ -50,7 +54,8 @@
   --page: #101216;
   --surface: #191c22;
   --surface-2: #22262e;
-  --border: #2c313b;
+  /* Dark hairline: a bright thin line rather than a heavy grey block. */
+  --border: rgba(255, 255, 255, 0.08);
   --ink: #e8eaee;
   --muted: #9aa3b2;
   --faint: #626b7a;
@@ -64,7 +69,7 @@
   --danger-soft: #331b1b;
   --warn: #fbbf24;
   --warn-soft: #33290f;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  --shadow: 0 0.5px 0 rgb(255 255 255 / 0.05) inset, 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.35);
 
   /* Chart series, lifted for a dark surface — the light theme's 600/700
      shades sit at ~2:1 on #191c22 and read as mud. These are the 300/400
@@ -86,7 +91,8 @@
   --page: #f4efe3;
   --surface: #fbf7ec;
   --surface-2: #efe8d8;
-  --border: #ddd2ba;
+  /* Cottage hairline: keep the warm cast, halve the weight. */
+  --border: rgba(148, 128, 84, 0.20);
   --ink: #3a3628;
   --muted: #77705a;
   --faint: #a89f85;
@@ -100,7 +106,7 @@
   --danger-soft: #f4e2dc;
   --warn: #96700f;
   --warn-soft: #f2ead0;
-  --shadow: 0 2px 3px rgb(90 80 50 / 0.08), 0 8px 20px rgb(90 80 50 / 0.08);
+  --shadow: 0 0.5px 0 rgb(90 80 50 / 0.06) inset, 0 1px 2px rgb(90 80 50 / 0.06), 0 12px 28px rgb(90 80 50 / 0.08);
 
   /* Chart series, mixed from the same paintbox as the theme: moss, terracotta,
      slate, ochre, plum, verdigris, rose, cocoa. The lead is the moss --accent,
@@ -197,19 +203,43 @@
 }
 
 @layer components {
+  /* The Apple restraint pushed into every theme -- bigger radii, hairline
+     borders (a HALF pixel where the display can show one), soft elevation,
+     no heavy outlines. iOS keeps its own scoped block below for the
+     tighter type stack. */
   .card {
-    @apply rounded-2xl border bg-surface;
+    @apply rounded-2xl bg-surface;
+    border: 0.5px solid var(--border);
     box-shadow: var(--shadow);
   }
+  @supports not (border-width: 0.5px) {
+    .card { border-width: 1px; }
+  }
   .btn-primary {
-    @apply rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-40;
+    @apply rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-contrast transition hover:bg-accent-hover disabled:opacity-40;
+    /* subtle vertical lift on hover, iOS taste */
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
   }
+  .btn-primary:active { transform: translateY(0.5px); }
   .btn-ghost {
-    @apply rounded-xl border bg-surface px-4 py-2 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-40;
+    @apply rounded-xl bg-surface px-4 py-2.5 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-ink disabled:opacity-40;
+    border: 0.5px solid var(--border);
   }
+  .btn-ghost:active { transform: translateY(0.5px); }
   .field {
-    @apply rounded-xl border bg-surface px-3 py-2 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent;
+    @apply rounded-xl bg-surface px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-accent;
+    border: 0.5px solid var(--border);
   }
+}
+
+/* Type stack for every theme -- iOS overrides this in its own block. The
+   old default was the browser's serif fallback which read very Notion. */
+body {
+  font-family: "Inter var", "Inter", ui-sans-serif, system-ui, -apple-system,
+               BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+               Arial, sans-serif;
+  font-feature-settings: "cv11", "ss01", "cv02";
+  letter-spacing: -0.005em;
 }
 
 /* Day grid: keep cells tight and Excel-ish */

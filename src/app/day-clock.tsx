@@ -30,9 +30,19 @@ export interface ClockSlot {
 
 const SIZE = 440;
 const C = SIZE / 2;
-const INNER = { r0: 66, r1: 128 };
-const OUTER = { r0: 138, r1: 200 };
-const LABEL_R = 215;
+/**
+ * The two rings are visually separated: a clear gap between AM and PM, plus a
+ * fine "dawn/dusk" ring in the gap. Without it, 23:45 and 00:00 sit as
+ * neighbouring wedges on the SAME ring and read like a single 24-slot spiral,
+ * which is what you noticed. They are two different days of the same clock,
+ * and the layout should say so.
+ */
+const INNER = { r0: 62, r1: 118 };
+const GAP = 12;
+const OUTER = { r0: INNER.r1 + GAP, r1: INNER.r1 + GAP + 82 };
+const LABEL_R = OUTER.r1 + 15;
+/** hair-thin ring at noon/midnight for the AM->PM handover */
+const NOON_TICK_R = INNER.r1 + GAP / 2;
 
 function polar(r: number, deg: number): [number, number] {
   const a = ((deg - 90) * Math.PI) / 180;
@@ -68,13 +78,16 @@ function geom(slot: number) {
 
 export default function DayClock({
   slots,
+  onSelect,
   onPaint,
   title,
   subtitle,
   activeCategory,
 }: {
   slots: Map<number, ClockSlot>;
-  /** provide to make it editable; called with an inclusive slot range */
+  /** fires as soon as a drag ends -- range only, no writes yet */
+  onSelect?: (from: number, to: number) => void;
+  /** kept for programmatic paint (e.g. arrow keys); no longer wired to drag */
   onPaint?: (from: number, to: number) => void;
   title?: string;
   subtitle?: string;
@@ -84,6 +97,7 @@ export default function DayClock({
   const [hover, setHover] = useState<number | null>(null);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [cursor, setCursor] = useState<number | null>(null);
+  const [selection, setSelection] = useState<[number, number] | null>(null);
   const dragging = anchor !== null;
 
   const slotAt = useCallback((clientX: number, clientY: number): number | null => {
@@ -94,10 +108,13 @@ export default function DayClock({
 
   const inSelection = useCallback(
     (s: number) => {
-      if (anchor === null || cursor === null) return false;
-      return s >= Math.min(anchor, cursor) && s <= Math.max(anchor, cursor);
+      if (dragging && anchor !== null && cursor !== null) {
+        return s >= Math.min(anchor, cursor) && s <= Math.max(anchor, cursor);
+      }
+      if (selection) return s >= selection[0] && s <= selection[1];
+      return false;
     },
-    [anchor, cursor]
+    [dragging, anchor, cursor, selection]
   );
 
   /**
@@ -139,7 +156,7 @@ export default function DayClock({
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         className="mx-auto block w-full max-w-[460px] touch-none select-none"
         onPointerDown={(e) => {
-          if (!onPaint) return;
+          if (!onSelect && !onPaint) return;
           const s = slotAt(e.clientX, e.clientY);
           if (s === null) return;
           (e.target as Element).releasePointerCapture?.(e.pointerId);
@@ -152,21 +169,51 @@ export default function DayClock({
           if (dragging && s !== null) setCursor(s);
         }}
         onPointerUp={() => {
-          if (onPaint && anchor !== null && cursor !== null) {
-            onPaint(Math.min(anchor, cursor), Math.max(anchor, cursor));
+          // Drag SELECTS a range. The parent's "Fill" button commits it.
+          // Instant-fill on release was destructive and undoable only by
+          // Clear -- one over-drag and you had painted six hours of Sleep.
+          if (anchor !== null && cursor !== null) {
+            const a = Math.min(anchor, cursor);
+            const b = Math.max(anchor, cursor);
+            setSelection([a, b]);
+            onSelect?.(a, b);
           }
           setAnchor(null);
           setCursor(null);
         }}
         onPointerLeave={() => {
           setHover(null);
-          setAnchor(null);
-          setCursor(null);
+          if (dragging) {
+            // let go OFF the ring, keep the range you had built up rather
+            // than dropping it silently
+            if (anchor !== null && cursor !== null) {
+              const a = Math.min(anchor, cursor);
+              const b = Math.max(anchor, cursor);
+              setSelection([a, b]);
+              onSelect?.(a, b);
+            }
+            setAnchor(null);
+            setCursor(null);
+          }
         }}
       >
         {/* ring backgrounds, so empty time still reads as time */}
         <circle cx={C} cy={C} r={(INNER.r0 + INNER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={INNER.r1 - INNER.r0} />
         <circle cx={C} cy={C} r={(OUTER.r0 + OUTER.r1) / 2} fill="none" stroke="var(--surface-2)" strokeWidth={OUTER.r1 - OUTER.r0} opacity={0.55} />
+        {/* the dawn/dusk hairline: the AM->PM seam, so 23:45 stops looking
+            like it flows into 00:00. Dashed to double as a 12-tick guide. */}
+        <circle
+          cx={C}
+          cy={C}
+          r={NOON_TICK_R}
+          fill="none"
+          stroke="var(--faint)"
+          strokeWidth={1}
+          strokeDasharray="1.5 2.5"
+          opacity={0.5}
+        />
+        {/* tiny sun/moon markers at 12: night on the inside, day on the outside */}
+        <text x={C} y={C - INNER.r1 - GAP / 2 + 1} textAnchor="middle" dominantBaseline="central" style={{ fontSize: 8, fill: "var(--faint)" }}>◐</text>
 
         {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
           const { ring, a0, a1, pm } = geom(s);
@@ -187,10 +234,12 @@ export default function DayClock({
               fill={fill}
               // the inner ring is night: darken it so the two halves of the day
               // are legible before you read a single number
-              opacity={fill === "transparent" ? 0 : pm ? 1 : 0.82}
+              // PM sits closer to full colour; AM is a shade lighter so the two
+              // halves are legible before you read a single number
+              opacity={fill === "transparent" ? 0 : pm ? 1 : 0.72}
               stroke="var(--page)"
               strokeWidth={0.6}
-              style={{ cursor: onPaint ? "crosshair" : "default" }}
+              style={{ cursor: onSelect || onPaint ? "crosshair" : "default" }}
             />
           );
         })}
