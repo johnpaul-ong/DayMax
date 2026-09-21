@@ -46,15 +46,25 @@ export default function CategoryLegend() {
           const cats = grouped[row.key];
           if (cats.length === 0) return null;
           return (
-            <div key={row.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            // Two-column grid instead of a wrapping flex row so
+            // wrapped chips indent to the chips column instead of
+            // jumping back under the row label. Fixes 'Eat and
+            // Family should start where Sleep is'.
+            <div
+              key={row.key}
+              className="grid items-baseline gap-x-3"
+              style={{ gridTemplateColumns: "4rem minmax(0, 1fr)" }}
+            >
               <span
-                className={`w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider ${row.tone}`}
+                className={`text-[10px] font-semibold uppercase tracking-wider ${row.tone}`}
               >
                 {row.label}
               </span>
-              {cats.map((c) => (
-                <Chip key={c.code} code={c.code} name={c.name} />
-              ))}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {cats.map((c) => (
+                  <Chip key={c.code} code={c.code} name={c.name} />
+                ))}
+              </div>
             </div>
           );
         })}

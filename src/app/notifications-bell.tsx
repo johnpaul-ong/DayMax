@@ -120,23 +120,31 @@ export default function NotificationsBell() {
     };
   }, [open]);
 
-  // Recompute the portal anchor whenever the panel opens, the
-  // viewport resizes, or the page scrolls. Fixed-position coords in
-  // viewport space -- keeps the panel pinned to the bell across
-  // sticky-nav re-flow and page scroll.
+  // Continuously track the button's real client rect while the
+  // panel is open. Previously used a resize + scroll listener, but
+  // if the nav re-flowed for any other reason (a tab appearing, an
+  // overflow-x-auto container shifting, a font finishing loading)
+  // the panel was left stuck at the anchor point it measured at
+  // open time -- reported as 'the notifications come up in a
+  // random area of the page'. RAF loop measures every paint frame,
+  // updates state only when the rect actually changed, and stops
+  // when the panel closes.
   useEffect(() => {
     if (!open) return;
-    const update = () => {
+    let raf = 0;
+    const tick = () => {
       const r = buttonRef.current?.getBoundingClientRect();
-      if (r) setAnchor({ right: window.innerWidth - r.right, top: r.bottom + 4 });
+      if (r && r.width > 0 && r.height > 0) {
+        const next = {
+          right: Math.max(4, Math.round(window.innerWidth - r.right)),
+          top: Math.round(r.bottom + 4),
+        };
+        setAnchor((prev) => (prev && prev.right === next.right && prev.top === next.top ? prev : next));
+      }
+      raf = requestAnimationFrame(tick);
     };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
-    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [open]);
 
   if (!me) return null;
