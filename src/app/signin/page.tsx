@@ -270,12 +270,17 @@ function YearStripHook() {
   return (
     <>
       <style>{`
+        /* Faster hue cycle -- was 8s (one wave every ~4s), now 3s
+           so multiple colour shifts happen per second across the
+           strip. Kept stepwise so each cell 'flickers' between
+           palettes rather than smoothly interpolating, which reads
+           more like real day cells changing state. */
         @keyframes daymax-signin-strip {
-          0%   { filter: hue-rotate(0deg)   brightness(1);    opacity: 0.9; }
-          25%  { filter: hue-rotate(45deg)  brightness(1.15); opacity: 1;   }
-          50%  { filter: hue-rotate(120deg) brightness(1);    opacity: 0.85;}
-          75%  { filter: hue-rotate(220deg) brightness(1.1);  opacity: 1;   }
-          100% { filter: hue-rotate(360deg) brightness(1);    opacity: 0.9; }
+          0%,  19% { filter: hue-rotate(0deg)   brightness(1);    opacity: 0.9; }
+          20%, 39% { filter: hue-rotate(60deg)  brightness(1.15); opacity: 1;   }
+          40%, 59% { filter: hue-rotate(150deg) brightness(0.95); opacity: 0.85;}
+          60%, 79% { filter: hue-rotate(240deg) brightness(1.1);  opacity: 1;   }
+          80%,100% { filter: hue-rotate(320deg) brightness(1);    opacity: 0.9; }
         }
         @keyframes daymax-signin-strip-flow {
           0%   { transform: translateY(0);    }
@@ -288,16 +293,15 @@ function YearStripHook() {
       `}</style>
       <div className="mx-auto mt-4 flex h-14 max-w-[340px] gap-[2px] overflow-hidden rounded-md" aria-hidden="true">
         {Array.from({ length: 40 }, (_, i) => {
-          // More varied per-column split -- previously every column
-          // was 45/30/25 which read as a fake pattern. Now 2-4
-          // stripes per column with pseudo-random heights that sum
-          // to 100. Deterministic (seeded by index) so SSR /
-          // hydration match, but every column looks different.
+          // Richer per-column split: 3-6 stripes per column (was
+          // 2-4), sizes pseudo-randomly 8-30 % of column height,
+          // normalised to 100. Deterministic (seeded by index) so
+          // SSR/hydration match, but every column now shows more
+          // segments and reads like a busier day.
           const seed = (i * 7 + 3) % 100;
-          const stripeCount = 2 + ((seed * 3) % 3); // 2, 3, or 4
+          const stripeCount = 3 + ((seed * 3) % 4); // 3, 4, 5, or 6
           const rawHeights = Array.from({ length: stripeCount }, (_, j) => {
-            // pseudo-random 15..55 range
-            const r = ((seed * (j * 13 + 17) + 41) % 40) + 15;
+            const r = ((seed * (j * 13 + 17) + 41) % 22) + 8; // 8..29
             return r;
           });
           const total = rawHeights.reduce((s, v) => s + v, 0);
@@ -326,7 +330,12 @@ function YearStripHook() {
                   style={{
                     height: `${p.h}%`,
                     background: `var(--cat-${p.c})`,
-                    animation: `daymax-signin-strip 8s linear ${((i * 0.09) + j * 0.4).toFixed(2)}s infinite`,
+                    // 3 s cycle (was 8 s) so shifts happen a few
+                    // times a second across the strip. Stagger by
+                    // column and by stripe so each cell 'flickers'
+                    // out of phase with its neighbours -- reads as
+                    // a busy live picture, not a synchronous wave.
+                    animation: `daymax-signin-strip 3s steps(5, end) ${((i * 0.05) + j * 0.17).toFixed(2)}s infinite`,
                   }}
                 />
               ))}
