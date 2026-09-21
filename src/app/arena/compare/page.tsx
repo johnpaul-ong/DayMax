@@ -443,18 +443,26 @@ function ComparePicker({
         </button>
 
         {peopleOpen && (
-          <div className="card absolute left-0 top-10 z-40 w-64 max-w-[80vw] p-2 shadow-xl">
-            <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-faint">
+          /* Compact floating panel. Was w-64 (256 px) + max-w-[80vw]
+             which sprawled across a narrow viewport and read as
+             half-page-wide; user asked for a proper 'over' popover.
+             Narrowed to w-52 (208 px), capped list to 10 rows
+             (max-h-52) so a group of 30 doesn't push the panel down
+             the page, and anchored right-0 to the button so it opens
+             leftward and never juts out over the graph area on the
+             right. */
+          <div className="card absolute right-0 top-10 z-40 w-52 max-w-[92vw] p-2 shadow-2xl">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-faint">
               <button onClick={() => setSelected(presets.everyone())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">All</button>
               <button onClick={() => setSelected(new Set())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">None</button>
-              <span className="ml-auto normal-case tracking-normal">{selected.size} of {roster.length}</span>
+              <span className="ml-auto normal-case tracking-normal">{selected.size}/{roster.length}</span>
             </div>
-            <ul className="max-h-64 space-y-0.5 overflow-y-auto">
+            <ul className="max-h-52 space-y-0.5 overflow-y-auto">
               {roster.map((r) => {
                 const on = selected.has(r.id);
                 return (
                   <li key={r.id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-surface-2">
+                    <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-surface-2">
                       <input
                         type="checkbox"
                         checked={on}
