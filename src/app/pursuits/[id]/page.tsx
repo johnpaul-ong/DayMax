@@ -686,9 +686,20 @@ function StatPreview({ stat }: { stat: StatSummary }) {
 }
 
 /**
- * Light vs Midnight vs Cottage, for this pursuit. Ranked on a PER-MEMBER average
- * so the biggest team doesn't win automatically — a team of three can beat a
- * team of thirty by being better, which is the only way this stays interesting.
+ * Light vs Midnight vs Cottage, for this pursuit. Ranked on FOCUS %
+ * (productive / (productive + brainrot)) rather than raw WorkMax
+ * so a team that's been logging for two weeks isn't eating a team
+ * that joined yesterday. WorkMax is volume-heavy: someone with 100h
+ * productive beats someone with 5h productive by 20x even at the
+ * same quality. Focus is volume-neutral -- 1h/0h scores 100%, 100h/0h
+ * also scores 100% -- so it's a fair comparison when teams have
+ * been in for different amounts of time.
+ *
+ * The server RPC still returns WorkMax (score) + the hours in the
+ * detail string; we parse the hours out of detail and compute focus
+ * client-side. Non-life pursuits (Money, Lifts, custom stats) don't
+ * have 'productive/brainrot' hours to parse, so they keep the raw
+ * server score and read as before.
  */
 function TeamStandings({ pursuitId }: { pursuitId: string }) {
   const [rows, setRows] = useState<TeamStanding[]>([]);
@@ -700,17 +711,42 @@ function TeamStandings({ pursuitId }: { pursuitId: string }) {
   }, [pursuitId]);
 
   if (rows.length === 0) return null;
-  const max = Math.max(...rows.map((r) => r.score), 1);
+
+  // Detail format on the life pursuit: "1982h productive · 482h brainrot".
+  const HOURS_RE = /([\d.]+)\s*h\s*productive\s*·\s*([\d.]+)\s*h\s*brainrot/i;
+  const hasFocus = rows.every((r) => HOURS_RE.test(r.detail));
+
+  const ranked = hasFocus
+    ? [...rows]
+        .map((r) => {
+          const m = r.detail.match(HOURS_RE)!;
+          const p = Number(m[1]);
+          const b = Number(m[2]);
+          const focus = p + b > 0 ? (p / (p + b)) * 100 : 0;
+          return { ...r, focus };
+        })
+        .sort((a, b) => b.focus - a.focus)
+    : rows.map((r) => ({ ...r, focus: undefined as number | undefined }));
+
+  const max = hasFocus
+    ? Math.max(...ranked.map((r) => r.focus ?? 0), 1)
+    : Math.max(...ranked.map((r) => r.score), 1);
 
   return (
     <section>
       <h2 className="mb-1 font-semibold">Team standings</h2>
       <p className="mb-2 text-sm text-muted">
-        Averaged per member, so a bigger team doesn&apos;t win by turning up.
+        {hasFocus
+          ? "Focus % (productive ÷ productive + brainrot). Volume-neutral, so a team that's been logging longer doesn't win by default."
+          : "Averaged per member, so a bigger team doesn't win by turning up."}
       </p>
       <div className="card divide-y">
-        {rows.map((r, i) => {
+        {ranked.map((r, i) => {
           const t = teamMeta(r.team);
+          const shownValue = hasFocus ? r.focus ?? 0 : r.score;
+          const barWidth = hasFocus
+            ? shownValue // focus is already 0..100
+            : (r.score / max) * 100;
           return (
             <div key={r.team} className="flex items-center gap-3 px-4 py-3">
               <span className="w-5 text-center font-bold text-faint">{i + 1}</span>
@@ -724,11 +760,13 @@ function TeamStandings({ pursuitId }: { pursuitId: string }) {
                   </span>
                 </p>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div className="h-full rounded-full" style={{ width: `${(r.score / max) * 100}%`, background: t.color }} />
+                  <div className="h-full rounded-full" style={{ width: `${barWidth}%`, background: t.color }} />
                 </div>
                 <p className="mt-0.5 text-xs text-faint">{r.detail}</p>
               </div>
-              <span className="tabular-nums text-lg font-bold">{r.score}</span>
+              <span className="tabular-nums text-lg font-bold">
+                {hasFocus ? `${shownValue.toFixed(1)}%` : shownValue}
+              </span>
             </div>
           );
         })}
@@ -748,11 +786,6 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
   if (members.length === 0) return null;
   const shown = expanded ? members : members.slice(0, 12);
   const hidden = total - members.length;
-  // If nobody in the pursuit has logged anything yet, add one line
-  // above the roster explaining what the "no logs here yet" chip
-  // refers to. On a brand-new custom pursuit that's every member and
-  // the pattern reads weird without context.
-  const anyLogged = members.some((m) => m.lastLogged != null);
 
   return (
     <section>
@@ -763,11 +796,13 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
           {hidden > 0 && ` · ${hidden} not shown`}
         </span>
       </div>
-      {!anyLogged && (
-        <p className="mb-2 text-xs text-muted">
-          Nobody has logged anything on this pursuit yet — the &ldquo;no logs here yet&rdquo; chip means just that. Be the first.
-        </p>
-      )}
+      {/* Old 'Nobody has logged anything on this pursuit yet -- the
+          "no logs here yet" chip means just that' hint lived here.
+          Killed on feedback ('redundant'), together with the chip
+          it was explaining -- see the member card render below. A
+          card with no chip now reads simply as 'this person hasn't
+          logged anything', which is what the row was trying to say
+          the long way. */}
       <div className="flex flex-wrap gap-2">
         {shown.map((m) => {
           const inner = (
@@ -785,12 +820,13 @@ function MembersSection({ members, total }: { members: PursuitMember[]; total: n
                   {m.role === "owner" && " · owner"}
                   {m.isDemo && " · legend"}
                 </span>
-                {/* who's active vs a ghost — the ONE bit of info a member card
-                    was missing. Tone colours a hot/warm/cold chip. Hover /
-                    long-press for the plain-English tooltip ("Hasn't logged
-                    anything on THIS pursuit yet"), which fixes the "what does
-                    'never' mean here" question on fresh custom pursuits. */}
-                {(() => {
+                {/* Active-vs-ghost chip. Renders ONLY when the
+                    person has actually logged something here -- a
+                    'no logs here yet' chip on every unlogged member
+                    was repeated on every card and read as noise. A
+                    card without a chip now reads the same story
+                    without saying it. */}
+                {m.lastLogged && (() => {
                   const ll = lastLoggedLabel(m.lastLogged, localToday());
                   const tint = ll.tone === "hot" ? "text-ok" : ll.tone === "warm" ? "text-warn" : "text-faint";
                   return <span title={ll.title} className={`block truncate text-[10px] ${tint}`}>· {ll.text}</span>;

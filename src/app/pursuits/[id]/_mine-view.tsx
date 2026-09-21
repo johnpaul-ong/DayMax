@@ -220,8 +220,10 @@ function MyLife() {
 
       {typicalDays > 0 && (
         <section>
-          <h2 className="mb-1 font-semibold">Your typical day</h2>
-          <p className="mb-2 text-sm text-muted">{typicalDays.toLocaleString()} days collapsed onto one dial — the most common thing at each quarter hour.</p>
+          <h2 className="mb-2 font-semibold">
+            Your typical day
+            <span className="ml-2 text-xs font-normal text-faint">{typicalDays.toLocaleString()} days</span>
+          </h2>
           <div className="card p-3">
             <DayClock slots={typicalSlots} />
           </div>
@@ -249,8 +251,10 @@ function MyLife() {
 
       {daily.length > 3 && (
         <section>
-          <h2 className="mb-1 font-semibold">Focus score</h2>
-          <p className="mb-2 text-sm text-muted">Productive ÷ (productive + brainrot) × 100, per day.</p>
+          <h2 className="mb-2 font-semibold">
+            Focus score
+            <span className="ml-2 text-xs font-normal text-faint">productive ÷ (productive + brainrot) × 100</span>
+          </h2>
           <div className="h-52 card p-2">
             <ResponsiveContainer>
               <LineChart data={daily}>
@@ -266,8 +270,7 @@ function MyLife() {
       )}
 
       <section>
-        <h2 className="mb-1 font-semibold">Average by weekday</h2>
-        <p className="mb-2 text-sm text-muted">Do your Mondays look like your Saturdays? (h per day of week.)</p>
+        <h2 className="mb-2 font-semibold">Average by weekday</h2>
         <div className="h-52 card p-2">
           <ResponsiveContainer>
             <BarChart data={weekday}>
@@ -285,8 +288,7 @@ function MyLife() {
 
       {catBreakdown.length > 0 && (
         <section>
-          <h2 className="mb-1 font-semibold">Where the hours went</h2>
-          <p className="mb-2 text-sm text-muted">Every logged 15 minutes, bucketed. Colours match the day-grid.</p>
+          <h2 className="mb-2 font-semibold">Where the hours went</h2>
           <div className="card divide-y">
             {catBreakdown.map((c) => {
               const pct = totals.p + totals.b + totals.sl + totals.o > 0
