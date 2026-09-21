@@ -158,6 +158,7 @@ export default function DayClock({
   subtitle,
   activeCategory,
   mode = "rings",
+  zoomable = false,
 }: {
   slots: Map<number, ClockSlot>;
   mode?: ClockMode;
@@ -168,6 +169,17 @@ export default function DayClock({
   title?: string;
   subtitle?: string;
   activeCategory?: number | null;
+  /**
+   * When true, show a +/-/1x chip strip so a user can enlarge the clock
+   * beyond its default max width. 96 wedges around a 460 px circle end
+   * up ~5.5 px wide each, which is fine on a phone (thick finger + real
+   * touch hit-boxes) but is small for a mouse cursor and reportedly
+   * misaligned in Brave. Zooming grows the CSS width while the viewBox
+   * is unchanged, so wedges scale up crisply and stay hit-testable
+   * through elementFromPoint. Container becomes horizontally
+   * scrollable at the larger sizes.
+   */
+  zoomable?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -175,6 +187,24 @@ export default function DayClock({
   const [cursor, setCursor] = useState<number | null>(null);
   const [selection, setSelection] = useState<[number, number] | null>(null);
   const dragging = anchor !== null;
+
+  // Zoom multiplier for the rendered SVG width. 1x fits inside the
+  // card; 1.5x / 2x overflow it (parent scrolls). Persisted per
+  // browser so a user who prefers big wedges doesn't reset every load.
+  const [zoom, setZoom] = useState(1);
+  const zoomLoadedRef = useRef(false);
+  if (typeof window !== "undefined" && !zoomLoadedRef.current) {
+    zoomLoadedRef.current = true;
+    try {
+      const saved = Number(localStorage.getItem("daymax-clock-zoom"));
+      if (Number.isFinite(saved) && saved >= 1 && saved <= 2) setZoom(saved);
+    } catch { /* ignore */ }
+  }
+  const setZoomAndSave = (z: number) => {
+    setZoom(z);
+    try { localStorage.setItem("daymax-clock-zoom", String(z)); } catch { /* ignore */ }
+  };
+  const scaledMax = Math.round(460 * zoom);
 
   /**
    * Two-tap mode alongside drag: if the pointer goes down and comes up
@@ -239,10 +269,30 @@ export default function DayClock({
           {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
       )}
+      {zoomable && (
+        <div className="mb-2 flex items-center justify-end gap-1 text-xs text-muted">
+          <span className="mr-1 text-faint">wedge size</span>
+          {[1, 1.5, 2].map((z) => (
+            <button
+              key={z}
+              onClick={() => setZoomAndSave(z)}
+              className={`rounded-md border px-2 py-0.5 tabular-nums transition ${
+                zoom === z ? "border-accent bg-accent-soft font-semibold text-accent" : "hover:bg-surface-2"
+              }`}
+              aria-pressed={zoom === z}
+              title={`Render the clock at ${z}x. Bigger wedges = easier clicks. Saved for next time.`}
+            >
+              {z}×
+            </button>
+          ))}
+        </div>
+      )}
+      <div className={zoom > 1 ? "-mx-3 overflow-x-auto px-3" : ""}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
-        className="mx-auto block w-full max-w-[460px] touch-none select-none"
+        style={{ maxWidth: `${scaledMax}px`, width: "100%" }}
+        className="mx-auto block touch-none select-none"
         onPointerDown={(e) => {
           if (!onSelect && !onPaint) return;
           const s = slotAt(e.clientX, e.clientY);
@@ -630,6 +680,7 @@ export default function DayClock({
           ) : null
         )}
       </svg>
+      </div>
     </div>
   );
 }

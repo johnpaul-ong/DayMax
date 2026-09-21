@@ -77,6 +77,7 @@ import { TeamDot } from "../../team-name";
 import { ChartEmpty, emptyCause } from "../../empty-chart";
 import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
+import { PeopleClocksGrid } from "../../pursuits/[id]/_community";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -784,6 +785,79 @@ export default function ChallengePage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Side-by-side per-member view: score, entries, per-day
+              clustered as three bars per person so you can see who is
+              winning on volume vs consistency vs pace at a glance.
+              Recharts renders BarChart groups side-by-side by default
+              when there is more than one <Bar> child. */}
+          {rows.length > 1 && (
+            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+              <Guarded
+                small
+                title="Side by side"
+                sub={`Same ${rows.length} people, three bars each — ${metricLabel.toLowerCase()}, days logged, and per-day pace, clustered so nobody is compared on volume alone.`}
+                cause={emptyCause({
+                  ...base,
+                  comparesPeople: true,
+                  plotted: scoreTotal,
+                  logged: isMoney ? loggedMoney : undefined,
+                  moneySubset: ranksNonEssential,
+                })}
+                noun={noun}
+                loggedLabel={loggedLabel}
+                startsOn={challenge.startsOn}
+                action={{ href: logHref, label: logLabel }}
+              >
+                <div className="h-64 card p-2">
+                  <ResponsiveContainer>
+                    <BarChart
+                      data={rows.map((r) => ({
+                        name: r.displayName,
+                        score: r.score ?? 0,
+                        perDay: r.perDay ?? 0,
+                        entries: r.entries ?? 0,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip
+                        formatter={(v: number, key: string) => {
+                          if (key === "entries") return [v, "days logged"];
+                          if (key === "perDay") return [formatScore(v, unit, currency), "per day"];
+                          return [formatScore(v, unit, currency), metricLabel.toLowerCase()];
+                        }}
+                      />
+                      <Legend
+                        formatter={(v: string) =>
+                          v === "score" ? metricLabel.toLowerCase() : v === "perDay" ? "per day" : "days logged"
+                        }
+                      />
+                      <Bar dataKey="score" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="perDay" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="entries" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Guarded>
+            </div>
+          )}
+
+          {/* Everyone's typical day — only for life challenges, where a
+              clock face means something. Money and pursuit-stat
+              challenges have no per-slot data to draw one from, so the
+              slide is skipped rather than empty. Reads member day
+              strips through the same RPC as the Life community page. */}
+          {family === "life" && rows.length > 0 && (
+            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+              <h2 className="mb-1 font-semibold">Everyone&apos;s typical day</h2>
+              <p className="mb-2 text-sm text-muted">
+                One dial per person — every day they&apos;ve logged, collapsed onto a clock. Neighbours show whose days rhyme.
+              </p>
+              <PeopleClocksGrid members={rows.map((r) => ({ id: r.userId, name: r.displayName }))} />
             </div>
           )}
 

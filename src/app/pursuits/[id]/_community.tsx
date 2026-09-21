@@ -205,7 +205,7 @@ export function LifeCommunity({ pursuitId, memberCount }: { pursuitId: string; m
  * One typical-day clock per member, side-by-side. Same rule as the
  * hero on Community: every logged day collapsed onto a single dial.
  */
-function PeopleClocksGrid({ members }: { members: Array<{ id: string; name: string }> }) {
+export function PeopleClocksGrid({ members }: { members: Array<{ id: string; name: string }> }) {
   const [strips, setStrips] = useState<Map<string, DayStripRow[]>>(new Map());
   const [loaded, setLoaded] = useState(false);
 

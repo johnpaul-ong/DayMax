@@ -170,9 +170,9 @@ export function YouScore({
           <Link href={logHref} className="font-medium text-accent hover:underline">Log a day →</Link>
         </p>
       )}
-      <p className="mt-3 border-t pt-3 text-xs text-faint">
-        This challenge doesn&apos;t read your spending — no money figures are shared by being in it.
-      </p>
+      {/* The old "this challenge doesn't read your spending" footer was
+          killed on feedback -- a money reassurance on a non-money card
+          answers a question nobody was asking. */}
     </div>
   );
 }

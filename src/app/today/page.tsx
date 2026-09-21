@@ -224,10 +224,46 @@ export default function TodayPage() {
         className="mb-3 w-full rounded-lg border px-3 py-2 text-sm"
       />
 
-      <div className="mb-2 flex items-center gap-2 text-sm">
-        <span className="w-10 text-muted">{from != null ? slotToTime(from) : "from"}</span>
-        <span>→</span>
-        <span className="w-10 text-muted">{until != null ? slotToTime(until) : "until"}</span>
+      {/*
+        Numeric FROM -> UNTIL selects, alongside the clock. Two ways in:
+        drag on the clock still works (and populates these), but if the
+        wedges are too fiddly (Brave has been reported as hard to click
+        by hand) or you just want to type in "15:30 -> 15:45" you can
+        pick from these dropdowns instead. Both selects list all 96 of
+        the day's quarter-hour slots, keyboard-arrow-able and
+        touch-friendly.
+      */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex items-center gap-1 text-xs text-muted">
+          from
+          <select
+            value={from ?? ""}
+            onChange={(e) => setFrom(e.target.value === "" ? null : Number(e.target.value))}
+            className="rounded-lg border bg-surface px-2 py-1.5 text-sm tabular-nums"
+          >
+            <option value="">—:—</option>
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => (
+              <option key={s} value={s}>{slotToTime(s)}</option>
+            ))}
+          </select>
+        </label>
+        <span aria-hidden="true">→</span>
+        <label className="flex items-center gap-1 text-xs text-muted">
+          until
+          <select
+            value={until ?? ""}
+            onChange={(e) => setUntil(e.target.value === "" ? null : Number(e.target.value))}
+            className="rounded-lg border bg-surface px-2 py-1.5 text-sm tabular-nums"
+          >
+            <option value="">—:—</option>
+            {Array.from({ length: SLOTS_PER_DAY }, (_, s) => (
+              // Until reads as an END time — the slot AFTER the last one
+              // being filled. Slot 62 fills 15:30 and displays as 15:45
+              // in the readout below, so match that with the +1 label.
+              <option key={s} value={s}>{slotToTime(Math.min(SLOTS_PER_DAY - 1, s + 1))}</option>
+            ))}
+          </select>
+        </label>
         <button
           onClick={() => void fill()}
           disabled={from == null || until == null || saving}
@@ -263,6 +299,7 @@ export default function TodayPage() {
         <DayClock
           slots={clockSlots}
           activeCategory={cat}
+          zoomable
           onSelect={(a, b) => {
             // Drag SELECTS. The existing Fill/Clear buttons below commit.
             // The old handler filled on release, so an over-drag painted
