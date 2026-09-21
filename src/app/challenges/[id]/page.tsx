@@ -692,25 +692,28 @@ export default function ChallengePage() {
                   />
                 </div>
 
-                {/* Columns on the left, grouped-bar breakdown on
-                    the right. Both draw from the same day-strip
-                    fetch so the extra chart doesn't cost another
-                    request. On narrow screens the bars stack under
-                    the columns. */}
                 <div>
                   <h3 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h3>
-                  <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
-                    <MembersDayColumns
-                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                      from={challenge.startsOn}
-                      to={challenge.endsOn}
-                    />
-                    <MembersHoursBars
-                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                      from={challenge.startsOn}
-                      to={challenge.endsOn}
-                    />
-                  </div>
+                  <MembersDayColumns
+                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                    from={challenge.startsOn}
+                    to={challenge.endsOn}
+                  />
+                </div>
+
+                {/* Horizontal lollipops of per-person hours in each
+                    bucket, scoped strictly to the challenge window
+                    (server-side via member_day_strip). Sized to
+                    match the Average Day clock cell so the picture
+                    balances on either side of the grid. */}
+                <div className="md:col-start-1">
+                  <h3 className="mb-2 font-semibold">Hours by person</h3>
+                  <MembersHoursBars
+                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                    from={challenge.startsOn}
+                    to={challenge.endsOn}
+                    maxWidth={360}
+                  />
                 </div>
 
                 {/* The race is hidden entirely on life challenges

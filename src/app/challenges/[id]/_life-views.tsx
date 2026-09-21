@@ -379,15 +379,24 @@ export function MembersHoursBars({
   members,
   from,
   to,
+  maxWidth = 360,
 }: {
   members: Member[];
   from?: string;
   to?: string;
+  /** CSS max-width for the card. Defaults to 360 so it mirrors the
+      Average Day clock size. Data axis scales inside. */
+  maxWidth?: number;
 }) {
   const { strips, loaded } = useMemberStrips(members, from, to);
   const buckets = defaultBuckets();
   const bucketOf = (cat: number): Bucket | undefined => buckets[cat];
 
+  // Per-person totals across the challenge window ONLY -- the
+  // useMemberStrips hook passes from/to straight through to the
+  // member_day_strip RPC, which filters server-side. Anything logged
+  // outside [from, to] is never returned, so these hours are strictly
+  // the challenge window.
   const data = useMemo(
     () =>
       members.map((m) => {
@@ -419,31 +428,72 @@ export function MembersHoursBars({
       </p>
     );
 
-  // Pull the standard bucket colours off the category registry so this
-  // chart matches every other productive/brainrot rendering in the app.
+  // Bucket colours -- keep the productive/brainrot palette that the
+  // rest of the app uses, so 'productive' is always the same blue.
   const catByCode = new Map(CATEGORIES.map((c) => [c.code, c]));
-  const P = catByCode.get(1)?.color ?? "#2563eb"; // Work
-  const B = catByCode.get(6)?.color ?? "#ef4444"; // Other
+  const P = catByCode.get(1)?.color ?? "#2563eb";
+  const B = catByCode.get(6)?.color ?? "#ef4444";
   const O = "var(--muted)";
 
+  // Horizontal lollipop: each person contributes three rows
+  // (productive, unproductive, other), each row a thin rail with a
+  // dot at its right end. Rail length is proportional to hours vs
+  // the max value across everything, so the x-axis 'scales to fit'
+  // the group's biggest number regardless of challenge length.
+  const rows: Array<{
+    key: string;
+    person: string;
+    bucket: "productive" | "unproductive" | "other";
+    hours: number;
+    color: string;
+    firstOfPerson: boolean;
+  }> = [];
+  for (const d of data) {
+    rows.push({ key: `${d.name}-p`, person: d.name, bucket: "productive", hours: d.productive, color: P, firstOfPerson: true });
+    rows.push({ key: `${d.name}-b`, person: d.name, bucket: "unproductive", hours: d.brainrot, color: B, firstOfPerson: false });
+    rows.push({ key: `${d.name}-o`, person: d.name, bucket: "other", hours: d.other, color: O, firstOfPerson: false });
+  }
+  const max = Math.max(1, ...rows.map((r) => r.hours));
+
   return (
-    <div className="card p-2" style={{ height: 288 }}>
-      <ResponsiveContainer>
-        <BarChart data={data} margin={{ top: 6, right: 6, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-          <YAxis tick={{ fontSize: 10 }} unit="h" />
-          <Tooltip formatter={(v: number) => `${v}h`} />
-          <Legend wrapperStyle={{ fontSize: 10 }} />
-          <Bar dataKey="productive" fill={P} radius={[3, 3, 0, 0]} />
-          <Bar dataKey="brainrot" fill={B} name="unproductive" radius={[3, 3, 0, 0]} />
-          <Bar dataKey="other" name="other" radius={[3, 3, 0, 0]}>
-            {data.map((d) => (
-              <Cell key={d.name} fill={O} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="card p-3" style={{ maxWidth: `${maxWidth}px` }}>
+      <div className="mb-2 flex items-center gap-3 text-[10px] text-muted">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: P }} />productive</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: B }} />unproductive</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: O }} />other</span>
+        <span className="ml-auto text-faint">0 – {Math.ceil(max)}h</span>
+      </div>
+      <div className="space-y-1">
+        {rows.map((r) => {
+          const pct = Math.max(1, (r.hours / max) * 100);
+          return (
+            <div key={r.key} className="grid grid-cols-[56px_1fr_44px] items-center gap-2 text-[11px]">
+              <span className={`truncate ${r.firstOfPerson ? "font-semibold text-ink" : "text-faint"}`} title={r.person}>
+                {r.firstOfPerson ? r.person : ""}
+              </span>
+              <div className="relative h-3">
+                <div className="absolute inset-y-1/2 left-0 right-0 -translate-y-1/2 border-t border-dashed border-border/60" />
+                <div
+                  className="absolute inset-y-1/2 left-0 -translate-y-1/2 rounded-full"
+                  style={{ width: `${pct}%`, height: 2, background: r.color, opacity: r.hours > 0 ? 1 : 0.2 }}
+                />
+                <div
+                  className="absolute -translate-y-1/2 -translate-x-1/2 rounded-full ring-2 ring-surface"
+                  style={{
+                    top: "50%",
+                    left: `${pct}%`,
+                    width: 8,
+                    height: 8,
+                    background: r.color,
+                    opacity: r.hours > 0 ? 1 : 0.3,
+                  }}
+                />
+              </div>
+              <span className="tabular-nums text-right text-faint">{r.hours}h</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
