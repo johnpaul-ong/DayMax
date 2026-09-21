@@ -35,6 +35,27 @@ export default function TodayPage() {
 
   const [from, setFrom] = useState<number | null>(null);
   const [until, setUntil] = useState<number | null>(null);
+
+  // "You are here" marker on the clock. Only meaningful when the
+  // shown date IS today -- looking at yesterday or last Tuesday
+  // shouldn't get a live tick. Recomputes every minute so the marker
+  // walks across the day as time passes without a page reload.
+  const [nowSlot, setNowSlot] = useState<number | null>(() => {
+    const n = new Date();
+    return date === localToday(n) ? n.getHours() * 4 + Math.floor(n.getMinutes() / 15) : null;
+  });
+  useEffect(() => {
+    const tick = () => {
+      const n = new Date();
+      setNowSlot(date === localToday(n) ? n.getHours() * 4 + Math.floor(n.getMinutes() / 15) : null);
+    };
+    tick();
+    // 30s tick is plenty -- the slot only changes every 15 min and
+    // half-min tick means the halo is never more than a slot off.
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, [date]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
@@ -300,6 +321,7 @@ export default function TodayPage() {
           slots={clockSlots}
           activeCategory={cat}
           zoomable
+          nowSlot={nowSlot}
           onSelect={(a, b) => {
             // Drag SELECTS. The existing Fill/Clear buttons below commit.
             // The old handler filled on release, so an over-drag painted

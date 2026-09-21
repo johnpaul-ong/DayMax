@@ -159,6 +159,7 @@ export default function DayClock({
   activeCategory,
   mode = "rings",
   zoomable = false,
+  nowSlot = null,
 }: {
   slots: Map<number, ClockSlot>;
   mode?: ClockMode;
@@ -180,6 +181,14 @@ export default function DayClock({
    * scrollable at the larger sizes.
    */
   zoomable?: boolean;
+  /**
+   * A slot index (0..95) to mark as "now". Renders a pulsing halo on
+   * that wedge and a small ▶ tick outside the rim pointing at it, so
+   * "the day is up to here" is visible even when the wedge itself is
+   * unfilled. The caller decides when to pass it -- /today does when
+   * the shown date is actually today; aggregate views leave it null.
+   */
+  nowSlot?: number | null;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -660,6 +669,53 @@ export default function DayClock({
               </text>
             );
           })}
+
+        {/* "Now" indicator. A pulsing accent halo on the current
+            wedge plus a small triangular tick outside the rim
+            pointing at it. Drawn in rings mode only -- spiral mode
+            is niche and doesn't need it. */}
+        {mode === "rings" && nowSlot != null && nowSlot >= 0 && nowSlot < SLOTS_PER_DAY && (() => {
+          const g = geom(nowSlot);
+          // outer rim tick: a small triangle just OUTSIDE the ring the
+          // current slot sits on, at the wedge's mid-angle
+          const midA = (g.a0 + g.a1) / 2;
+          const tickR = g.ring.r1 + 6;
+          const [tx, ty] = polar(tickR, midA);
+          const [lx, ly] = polar(tickR + 10, midA - 3);
+          const [rx, ry] = polar(tickR + 10, midA + 3);
+          return (
+            <g pointerEvents="none">
+              {/* wedge halo, thick + slightly outside the wedge so a
+                  filled slot still shows its own colour through the
+                  middle. Two strokes: solid ring under a pulsing
+                  outer stroke for visibility on any background. */}
+              <path
+                d={wedge(g.ring.r0 - 1.5, g.ring.r1 + 1.5, g.a0 - 0.2, g.a1 + 0.2)}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={2.5}
+                opacity={0.95}
+              />
+              <path
+                d={wedge(g.ring.r0 - 1.5, g.ring.r1 + 1.5, g.a0 - 0.2, g.a1 + 0.2)}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={5}
+                opacity={0.35}
+                style={{ animation: "daymax-clock-now-pulse 1.8s ease-in-out infinite" }}
+              />
+              {/* pointer tick just outside the rim */}
+              <polygon
+                points={`${tx},${ty} ${lx},${ly} ${rx},${ry}`}
+                fill="var(--accent)"
+                stroke="var(--surface)"
+                strokeWidth={0.6}
+              />
+              {/* keyframes; inlined so callers don't need a global stylesheet touch */}
+              <style>{`@keyframes daymax-clock-now-pulse{0%,100%{opacity:.15;stroke-width:5}50%{opacity:.55;stroke-width:9}}`}</style>
+            </g>
+          );
+        })()}
 
         {/* centre readout */}
         <circle cx={C} cy={C} r={INNER.r0 - 6} fill="var(--surface)" />
