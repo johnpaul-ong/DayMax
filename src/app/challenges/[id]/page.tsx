@@ -224,9 +224,12 @@ function YourSpendingLollipop({
     { label: "Non-essential", value: me.nonEssential ?? 0, color: "#dc2626", hint: "What you spent on discretionary things" },
   ];
   const max = Math.max(1, ...rows.map((r) => r.value));
+  // Fixed height so it matches the pie + list cards next to it in
+  // the money-challenge grid (all 320 px). Content is centred and
+  // spaced out to fill.
   return (
-    <div className="card p-4">
-      <div className="space-y-3">
+    <div className="card flex flex-col justify-between p-4" style={{ height: 320 }}>
+      <div className="space-y-4">
         {rows.map((r) => {
           const pct = Math.max(2, Math.round((r.value / max) * 100));
           return (
@@ -788,14 +791,24 @@ export default function ChallengePage() {
                           well above the median. Worth checking for a doubled-up entry.
                         </p>
                       )}
-                      {/* Pie + list side-by-side ALWAYS -- was solo-only-hidden
-                          before, but a pie of one person's essentials still
-                          answers 'where does my fixed cost live' cleanly. */}
+                      {/* Pie + list side-by-side, matching heights.
+                          Pie labels dropped (they were overflowing
+                          the card) -- the list on the right names
+                          each slice, and hovering still shows the
+                          amount tooltip. Both cards hit h-72 so the
+                          section reads as one balanced block. */}
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="h-56 card p-2">
+                        <div className="card p-2" style={{ height: 320 }}>
                           <ResponsiveContainer>
-                            <PieChart>
-                              <Pie data={ess.slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
+                            <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                              <Pie
+                                data={ess.slice(0, 8)}
+                                dataKey="total"
+                                nameKey="name"
+                                outerRadius="85%"
+                                stroke="var(--surface)"
+                                strokeWidth={1}
+                              >
                                 {ess.slice(0, 8).map((_, i) => (
                                   <Cell key={i} fill={SERIES[i % SERIES.length]} />
                                 ))}
@@ -804,9 +817,10 @@ export default function ChallengePage() {
                             </PieChart>
                           </ResponsiveContainer>
                         </div>
-                        <div className="card divide-y">
-                          {ess.slice(0, 8).map((c) => (
-                            <div key={c.name} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
+                        <div className="card divide-y overflow-y-auto" style={{ height: 320 }}>
+                          {ess.slice(0, 8).map((c, i) => (
+                            <div key={c.name} className="flex items-baseline gap-2 px-3 py-2 text-sm">
+                              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: SERIES[i % SERIES.length] }} />
                               <span className="min-w-0 flex-1 truncate">
                                 {c.name}
                                 {flag(c) && (
@@ -839,11 +853,18 @@ export default function ChallengePage() {
                         ? <>Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.</>
                         : <>{money(group.ne, currency)} in discretionary spending this window.</>}
                     </p>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="h-60 card p-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="card p-2" style={{ height: 320 }}>
                         <ResponsiveContainer>
-                          <PieChart>
-                            <Pie data={cats.filter((c) => !c.essential).slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
+                          <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                            <Pie
+                              data={cats.filter((c) => !c.essential).slice(0, 8)}
+                              dataKey="total"
+                              nameKey="name"
+                              outerRadius="85%"
+                              stroke="var(--surface)"
+                              strokeWidth={1}
+                            >
                               {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
                                 <Cell key={i} fill={SERIES[i % SERIES.length]} />
                               ))}
@@ -852,9 +873,10 @@ export default function ChallengePage() {
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
-                      <div className="card divide-y">
-                        {cats.filter((c) => !c.essential).slice(0, 8).map((c) => (
-                          <div key={c.name} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
+                      <div className="card divide-y overflow-y-auto" style={{ height: 320 }}>
+                        {cats.filter((c) => !c.essential).slice(0, 8).map((c, i) => (
+                          <div key={c.name} className="flex items-baseline gap-2 px-3 py-2 text-sm">
+                            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: SERIES[i % SERIES.length] }} />
                             <span className="min-w-0 flex-1 truncate">{c.name}</span>
                             <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
                           </div>
