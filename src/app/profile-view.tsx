@@ -625,13 +625,25 @@ function ProfileMoneySummary() {
         const m = await import("@/lib/money");
         const today = localToday();
         // Since the last income row, so the summary matches the pay
-        // period you actually live in. Fall back to the calendar month
-        // when there's no income logged yet (otherwise the range would
-        // be null and the fetch would blow up).
+        // period you actually live in. Fall back to the last 90 days
+        // when there's no income yet -- was falling back to just the
+        // current calendar month, which showed 'nothing logged' on
+        // every day of the month before you got paid, even though a
+        // year of spending sat in the DB. 90 days is wide enough to
+        // catch even monthly bills without pulling in ancient
+        // history.
         const last = await m.lastPaycheckDate().catch(() => null);
-        const from = last ?? `${today.slice(0, 7)}-01`;
         const to = today;
-        setRangeLabel(last ? `since your last paycheck (${last})` : "this month");
+        let from: string;
+        if (last) {
+          from = last;
+          setRangeLabel(`since your last paycheck (${last})`);
+        } else {
+          const d = new Date(today + "T00:00:00");
+          d.setDate(d.getDate() - 90);
+          from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          setRangeLabel("last 90 days");
+        }
         const [s, cats] = await Promise.all([m.fetchSummary(from, to), m.fetchByCategory(from, to)]);
         setSum(s);
         setByCat(cats);
@@ -640,9 +652,11 @@ function ProfileMoneySummary() {
     })();
   }, []);
   if (!loaded) return null;
-  // Nothing logged in this window AND no income -- render a tiny CTA
-  // so the section isn't a dead space, rather than nothing at all.
-  if (!sum || (sum.total === 0 && sum.income === 0)) {
+  // Only render 'Nothing logged' when truly nothing was returned --
+  // sum is null (RPC threw). If sum exists with total/income both
+  // at 0, still render the ring so 0 is visibly 0 rather than the
+  // section vanishing.
+  if (!sum) {
     return (
       <section>
         <h2 className="mb-2 font-semibold">Money</h2>
