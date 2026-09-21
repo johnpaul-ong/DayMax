@@ -288,12 +288,24 @@ function YearStripHook() {
       `}</style>
       <div className="mx-auto mt-4 flex h-14 max-w-[340px] gap-[2px] overflow-hidden rounded-md" aria-hidden="true">
         {Array.from({ length: 40 }, (_, i) => {
+          // More varied per-column split -- previously every column
+          // was 45/30/25 which read as a fake pattern. Now 2-4
+          // stripes per column with pseudo-random heights that sum
+          // to 100. Deterministic (seeded by index) so SSR /
+          // hydration match, but every column looks different.
           const seed = (i * 7 + 3) % 100;
-          const parts = [
-            { c: cats[(seed * 3) % cats.length], h: 45 },
-            { c: cats[(seed * 5) % cats.length], h: 30 },
-            { c: cats[(seed * 11) % cats.length], h: 25 },
-          ];
+          const stripeCount = 2 + ((seed * 3) % 3); // 2, 3, or 4
+          const rawHeights = Array.from({ length: stripeCount }, (_, j) => {
+            // pseudo-random 15..55 range
+            const r = ((seed * (j * 13 + 17) + 41) % 40) + 15;
+            return r;
+          });
+          const total = rawHeights.reduce((s, v) => s + v, 0);
+          const heights = rawHeights.map((h) => Math.round((h / total) * 100));
+          const parts = heights.map((h, j) => ({
+            c: cats[(seed * (j * 7 + 3) + j) % cats.length],
+            h,
+          }));
           // Stagger the hue-cycle by column so the wave travels
           // across the strip. 40 cols × 90 ms = one full pass every
           // ~3.6 s at 8 s cycle length.
