@@ -111,11 +111,8 @@ export function AverageDayClock({
 
   return (
     <section>
-      <h2 className="mb-1 font-semibold">{title ?? "The group's average day"}</h2>
-      <p className="mb-2 text-sm text-muted">
-        {subtitle ??
-          "Every day every member has logged in the challenge window, collapsed to one dial. Whichever category shows up most at a given slot is what it wears."}
-      </p>
+      <h2 className="mb-2 font-semibold">{title ?? "The group's average day"}</h2>
+      {subtitle && <p className="mb-2 text-sm text-muted">{subtitle}</p>}
       {!loaded ? (
         <p className="text-sm text-faint">Loading…</p>
       ) : !hasAny ? (

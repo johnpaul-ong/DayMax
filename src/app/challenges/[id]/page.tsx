@@ -641,10 +641,7 @@ export default function ChallengePage() {
                 </div>
 
                 <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  <h2 className="mb-1 font-semibold">Everyone&apos;s day, side by side</h2>
-                  <p className="mb-2 text-sm text-muted">
-                    Each column is one person&apos;s 24 hours during the challenge, top to bottom. Neighbours show who&apos;s a morning person and who lives at night.
-                  </p>
+                  <h2 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h2>
                   <MembersDayColumns
                     members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
                     from={challenge.startsOn}
