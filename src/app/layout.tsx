@@ -35,8 +35,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   // matches --page in both themes so the browser chrome doesn't clash
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf9f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#111318" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f8fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#05070d" },
   ],
 };
 

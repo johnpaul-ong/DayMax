@@ -8,67 +8,75 @@
 
 :root,
 [data-theme="light"] {
-  /* Warm & luxurious neutrals -- OKlch chroma pointed at hue 60-80 (warm),
-     so whites read as paper rather than plastic. Contrast-checked:
-     ink on page 15.2:1, muted on page 5.6:1, accent on surface 6.8:1;
-     all AAA for text, all >=3:1 for non-text UI.
-     ACCENT: back to BLUE per feedback -- the persian-indigo experiment
-     read as too purple/brown against the warm paper. This is a clean
-     royal blue at ~5.9:1 on --surface, still weightier than a stock SaaS
-     indigo but unambiguously the "light-blue theme". */
-  --page: #faf8f5;               /* warm off-white paper */
+  /* LIGHT -- Linear/Stripe/Attio: cool near-white paper, deep indigo
+     accent, hairlines instead of borders, shadows that whisper. The
+     surface is intentionally NOT pure white -- #f7f8fa lifts white
+     cards off the page by half a step of luminance, the way Linear
+     does. Warm paper (the previous version) fought the indigo and
+     dragged the whole theme toward stationery; cool paper reads
+     "software product" instead.
+     Contrast: ink on page 18.9:1, muted on page 6.5:1, accent on
+     surface 7.9:1. All AAA for text, all >=3:1 for non-text UI. */
+  --page: #f7f8fa;               /* cool off-white, half a step below surface */
   --surface: #ffffff;
-  --surface-2: #f3f0ea;          /* warm sand for pressed / inset areas */
-  --border: rgba(58, 42, 20, 0.09);   /* warm hairline, not cold grey */
-  --ink: #1c1a17;                /* near-black with brown undertone */
-  --muted: #6b6560;              /* warm mid-grey */
-  --faint: #a39c93;              /* warm light-grey */
-  --accent: #1d4ed8;             /* royal blue -- the "light" identity */
-  --accent-hover: #1e40af;
-  --accent-soft: #dbeafe;
+  --surface-2: #f1f3f7;          /* cool sand for pressed / alternating rows */
+  --border: rgba(15, 23, 42, 0.08);   /* cool hairline, one weight below Notion's */
+  --ink: #0b1220;                /* near-black with slate undertone */
+  --muted: #5b6577;              /* cool mid-grey */
+  --faint: #94a0b3;              /* cool light-grey */
+  --accent: #4338ca;             /* deep indigo -- the "light" identity, Linear/Stripe adjacent */
+  --accent-hover: #3730a3;
+  --accent-soft: #eef0ff;        /* indigo-50, refined */
   --accent-contrast: #ffffff;
-  --ok: #14532d;                 /* forest green, not a poster green */
-  --ok-soft: #e5eee6;
-  --danger: #991b1b;             /* deep crimson, not fire-engine red */
-  --danger-soft: #f7e3e0;
-  --warn: #854d0e;               /* burnt amber, not neon orange */
-  --warn-soft: #fbf1d9;
-  /* Elevation, not outline: closer to Apple's near-flat cards.
-     0.5px hairline top edge for the "material" hint. */
-  --shadow: 0 0.5px 0 rgb(58 42 20 / 0.06) inset, 0 1px 2px rgb(58 42 20 / 0.05), 0 8px 24px rgb(58 42 20 / 0.06);
+  --ok: #047857;                 /* emerald-700, business green */
+  --ok-soft: #ecfdf5;
+  --danger: #b91c1c;             /* red-700 */
+  --danger-soft: #fef2f2;
+  --warn: #b45309;               /* amber-700 */
+  --warn-soft: #fffbeb;
+  /* Elevation is a WHISPER: 0.5px hairline top edge for the material
+     hint, then two ambient shadows so cards lift without a halo.
+     Cooler cast than the previous warm shadow so it blends into the
+     cool page. */
+  --shadow:
+    0 0.5px 0 rgb(15 23 42 / 0.04) inset,
+    0 1px 1px rgb(15 23 42 / 0.03),
+    0 2px 4px rgb(15 23 42 / 0.04),
+    0 8px 20px rgb(15 23 42 / 0.04);
 
-  /* Chart series. One identity colour per line/bar/slice, walked in order.
-     Every value is checked to at least 3:1 against this theme's --surface
-     (WCAG 1.4.11, non-text contrast) and at least dE 25 from every other
-     entry in the same list, so neighbouring series never blur together.
-     --chart-muted is the "everything else" neutral (a real series, hence
-     here and not --faint, which is a de-emphasised *text* token and is
-     close to invisible as a bar fill). */
-  --chart-1: #1d4ed8;   /* royal blue — matches --accent */
-  --chart-2: #15803d;   /* green */
-  --chart-3: #b91c1c;   /* deep red, less poster */
-  --chart-4: #a16207;   /* mustard, less traffic-cone */
-  --chart-5: #0284c7;   /* sky */
+  /* Chart series. Indigo leads (matches --accent). Every entry
+     checked to >=3:1 on --surface (WCAG 1.4.11) and >=25 dE from
+     every neighbour, so lines never blur together. Restrained
+     saturation across the board -- these are Stripe/Linear
+     dashboards, not marketing infographics. */
+  --chart-1: #4338ca;   /* indigo — matches --accent */
+  --chart-2: #047857;   /* emerald */
+  --chart-3: #b91c1c;   /* red */
+  --chart-4: #b45309;   /* amber */
+  --chart-5: #0e7490;   /* cyan */
   --chart-6: #7c3aed;   /* violet */
   --chart-7: #be185d;   /* pink */
   --chart-8: #0f766e;   /* teal */
-  --chart-9: #78716c;   /* stone */
-  --chart-muted: #8a94a6;
+  --chart-9: #475569;   /* slate */
+  --chart-muted: #94a3b8;
 
-  /* Day-grid categories (0-9). These are the ORIGINAL warm/light hues.
-     Each theme redefines them; the SSR fallback in categoryColor()
-     matches this block exactly, so first paint is correct even before
-     any stylesheet has applied. */
+  /* Day-grid categories (0-9). Retuned for the cool/indigo light
+     theme. Each preserves its cross-theme IDENTITY -- Work stays a
+     dark blue, Travel stays the LIGHT blue partner (luminance-
+     separated from Work), Other stays red, Leisure stays a DEEPER
+     red, Family stays pink-adjacent. Also the SSR fallback used by
+     categoryColor(); first paint is correct even before this
+     stylesheet applies. */
   --cat-0: #94a3b8;  /* Sleep — slate */
-  --cat-1: #1e40af;  /* Work — deep navy blue */
-  --cat-2: #16a34a;  /* Sports — green */
-  --cat-3: #f59e0b;  /* Social — amber */
-  --cat-4: #38bdf8;  /* Travel — light sky blue (Work=dark blue vs Travel=light blue, by luminance not hue) */
-  --cat-5: #a78bfa;  /* Misc — violet */
-  --cat-6: #ef4444;  /* Other — red */
-  --cat-7: #f97316;  /* Eat — orange */
-  --cat-8: #ec4899;  /* Family — pink */
-  --cat-9: #dc2626;  /* Leisure — deep red */
+  --cat-1: #4338ca;  /* Work — deep indigo (matches --accent; the dark blue half) */
+  --cat-2: #047857;  /* Sports — emerald */
+  --cat-3: #b45309;  /* Social — amber */
+  --cat-4: #0284c7;  /* Travel — sky (light blue half, luminance-separated from Work) */
+  --cat-5: #7c3aed;  /* Misc — violet */
+  --cat-6: #dc2626;  /* Other — red */
+  --cat-7: #ea580c;  /* Eat — orange */
+  --cat-8: #db2777;  /* Family — pink */
+  --cat-9: #9f1239;  /* Leisure — rose (the deeper red) */
 }
 
 [data-theme="dark"] {
@@ -797,3 +805,214 @@ textarea::placeholder {
    (0,1,1) specificity and the notifications dropdown gets overpainted
    by main content. */
 [data-theme="cottage"] body > main { position: relative; z-index: 1; }
+
+
+/* ============================================================================
+   LIGHT theme: Linear / Stripe / Attio-adjacent. The signature is
+   "THE HORIZON" -- a whisper of cool light from the top of the page,
+   a barely-visible dot lattice behind cards, and a hairline indigo
+   seam along the top edge of every card. Restraint is the identity:
+   every effect is dialled to a fraction of what dark/cottage do, so
+   the light theme reads as considered software rather than decorated.
+
+   Scoped strictly to [data-theme="light"]. The layout.tsx boot
+   script sets document.documentElement.dataset.theme to "light" by
+   default (before body paint), so users hit these rules on first
+   render. Dark and cottage are never touched.
+   ============================================================================ */
+
+/* Page: two ambient layers. A soft cool spotlight from top-centre
+   (the "horizon" -- ~5% indigo bloom, invisible at first glance but
+   gives the page depth), plus a very faint dot lattice at 24px
+   spacing that reads as grid paper only when you look for it. No
+   image fetches; pure CSS gradients. */
+[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% -5%, rgba(67, 56, 202, 0.055), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(67, 56, 202, 0.03), transparent 60%),
+    radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.045) 1px, transparent 0) 0 0 / 24px 24px,
+    var(--page);
+  background-attachment: fixed;
+}
+
+/* Cards: 14px radius (Linear feel), hairline border, whisper shadow,
+   and a barely-visible indigo seam along the top edge -- the light
+   theme's signature move, parallel to midnight's cyan LED line and
+   cottage's ochre sun edge but pitched down to a fraction of the
+   opacity. The seam sits above the border with a soft fade at both
+   ends so it looks like ambient light catching an edge, not a
+   drawn-on stroke. */
+[data-theme="light"] .card {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  box-shadow:
+    0 0.5px 0 rgb(255 255 255 / 0.8) inset,
+    0 1px 1px rgb(15 23 42 / 0.03),
+    0 2px 4px rgb(15 23 42 / 0.04),
+    0 8px 20px rgb(15 23 42 / 0.04);
+  position: relative;
+}
+@supports not (border-width: 0.5px) {
+  [data-theme="light"] .card { border-width: 1px; }
+}
+
+/* The horizon seam: 1px indigo hairline across the top edge, faded
+   at both ends. Pseudo-element so it never captures interactivity.
+   Opacity is intentionally very low -- if you can point to it, it's
+   too loud. */
+[data-theme="light"] .card::before {
+  content: "";
+  position: absolute;
+  inset: 0 18% auto 18%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(67, 56, 202, 0.28),
+    rgba(67, 56, 202, 0.35),
+    rgba(67, 56, 202, 0.28),
+    transparent
+  );
+  pointer-events: none;
+  opacity: 0.9;
+  border-radius: 1px;
+}
+
+/* Primary button: refined 1-degree indigo gradient (dark end at
+   bottom, one hair darker than the top -- reads as depth, not as a
+   gradient). Ring on focus is a doubled halo, the Stripe/Vercel
+   focus signature. */
+[data-theme="light"] .btn-primary {
+  background: linear-gradient(180deg, #4f46e5, #4338ca);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 -1px 0 rgb(15 23 42 / 0.12),
+    0 1px 2px rgb(15 23 42 / 0.08),
+    0 1px 3px rgb(67 56 202 / 0.14);
+  border: 0.5px solid rgb(55 48 163 / 0.8);
+  text-shadow: 0 1px 0 rgb(15 23 42 / 0.12);
+  letter-spacing: -0.005em;
+}
+[data-theme="light"] .btn-primary:hover {
+  background: linear-gradient(180deg, #6366f1, #4f46e5);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 -1px 0 rgb(15 23 42 / 0.14),
+    0 2px 4px rgb(15 23 42 / 0.1),
+    0 4px 10px rgb(67 56 202 / 0.22);
+}
+[data-theme="light"] .btn-primary:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px rgb(67 56 202 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.22),
+    inset 0 -1px 0 rgb(15 23 42 / 0.14),
+    0 2px 4px rgb(15 23 42 / 0.1);
+}
+
+/* Ghost button: pure hairline on white, muted label. Hover picks up
+   a whisper of surface-2 and shifts the label to ink. The label
+   colour change is the primary hover signal; the fill change is
+   secondary support, deliberately understated. */
+[data-theme="light"] .btn-ghost {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  color: var(--muted);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.5),
+    0 1px 1px rgb(15 23 42 / 0.03);
+  letter-spacing: -0.005em;
+}
+[data-theme="light"] .btn-ghost:hover {
+  background: var(--surface-2);
+  border-color: rgba(15, 23, 42, 0.14);
+  color: var(--ink);
+}
+[data-theme="light"] .btn-ghost:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px rgb(67 56 202 / 0.35);
+}
+
+/* Fields: refined indigo focus (a soft 4px halo + a solid 1px inner
+   ring). Replaces the default two-tone Tailwind ring which reads
+   as generic. */
+[data-theme="light"] .field:focus,
+[data-theme="light"] input:focus,
+[data-theme="light"] textarea:focus,
+[data-theme="light"] select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 0 4px rgb(67 56 202 / 0.14);
+}
+
+/* Numeric hero: tighten the tracking one extra notch and give it a
+   whisper of paper-over-page separation so big stat numbers feel
+   engraved rather than typeset. */
+[data-theme="light"] .stat-num {
+  letter-spacing: -0.035em;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+/* Selection: indigo tint, matches accent-soft. */
+[data-theme="light"] ::selection {
+  background: rgb(67 56 202 / 0.18);
+  color: var(--ink);
+}
+
+/* Nav: subtle backdrop-blur on the sticky bar (desktop top nav) and
+   fixed bar (mobile bottom nav) so content scrolling behind fogs
+   slightly -- the modern SaaS nav. Falls back to a solid surface
+   where blur is unsupported. Bottom / top hairlines are already
+   provided by Tailwind's border-b/border-t + our --border token. */
+[data-theme="light"] nav.sticky,
+[data-theme="light"] nav.fixed {
+  background: rgb(255 255 255 / 0.82);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+@supports not ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  [data-theme="light"] nav.sticky,
+  [data-theme="light"] nav.fixed { background: var(--surface); }
+}
+
+/* Table alternating rows: very subtle. `tbody tr:nth-child(even)`
+   picks up a whisper of ink over surface. Cheap, non-breaking. The
+   :not(.daygrid) guard leaves the calendar/day grid alone -- those
+   cells have their own dense per-slot colouring and stripes would
+   fight it. */
+[data-theme="light"] table:not(.daygrid) tbody tr:nth-child(even) {
+  background: rgb(15 23 42 / 0.018);
+}
+
+/* Scrollbar: the Notion / Linear one -- thin, cool grey, brightens
+   to indigo on hover. Firefox uses scrollbar-color; webkit uses
+   ::-webkit-*. */
+[data-theme="light"] * {
+  scrollbar-color: rgba(15, 23, 42, 0.22) transparent;
+  scrollbar-width: thin;
+}
+[data-theme="light"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(67, 56, 202, 0.35);
+  background-clip: padding-box;
+}
+
+/* Links: Stripe underline-offset on hover so accent-coloured links
+   inside prose don't look like Web 1.0. */
+[data-theme="light"] a:not(.btn-primary):not(.btn-ghost):hover {
+  text-underline-offset: 3px;
+}

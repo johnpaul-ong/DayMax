@@ -29,15 +29,15 @@ export interface Category {
  */
 export const CATEGORIES: Category[] = [
   { code: 0, name: "Sleep", aliases: ["sleep"], defaultBucket: "other", color: "#94a3b8" },
-  { code: 1, name: "Work/School", aliases: ["work", "school", "work/school", "study", "studying"], defaultBucket: "productive", color: "#2563eb" },
-  { code: 2, name: "Sports", aliases: ["gym / judo", "gym", "judo"], defaultBucket: "productive", color: "#16a34a" },
-  { code: 3, name: "Social", aliases: ["social"], defaultBucket: "other", color: "#f59e0b" },
-  { code: 4, name: "Travel", aliases: ["travel"], defaultBucket: "other", color: "#0ea5e9" },
-  { code: 5, name: "Misc / Getting Ready", aliases: ["misc", "getting ready", "misc / getting ready"], defaultBucket: "other", color: "#a78bfa" },
-  { code: 6, name: "Other", aliases: ["fucking around / other", "fucking around", "other"], defaultBucket: "brainrot", color: "#ef4444" },
-  { code: 7, name: "Eat", aliases: ["eat"], defaultBucket: "other", color: "#f97316" },
-  { code: 8, name: "Family", aliases: ["family"], defaultBucket: "other", color: "#ec4899" },
-  { code: 9, name: "Leisure", aliases: ["leisure"], defaultBucket: "brainrot", color: "#dc2626" },
+  { code: 1, name: "Work/School", aliases: ["work", "school", "work/school", "study", "studying"], defaultBucket: "productive", color: "#4338ca" },
+  { code: 2, name: "Sports", aliases: ["gym / judo", "gym", "judo"], defaultBucket: "productive", color: "#047857" },
+  { code: 3, name: "Social", aliases: ["social"], defaultBucket: "other", color: "#b45309" },
+  { code: 4, name: "Travel", aliases: ["travel"], defaultBucket: "other", color: "#0284c7" },
+  { code: 5, name: "Misc / Getting Ready", aliases: ["misc", "getting ready", "misc / getting ready"], defaultBucket: "other", color: "#7c3aed" },
+  { code: 6, name: "Other", aliases: ["fucking around / other", "fucking around", "other"], defaultBucket: "brainrot", color: "#dc2626" },
+  { code: 7, name: "Eat", aliases: ["eat"], defaultBucket: "other", color: "#ea580c" },
+  { code: 8, name: "Family", aliases: ["family"], defaultBucket: "other", color: "#db2777" },
+  { code: 9, name: "Leisure", aliases: ["leisure"], defaultBucket: "brainrot", color: "#9f1239" },
 ];
 
 export const CATEGORY_BY_CODE = new Map(CATEGORIES.map((c) => [c.code, c]));
