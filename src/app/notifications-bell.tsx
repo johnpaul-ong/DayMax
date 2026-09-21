@@ -153,47 +153,52 @@ export default function NotificationsBell() {
       </button>
 
       {open && (
+        /* Matches the compact-popover treatment used elsewhere
+           (Group/People pickers): plain border+bg-surface panel
+           with a soft shadow, anchored to the button's bottom via
+           top-full + a small mt, rather than the heavy 'card'
+           chrome that was reading as a modal. */
         <div
-          className="card absolute right-0 top-11 z-50 w-[min(360px,calc(100vw-1rem))] overflow-hidden p-0"
+          className="absolute right-0 top-full z-50 mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-md"
           role="dialog"
           aria-label="Notifications"
         >
-          <div className="flex items-center gap-2 border-b px-3 py-2">
-            <h3 className="text-sm font-semibold">Notifications</h3>
-            <span className="text-xs text-faint">{unread > 0 ? `${unread} unread` : "all caught up"}</span>
+          <div className="sticky top-0 flex items-center gap-2 border-b bg-surface px-3 py-1.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-faint">Notifications</h3>
+            <span className="text-[10px] text-faint">{unread > 0 ? `${unread} unread` : "all caught up"}</span>
             {unread > 0 && (
               <button
                 onClick={() => void markAllRead().then(refresh)}
-                className="ml-auto text-xs font-medium text-accent hover:underline"
+                className="ml-auto text-[10px] font-medium text-accent hover:underline"
               >
                 Mark all read
               </button>
             )}
           </div>
 
-          <div className="max-h-[70vh] overflow-y-auto">
+          <div className="max-h-[60vh] overflow-y-auto">
             {loading && items.length === 0 && (
-              <p className="px-3 py-6 text-center text-xs text-faint">Loading…</p>
+              <p className="px-3 py-4 text-center text-xs text-faint">Loading…</p>
             )}
             {!loading && items.length === 0 && (
-              <p className="px-3 py-8 text-center text-sm text-muted">Nothing here yet.</p>
+              <p className="px-3 py-6 text-center text-sm text-muted">Nothing here yet.</p>
             )}
-            <ul className="divide-y">
+            <ul>
               {items.map((n) => {
                 const inner = (
                   <div
                     onClick={() => { if (!n.readAt) void markRead(n.id).then(refresh); setOpen(false); }}
-                    className={`flex items-start gap-2.5 px-3 py-2.5 text-sm transition ${
-                      n.readAt ? "opacity-70" : "bg-accent-soft/40"
+                    className={`flex items-start gap-2 px-3 py-2 text-sm transition ${
+                      n.readAt ? "opacity-70" : "bg-accent-soft/30"
                     } hover:bg-surface-2`}
                   >
-                    <span aria-hidden="true" className="mt-0.5 text-base leading-none">{kindEmoji(n.kind)}</span>
+                    <span aria-hidden="true" className="mt-0.5 text-sm leading-none">{kindEmoji(n.kind)}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium">{n.title}</p>
-                      {n.body && <p className="truncate text-xs text-muted">{n.body}</p>}
+                      <p className="truncate text-xs font-medium">{n.title}</p>
+                      {n.body && <p className="truncate text-[11px] text-muted">{n.body}</p>}
                       <p className="mt-0.5 text-[10px] text-faint">{relativeTime(n.createdAt)} ago</p>
                     </div>
-                    {!n.readAt && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-label="unread" />}
+                    {!n.readAt && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="unread" />}
                   </div>
                 );
                 return (
