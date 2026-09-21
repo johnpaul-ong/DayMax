@@ -838,6 +838,81 @@ export default function ChallengePage() {
                   </div>
                 )}
 
+                {/* Essentials breakdown. Budget Baddies ranks on NON-
+                    essential spending, so the essentials aren't part
+                    of the score -- but they're where most of the
+                    money actually goes, and the user wanted them
+                    charted alongside so 'where does the group's fixed
+                    cost live' is answerable. Also flags categories
+                    where per-person spend is 2x the median as a
+                    heuristic 'possible duplicate' hint (e.g. Car
+                    logged twice as a $200 fill-up AND a $600
+                    service). */}
+                {isMoney && cats.some((c) => c.essential) && (() => {
+                  const ess = cats.filter((c) => c.essential);
+                  const perPerson = ess.map((c) => (c.people > 0 ? c.total / c.people : 0)).filter((v) => v > 0);
+                  const median = perPerson.length > 0
+                    ? [...perPerson].sort((a, b) => a - b)[Math.floor(perPerson.length / 2)]
+                    : 0;
+                  const flag = (c: ChallengeCategory) =>
+                    c.people > 0 && median > 0 && c.total / c.people >= median * 2;
+                  const flagged = ess.filter(flag);
+                  return (
+                    <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                      <h2 className="mb-1 font-semibold">Essentials — where the fixed costs go</h2>
+                      <p className="mb-2 text-sm text-muted">
+                        {money(group.es, currency)} across the group. These don&apos;t count toward the ranking on this
+                        challenge — {noun.toLowerCase()} is what wins — but they&apos;re usually the bulk of anyone&apos;s spend.
+                      </p>
+                      {flagged.length > 0 && (
+                        <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+                          <b>Heads up:</b> per-person spend on <b>{flagged.map((c) => c.name).join(", ")}</b> is well
+                          above the median. Worth checking whether the same bill was logged twice — a doubled-up rent
+                          or utilities entry throws the whole essentials picture off.
+                        </p>
+                      )}
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="h-60 card p-2">
+                          <ResponsiveContainer>
+                            <PieChart>
+                              <Pie
+                                data={ess.slice(0, 8)}
+                                dataKey="total"
+                                nameKey="name"
+                                label={(p: any) => p.name}
+                              >
+                                {ess.slice(0, 8).map((_, i) => (
+                                  <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: number) => money(Number(v), currency)} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="card divide-y">
+                          {ess.slice(0, 7).map((c) => (
+                            <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <span className="min-w-0 flex-1 truncate">
+                                {c.name}
+                                {flag(c) && (
+                                  <span className="ml-1.5 rounded-full bg-warn-soft px-1.5 py-0.5 text-[9px] font-semibold text-warn">
+                                    2× median
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-xs text-faint">
+                                {c.people} {c.people === 1 ? "person" : "people"}
+                                {c.people > 0 && <> · {money(c.total / c.people, currency)}/head</>}
+                              </span>
+                              <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
                   <Guarded
                     title={isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}
@@ -894,12 +969,19 @@ export default function ChallengePage() {
           only, not the group chat). Runs on Phase 2 tables from
           migration 0041 (challenge_posts + comments + reactions +
           storage bucket). */}
+      {/* Feed is shared with life challenges: same ChallengeFeed
+          component, same props shape. Any money-vs-life visual
+          difference before this commit was because the me prop was
+          hardcoded to null -- own-post controls (delete, own tag)
+          didn't light up because the feed couldn't tell it was you.
+          Fixed by threading the current user id through from the
+          standings row. */}
       {challenge.isMember && (
         <ChallengeFeed
           challengeId={id}
           startsOn={challenge.startsOn}
           endsOn={challenge.endsOn}
-          me={null}
+          me={me?.userId ?? null}
           isMember={challenge.isMember}
         />
       )}
