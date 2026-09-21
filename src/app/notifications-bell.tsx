@@ -16,6 +16,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import {
   fetchNotifications,
@@ -55,7 +56,16 @@ export default function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  // drawerRef points at the trigger, panelRef at the floating panel
+  // inside the portal. Outside-click closure needs both so a click
+  // inside the panel (which lives outside the bell's DOM subtree
+  // once portalled) doesn't count as 'outside'.
   const drawerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // Client-rect anchor for the portalled panel. Recomputed on open,
+  // on window resize and on scroll so the panel tracks the bell.
+  const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null);
 
   // Whoever's signed in — the bell only mounts realtime for that person.
   useEffect(() => {
@@ -91,18 +101,41 @@ export default function NotificationsBell() {
     if (open) refresh();
   }, [open, refresh]);
 
-  // Close on outside click / Escape, when open.
+  // Close on outside click / Escape, when open. Panel is portalled
+  // so outside-click has to check both the trigger and the panel.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     const onClick = (e: MouseEvent) => {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (drawerRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t)) return;
+      setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onClick);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onClick);
+    };
+  }, [open]);
+
+  // Recompute the portal anchor whenever the panel opens, the
+  // viewport resizes, or the page scrolls. Fixed-position coords in
+  // viewport space -- keeps the panel pinned to the bell across
+  // sticky-nav re-flow and page scroll.
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setAnchor({ right: window.innerWidth - r.right, top: r.bottom + 4 });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
     };
   }, [open]);
 
@@ -116,6 +149,7 @@ export default function NotificationsBell() {
   return (
     <div className="relative shrink-0" ref={drawerRef}>
       <button
+        ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications (${unread} unread)`}
         // Fixed 32x32 button, matches nav-link sizing so opening the
@@ -152,14 +186,17 @@ export default function NotificationsBell() {
         )}
       </button>
 
-      {open && (
-        /* Matches the compact-popover treatment used elsewhere
-           (Group/People pickers): plain border+bg-surface panel
-           with a soft shadow, anchored to the button's bottom via
-           top-full + a small mt, rather than the heavy 'card'
-           chrome that was reading as a modal. */
+      {open && anchor && typeof document !== "undefined" && createPortal(
+        /* Portalled to <body> so the panel escapes the nav's
+           overflow-x-auto clipping (which was hiding the whole
+           thing behind page content). Fixed positioning tracks the
+           bell's client rect via the anchor state -- follows scroll
+           + resize. Same compact popover styling as the Group /
+           People pickers. */
         <div
-          className="absolute right-0 top-full z-50 mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-md"
+          ref={panelRef}
+          className="fixed z-[100] w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-lg"
+          style={{ top: anchor.top, right: anchor.right }}
           role="dialog"
           aria-label="Notifications"
         >
@@ -213,7 +250,8 @@ export default function NotificationsBell() {
               })}
             </ul>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
