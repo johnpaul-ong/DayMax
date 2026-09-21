@@ -78,6 +78,8 @@ import { ChartEmpty, emptyCause } from "../../empty-chart";
 import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
 import { AverageDayClock, MembersDayColumns, MembersHoursBars } from "./_life-views";
+import { CATEGORIES, categoryColor } from "@/lib/categories";
+import { defaultBuckets } from "@/lib/categories";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -264,6 +266,43 @@ function YourSpendingLollipop({
   );
 }
 
+/**
+ * A one-line category legend for life-family challenges. What each
+ * coloured stripe / wedge / column actually is, in the same colour
+ * the rest of the page uses. Bucket (productive / brainrot / other)
+ * is included as a small tag so 'why does that count in the score?'
+ * is visible without flipping to Settings.
+ */
+function CategoryLegend() {
+  const buckets = defaultBuckets();
+  return (
+    <div className="card px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+          Categories
+        </span>
+        {CATEGORIES.map((c) => {
+          const bk = buckets[c.code];
+          return (
+            <span key={c.code} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ background: categoryColor(c.code) }}
+              />
+              <span className="font-medium">{c.name}</span>
+              {bk !== "other" && (
+                <span className={`text-[9px] uppercase tracking-wider ${bk === "productive" ? "text-ok" : "text-danger"}`}>
+                  {bk === "productive" ? "P" : "B"}
+                </span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -406,7 +445,10 @@ export default function ChallengePage() {
   /** True only when the ranked number is a SUBSET of what you log. */
   const ranksNonEssential = canon === "money_nonessential" || canon === "money_nonessential_pct";
 
-  const logHref = isMoney ? "/money" : family === "life" ? "/day" : challenge.pursuitId ? `/pursuits/${challenge.pursuitId}` : "/pursuits";
+  // 'Log your day' lands on /today (the Day view) so the log form
+  // is right there, not the Month grid. /day = Month was reached
+  // from here before; users expect Day when they click a 'log' CTA.
+  const logHref = isMoney ? "/money" : family === "life" ? "/today" : challenge.pursuitId ? `/pursuits/${challenge.pursuitId}` : "/pursuits";
   const logLabel = isMoney ? "Log spending →" : family === "life" ? "Log your day →" : "Log it →";
 
   // --- how much of this board is actually empty, and why ---------------------
@@ -522,6 +564,14 @@ export default function ChallengePage() {
         </div>
 
       </div>
+
+      {/* Category key for life challenges. The stripes / wedges /
+          bars on every chart below use these colours, so having the
+          legend once at the top means every graph reads at a glance
+          without a per-chart legend. Money and pursuit-stat
+          challenges don't use these categories, so the row hides
+          itself. */}
+      {family === "life" && <CategoryLegend />}
 
       {/* ONE diagnosis, at the top, for whatever is hollowing out the board.
           Ordered by what the reader has to fix first — there is no point

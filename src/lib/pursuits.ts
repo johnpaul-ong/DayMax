@@ -367,7 +367,10 @@ export function pursuitHref(p: Pick<Pursuit, "id" | "kind">): string {
 const MONEY_PURSUIT_ID = "33333333-3333-4333-8333-333333333305";
 
 export function pursuitLogHref(p: Pick<Pursuit, "id" | "kind">): string | null {
-  if (p.kind === "life") return "/day";
+  // Life pursuits log through /today (Day view), not /day (Month
+  // view). Users expect the log form when they click 'log', not
+  // the monthly grid.
+  if (p.kind === "life") return "/today";
   if (p.kind === "lifts") return "/lifts";
   if (p.id === MONEY_PURSUIT_ID) return "/money";
   return null;
