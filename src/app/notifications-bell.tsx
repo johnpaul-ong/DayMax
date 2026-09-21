@@ -162,7 +162,13 @@ export default function NotificationsBell() {
            computed viewport anchor that had the panel drifting to
            the middle of the page. */
         <div
-          className="absolute right-0 top-full z-[60] mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-lg"
+          // z-[60] inside the nav's stacking context; combined with
+          // the nav's z-[100] page-level, this lands the panel at
+          // page level 100 -- above every card, side chart or
+          // absolute overlay below. Also opaque bg so a semi-
+          // transparent theme surface doesn't leak page content
+          // through the panel.
+          className="absolute right-0 top-full z-[60] mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-page text-ink shadow-xl"
           role="dialog"
           aria-label="Notifications"
         >

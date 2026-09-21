@@ -65,18 +65,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
          * leaf-shaped mask, so pink accent = pink leaves.
          */}
         <div className="cottage-leaves" aria-hidden="true" />
-        {/* Nav at z-50 -- above every ordinary in-flow card so the
-            sticky bar always wins the paint order. Split into two
-            containers on purpose: the LEFT half (logo + tabs) can
-            horizontally scroll on narrow viewports without dragging
-            the bell + theme switcher along with it. Previously the
-            whole nav shared one overflow-x-auto so on narrow
-            screens the bell wandered off with the scroll and its
-            dropdown followed, ending up in the middle of the page.
-            Bell wrapper is now a fixed sibling of the scroll rail,
-            so it lives at the right edge of the nav no matter what
-            the tabs are doing. */}
-        <nav className="sticky top-0 z-50 border-b bg-surface">
+        {/* Nav z-index is DELIBERATELY very high (100). The nav
+            creates its own stacking context via sticky + z-index,
+            so anything rendered inside it (like the notification
+            dropdown) is capped at the nav's page-level z. Nav at
+            z-50 meant the dropdown, no matter how high its own z,
+            paints at level 50 -- which lost to any page content
+            with an explicit stacking context nearby, and the
+            dropdown ended up SEE-THROUGH over cards below the
+            nav. z-100 keeps the whole nav stacking context above
+            every ordinary card, and comfortably above the Capture
+            Widget (z-55) so the dropdown always wins.
+
+            Split into two containers on purpose: LEFT half (logo +
+            tabs) scrolls horizontally on narrow viewports without
+            dragging the bell + theme switcher with it. Bell +
+            theme are a shrink-0 sibling of the scroll rail so they
+            sit at the right edge no matter what the tabs are
+            doing. */}
+        <nav className="sticky top-0 z-[100] border-b bg-surface">
           <div className="mx-auto flex max-w-6xl items-center px-3">
             <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2.5">
               <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
