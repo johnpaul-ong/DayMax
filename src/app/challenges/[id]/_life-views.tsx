@@ -194,21 +194,33 @@ export function MembersDayColumns({
       members
         .map((m) => {
           const rows = strips.get(m.id) ?? [];
-          const perSlot = new Map<number, Map<number, number>>();
+          // slot -> category -> { count, labels }
+          const perSlot = new Map<number, Map<number, { count: number; labels: Map<string, number> }>>();
           for (const r of rows) {
             if (!perSlot.has(r.slot)) perSlot.set(r.slot, new Map());
             const mm = perSlot.get(r.slot)!;
-            mm.set(r.category, (mm.get(r.category) ?? 0) + 1);
+            const cur = mm.get(r.category) ?? { count: 0, labels: new Map<string, number>() };
+            cur.count += 1;
+            const lbl = (r.label ?? "").trim();
+            if (lbl) cur.labels.set(lbl, (cur.labels.get(lbl) ?? 0) + 1);
+            mm.set(r.category, cur);
           }
           // Per slot: which category won, how many days for that
           // category at that slot, total days with anything logged
-          // at that slot. Feeds the hover tooltip and the stripe
-          // colour.
-          const clock = new Map<number, { cat: number; count: number; total: number }>();
+          // at that slot, and the most common LABEL that came with
+          // that winning category. Feeds the hover tooltip.
+          const clock = new Map<
+            number,
+            { cat: number; count: number; total: number; label: string | null }
+          >();
           for (const [slot, counts] of perSlot) {
-            const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-            const total = [...counts.values()].reduce((s, v) => s + v, 0);
-            if (top) clock.set(slot, { cat: top[0], count: top[1], total });
+            const top = [...counts.entries()].sort((a, b) => b[1].count - a[1].count)[0];
+            const total = [...counts.values()].reduce((s, v) => s + v.count, 0);
+            if (top) {
+              const [cat, meta] = top;
+              const topLabel = [...meta.labels.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+              clock.set(slot, { cat, count: meta.count, total, label: topLabel });
+            }
           }
           const days = new Set(rows.map((r) => r.date)).size;
           return { ...m, clock, days };
@@ -344,7 +356,15 @@ export function MembersDayColumns({
             </div>
             {hoveredCell ? (
               <div className="text-muted">
+                {/* "Work — laptop review" style, with the label (if
+                    any) after an em-dash. Requested on feedback:
+                    'have the note as well. So it shows Work - Note
+                    please'. Falls back to just the category name
+                    when there's no label attached at that slot. */}
                 {categoryName(hoveredCell.cat)}
+                {hoveredCell.label && (
+                  <span className="ml-1 text-ink">— {hoveredCell.label}</span>
+                )}
                 {hoveredCell.total > 1 && (
                   <span className="ml-1 text-faint">
                     · {hoveredCell.count}/{hoveredCell.total} days
