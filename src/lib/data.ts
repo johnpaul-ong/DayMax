@@ -61,6 +61,20 @@ export async function fetchAllDayEntries(): Promise<DayEntry[]> {
   return all;
 }
 
+/**
+ * Fires whenever this user's day_entries change (upsert OR delete).
+ * Every consumer of that data -- the Home streak card, the challenge
+ * boards, the profile grid, the community caches -- listens for this
+ * to know its numbers are stale. Was previously only fired from the
+ * Quick Capture widget, which meant a save on /day or /today left
+ * every OTHER open tab and every OTHER open page showing the old
+ * count. Emitting it here centralises the notification.
+ */
+function announceDayChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("daymax-day-saved"));
+}
+
 export async function upsertDayEntries(entries: DayEntry[]): Promise<void> {
   if (entries.length === 0) return;
   const supabase = createClient();
@@ -73,6 +87,7 @@ export async function upsertDayEntries(entries: DayEntry[]): Promise<void> {
       .upsert(rows.slice(i, i + 500), { onConflict: "user_id,date,slot" });
     if (error) throw error;
   }
+  announceDayChange();
 }
 
 export async function deleteDayEntries(date: string, slots: number[]): Promise<void> {
@@ -80,6 +95,7 @@ export async function deleteDayEntries(date: string, slots: number[]): Promise<v
   const supabase = createClient();
   const { error } = await supabase.from("day_entries").delete().eq("date", date).in("slot", slots);
   if (error) throw error;
+  announceDayChange();
 }
 
 // --- day metrics -------------------------------------------------------------

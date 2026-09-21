@@ -254,6 +254,44 @@ export default function ChallengePage() {
   }, [id]);
   useEffect(() => { fetchCurrency().then(setCur).catch(() => {}); }, []);
 
+  // "I just logged a slot, why does the challenge still say Nothing
+  // logged yet?" -- because the challenge page fetched its standings
+  // when it mounted and had no idea a day_entry landed on another
+  // route. Two listeners fix that:
+  //
+  //   daymax-day-saved   fired by lib/data.ts on every upsert/delete
+  //                      of a day_entry (Quick Capture, /day, /today).
+  //                      Same tab, same session -> instant refresh.
+  //   visibilitychange   the cross-tab case. Log on /day in one tab,
+  //                      switch back to the challenge tab, and the
+  //                      standings refetch as soon as that tab shows.
+  //
+  // Community-side caches (leaderboards, arena) also need clearing
+  // because the daily race chart on this page reads them.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let refreshing = false;
+    const refresh = () => {
+      if (refreshing) return;
+      refreshing = true;
+      // Small debounce so a burst of upserts (catch-up mode saves
+      // 4-20 slots in a row) collapses into one reload.
+      setTimeout(() => {
+        refreshing = false;
+        import("@/lib/friends").then((f) => f.invalidateCommunityCache?.()).catch(() => {});
+        reload();
+      }, 250);
+    };
+    const onVis = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener("daymax-day-saved", refresh);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("daymax-day-saved", refresh);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const me = rows.find((r) => r.isMe);
   const running = challenge ? challenge.startsOn <= today && challenge.endsOn >= today : false;
   const finished = challenge ? challenge.endsOn < today : false;
