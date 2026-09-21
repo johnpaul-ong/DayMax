@@ -670,7 +670,8 @@ export default function ChallengePage() {
                     days={raceData.length}
                     action={{ href: logHref, label: logLabel }}
                   >
-                    <div className="h-64 card p-2">
+                    {/* Halved from h-64 -> h-36 on feedback. */}
+                    <div className="h-36 card p-2">
                       <ResponsiveContainer>
                         <LineChart data={raceData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />

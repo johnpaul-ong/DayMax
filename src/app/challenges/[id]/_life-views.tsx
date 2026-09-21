@@ -123,9 +123,10 @@ export function AverageDayClock({
           Nothing logged yet by anyone in the challenge window — the average kicks in as soon as one person starts.
         </p>
       ) : (
-        // Bigger than the default -- this slide's whole job is to
-        // show the clock, so let it fill the slide's card.
-        <DayClock slots={clockSlots} maxWidth={720} />
+        // Feedback: the previous 720 px was way too tall on the
+        // challenge page; halved to ~360 so it fits without dwarfing
+        // everything below it.
+        <DayClock slots={clockSlots} maxWidth={360} />
       )}
     </section>
   );
@@ -151,10 +152,13 @@ export function MembersDayColumns({
   to?: string;
 }) {
   const { strips, loaded } = useMemberStrips(members, from, to);
-  // How tall each stripe is. 96 stripes at 6 px each = 576 px total,
-  // which fits comfortably on a phone and pairs with the clock above
-  // without dwarfing it.
-  const STRIPE_H = 6;
+  // How tall each stripe is. 96 stripes at 3 px each = 288 px total.
+  // Halved from 6 px on feedback that the columns dwarfed everything
+  // else on the challenge page. Still tall enough to read the daily
+  // rhythm; individual quarter-hours become a hint rather than a
+  // distinct band, which is the right level of detail for "when do
+  // these people live?".
+  const STRIPE_H = 3;
   const totalH = STRIPE_H * SLOTS_PER_DAY;
   const COL_W = 34;
 

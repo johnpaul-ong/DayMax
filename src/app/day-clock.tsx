@@ -80,15 +80,13 @@ function wedge(r0: number, r1: number, a0: number, a1: number): string {
 /**
  * slot -> which ring, and the angles it occupies.
  *
- * The number "N" sits at the START of hour N's band (running clockwise), the
- * way a real analog clock face works: at 3:00 exactly the hand points to the
- * "3"; at 3:30 it is halfway to the "4". The previous -15 offset centred each
- * band on its number, which meant slot 60 (15:00) landed ~1/2 an hour before
- * the "3" -- fine as decoration, wrong for a live "you are here" marker,
- * and confusing when a user taps the wedge under a number expecting that
- * hour's start.
+ * Each hour band is CENTRED on its clock-face number: the "3" label sits
+ * at the middle of the 3-hour slice, so the picture reads as a proper
+ * clock. Tried HOUR_OFFSET = 0 briefly (so a slot's angle matched real
+ * analog-clock time exactly), and the user preferred the centred layout,
+ * so back to -15.
  */
-const HOUR_OFFSET = 0;
+const HOUR_OFFSET = -15;
 
 function geom(slot: number) {
   const hour = Math.floor(slot / 4);
