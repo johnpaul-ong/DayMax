@@ -158,6 +158,16 @@ export function MembersDayColumns({
   const STRIPE_H = 3;
   const totalH = STRIPE_H * SLOTS_PER_DAY;
   const COL_W = 34;
+  // Bit of breathing room above and below the columns so the 00:00
+  // and 23:45 stripes aren't glued to the card edge -- reported as
+  // "needs a bit more headroom" in the last screenshot.
+  const PAD_Y = 8;
+  // Hover state for the custom tooltip. Native title tooltips were
+  // showing a "?" cursor without the actual text on the user's
+  // browser, so we render our own overlay pinned to the column.
+  const [hover, setHover] = useState<
+    { memberId: string; slot: number; x: number; y: number } | null
+  >(null);
 
   const withData = useMemo(
     () =>
@@ -205,20 +215,30 @@ export function MembersDayColumns({
   const AXIS_W = 32;
   const GAP = 8; // matches gap-2
   const contentW = AXIS_W + withData.length * (COL_W + GAP) + 16;
+  // Custom tooltip content -- memberised by hover state.
+  const hoveredMember = hover ? withData.find((m) => m.id === hover.memberId) : null;
+  const hoveredCell = hover && hoveredMember ? hoveredMember.clock.get(hover.slot) : null;
+
   return (
     <div className="card p-3" style={{ maxWidth: `${contentW}px` }}>
       {/* Redundant '00:00 up top / N people' caption killed on
           feedback -- the axis on the left already labels the times
           and each column has a name under it. */}
-      <div className="-mx-3 overflow-x-auto px-3">
-        <div className="flex items-start gap-2" style={{ minHeight: totalH + 24 }}>
+      <div
+        className="relative -mx-3 overflow-x-auto px-3"
+        onMouseLeave={() => setHover(null)}
+      >
+        <div className="flex items-start gap-2" style={{ minHeight: totalH + 2 * PAD_Y + 24 }}>
           {/* Left-side time axis */}
-          <div className="relative shrink-0 pr-1 pt-2 text-[10px] tabular-nums text-faint" style={{ height: totalH, width: 32 }}>
+          <div
+            className="relative shrink-0 pr-1 text-[10px] tabular-nums text-faint"
+            style={{ height: totalH + 2 * PAD_Y, width: 32, paddingTop: PAD_Y }}
+          >
             {TICKS.map((s) => (
               <span
                 key={s}
                 className="absolute right-1"
-                style={{ top: s * STRIPE_H - 6 }}
+                style={{ top: PAD_Y + s * STRIPE_H - 6 }}
               >
                 {slotToTime(s)}
               </span>
@@ -229,48 +249,53 @@ export function MembersDayColumns({
             <div key={m.id} className="shrink-0" style={{ width: COL_W }}>
               <div
                 className="relative overflow-hidden rounded-md border"
-                style={{ width: COL_W, height: totalH, background: "var(--surface-2)" }}
+                style={{
+                  width: COL_W,
+                  height: totalH + 2 * PAD_Y,
+                  background: "var(--surface-2)",
+                  paddingTop: PAD_Y,
+                  paddingBottom: PAD_Y,
+                  boxSizing: "border-box",
+                }}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const y = e.clientY - rect.top - PAD_Y;
+                  const slot = Math.max(0, Math.min(SLOTS_PER_DAY - 1, Math.floor(y / STRIPE_H)));
+                  setHover({ memberId: m.id, slot, x: rect.left + rect.width / 2, y: rect.top });
+                }}
               >
                 {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
                   const cell = m.clock.get(s);
-                  if (!cell) {
-                    // Empty stripe still gets a tooltip target so
-                    // hovering an unlogged slot tells you it's unlogged
-                    // rather than looking dead.
-                    return (
-                      <div
-                        key={s}
-                        title={`${m.name} · ${slotToTime(s)} — not logged`}
-                        style={{
-                          position: "absolute",
-                          top: s * STRIPE_H,
-                          left: 0,
-                          right: 0,
-                          height: STRIPE_H,
-                        }}
-                      />
-                    );
-                  }
-                  const share = cell.total > 0 ? Math.round((cell.count / cell.total) * 100) : 0;
-                  const tip = `${m.name} · ${slotToTime(s)}\n${categoryName(cell.cat)}${
-                    cell.total > 1 ? ` · ${cell.count}/${cell.total} days (${share}%)` : ""
-                  }`;
+                  if (!cell) return null;
                   return (
                     <div
                       key={s}
-                      title={tip}
                       style={{
                         position: "absolute",
-                        top: s * STRIPE_H,
+                        top: PAD_Y + s * STRIPE_H,
                         left: 0,
                         right: 0,
                         height: STRIPE_H,
                         background: categoryColor(cell.cat),
-                        cursor: "help",
                       }}
                     />
                   );
                 })}
+                {/* Highlight the hovered slot so the tooltip has a
+                    visible anchor even on unlogged stripes. */}
+                {hover?.memberId === m.id && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: PAD_Y + hover.slot * STRIPE_H - 1,
+                      left: -1,
+                      right: -1,
+                      height: STRIPE_H + 2,
+                      border: "1px solid var(--accent)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
               </div>
               <p className="mt-1 max-w-[60px] truncate text-center text-[10px] font-medium" title={m.name}>
                 {m.name.split(/\s+/)[0]}
@@ -279,6 +304,39 @@ export function MembersDayColumns({
             </div>
           ))}
         </div>
+
+        {/* Custom hover tooltip. Uses fixed positioning off the
+            hover coords so it sits above the column and doesn't get
+            clipped by the horizontally-scrolling wrapper. */}
+        {hover && hoveredMember && (
+          <div
+            className="pointer-events-none fixed z-50 rounded-lg border bg-surface px-2.5 py-1.5 text-xs shadow-lg"
+            style={{
+              left: hover.x,
+              top: hover.y - 6,
+              transform: "translate(-50%, -100%)",
+              whiteSpace: "nowrap",
+              maxWidth: 260,
+            }}
+          >
+            <div className="font-semibold">
+              {hoveredMember.name} · <span className="tabular-nums text-muted">{slotToTime(hover.slot)}</span>
+            </div>
+            {hoveredCell ? (
+              <div className="text-muted">
+                {categoryName(hoveredCell.cat)}
+                {hoveredCell.total > 1 && (
+                  <span className="ml-1 text-faint">
+                    · {hoveredCell.count}/{hoveredCell.total} days
+                    ({Math.round((hoveredCell.count / hoveredCell.total) * 100)}%)
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="text-faint">not logged</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
