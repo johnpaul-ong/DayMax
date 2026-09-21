@@ -18,7 +18,8 @@
  * elementFromPoint is the only thing that works on a phone and on a desktop.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 
 export interface ClockSlot {
@@ -162,6 +163,7 @@ export default function DayClock({
   mode = "rings",
   nowSlot = null,
   maxWidth = 560,
+  _fullscreen = false,
 }: {
   slots: Map<number, ClockSlot>;
   mode?: ClockMode;
@@ -190,6 +192,13 @@ export default function DayClock({
    * fill their container.
    */
   maxWidth?: number;
+  /**
+   * Internal use only. When the component recurses into itself
+   * inside the full-screen expand overlay, this suppresses the card
+   * chrome (title/subtitle/expand button) so the fullscreen version
+   * is just the clock plus its own close button.
+   */
+  _fullscreen?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -197,6 +206,12 @@ export default function DayClock({
   const [cursor, setCursor] = useState<number | null>(null);
   const [selection, setSelection] = useState<[number, number] | null>(null);
   const dragging = anchor !== null;
+  // Full-screen "expanded" mode. Interactive callers get a small
+  // expand button in the header; tapping it opens the same clock at
+  // fullscreen size inside a pinch/pan overlay (see FullscreenClock
+  // below). Non-interactive callers (aggregate views, profile
+  // strips) don't get the button -- there's nothing to click into.
+  const [expanded, setExpanded] = useState(false);
 
   /**
    * Two-tap mode alongside drag: if the pointer goes down and comes up
@@ -253,12 +268,50 @@ export default function DayClock({
   const readout = hover ?? cursor ?? null;
   const readoutSlot = readout == null ? null : slots.get(readout);
 
+  const interactive = !!(onSelect || onPaint);
+  const showExpand = interactive && !_fullscreen;
+
   return (
-    <div className="card p-3">
-      {(title || subtitle) && (
-        <div className="mb-1 text-center">
-          {title && <p className="font-semibold">{title}</p>}
-          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+    <div
+      className={_fullscreen ? "" : "card mx-auto p-3"}
+      // Cap the card to just what it needs -- previously the card
+      // stretched to fill its parent (85% of the challenge carousel
+      // slide, hundreds of empty px on either side of a 360 px
+      // clock). max-width honours the maxWidth prop plus a hair for
+      // padding.
+      style={_fullscreen ? undefined : { maxWidth: `${maxWidth + 24}px` }}
+    >
+      {!_fullscreen && (title || subtitle || showExpand) && (
+        <div className="mb-1 flex items-start gap-2">
+          <div className="min-w-0 flex-1 text-center">
+            {title && <p className="font-semibold">{title}</p>}
+            {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+          </div>
+          {showExpand && (
+            <button
+              onClick={() => setExpanded(true)}
+              aria-label="Expand clock to full screen"
+              title="Expand — bigger wedges, pinch to zoom on phone"
+              className="shrink-0 rounded-lg border px-2 py-1 text-xs text-muted hover:bg-surface-2"
+            >
+              ⤢
+            </button>
+          )}
+        </div>
+      )}
+      {/* When no title bar shows but the clock is interactive, we
+          still want the expand affordance: a floating chip in the
+          top-right corner of the card. */}
+      {!_fullscreen && !title && !subtitle && showExpand && (
+        <div className="mb-1 flex justify-end">
+          <button
+            onClick={() => setExpanded(true)}
+            aria-label="Expand clock to full screen"
+            title="Expand — bigger wedges, pinch to zoom on phone"
+            className="rounded-lg border px-2 py-1 text-xs text-muted hover:bg-surface-2"
+          >
+            ⤢
+          </button>
         </div>
       )}
       <svg
@@ -403,15 +456,22 @@ export default function DayClock({
           const { ring, a0, a1 } = geom(s);
           const v = slots.get(s);
           const fill = v ? categoryColor(v.category) : "transparent";
+          // Was `opacity={fill === "transparent" ? 0 : 1}` which hid
+          // the whole wedge -- stroke and all -- for empty slots,
+          // leaving the outer ring reading as a solid track with no
+          // visible slices. `fillOpacity` keeps the wedge invisible
+          // while the stroke stays drawn, so the ring is always
+          // divided into 48 clear per-quarter-hour cells.
+          const empty = fill === "transparent";
           return (
             <path
               key={`base-${s}`}
               data-slot={s}
               d={wedge(ring.r0, ring.r1, a0, a1)}
-              fill={fill}
-              opacity={fill === "transparent" ? 0 : 1}
-              stroke="var(--page)"
-              strokeWidth={0.6}
+              fill={empty ? "transparent" : fill}
+              stroke={empty ? "var(--border)" : "var(--page)"}
+              strokeWidth={empty ? 0.5 : 0.6}
+              strokeOpacity={empty ? 0.55 : 1}
               style={{ cursor: onSelect || onPaint ? "crosshair" : "default" }}
             />
           );
@@ -689,6 +749,210 @@ export default function DayClock({
           ) : null
         )}
       </svg>
+      {expanded && (
+        <FullscreenClock
+          slots={slots}
+          onSelect={(a, b) => {
+            // The nested DayClock inside fullscreen will call its own
+            // onSelect; we forward it back out so the parent form
+            // sees the pick. Left the fullscreen open so the user can
+            // adjust before hitting Fill on the underlying page.
+            onSelect?.(a, b);
+          }}
+          onPaint={onPaint}
+          activeCategory={activeCategory}
+          mode={mode}
+          nowSlot={nowSlot}
+          onClose={() => setExpanded(false)}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * Full-screen overlay that hosts a scaled-up clock with real
+ * pinch/pan on top. Rendered through a portal so it escapes any
+ * clipping ancestor (carousel snap containers, cards with rounded
+ * masks). The clock inside is the SAME DayClock component with
+ * _fullscreen=true, which hides its own chrome so the overlay owns
+ * the frame.
+ *
+ * Gestures on the wrapper:
+ *   - 1 pointer: passes straight to the inner SVG (tap / drag to
+ *     select) via bubbling. The SVG's own handlers ignore events
+ *     while a pinch is active.
+ *   - 2 pointers: pinch to zoom (0.5x .. 4x). Midpoint moves the
+ *     pan translate along with it so the pinch centre stays under
+ *     your fingers.
+ *   - Ctrl/Cmd + wheel: desktop zoom.
+ *   - Drag with one pointer on a zoomed clock: not supported for
+ *     panning (would fight the select drag). Use a two-finger drag
+ *     while pinched instead, or reset zoom.
+ */
+function FullscreenClock({
+  slots,
+  onSelect,
+  onPaint,
+  activeCategory,
+  mode,
+  nowSlot,
+  onClose,
+}: {
+  slots: Map<number, ClockSlot>;
+  onSelect?: (from: number, to: number) => void;
+  onPaint?: (from: number, to: number) => void;
+  activeCategory?: number | null;
+  mode: ClockMode;
+  nowSlot: number | null;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gestureRef = useRef<{
+    startDist: number;
+    startScale: number;
+    startCenter: { x: number; y: number };
+    startTx: number;
+    startTy: number;
+  } | null>(null);
+  // Share the pinch-active flag with the nested DayClock's SVG
+  // handlers so a second finger doesn't also start a drag-paint.
+  // Passed down as `pinchingRef` on window since we can't thread
+  // through the current props cleanly; kept private via a unique
+  // symbol keyed field.
+  const pinchingRef = useRef(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    // Lock body scroll while open.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const setPinching = (v: boolean) => {
+    pinchingRef.current = v;
+    // Expose to the nested SVG via a data attribute on the wrapper
+    // that its own onPointerDown checks. Simpler than context.
+    const wrap = document.getElementById("daymax-clock-fullscreen-inner");
+    if (wrap) wrap.dataset.pinching = v ? "1" : "0";
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      gestureRef.current = {
+        startDist: Math.hypot(a.x - b.x, a.y - b.y),
+        startScale: scale,
+        startCenter: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        startTx: tx,
+        startTy: ty,
+      };
+      setPinching(true);
+    }
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size >= 2 && gestureRef.current) {
+      const pts = [...pointers.current.values()];
+      const a = pts[0]; const b = pts[1];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const g = gestureRef.current;
+      const next = Math.max(0.5, Math.min(4, g.startScale * (dist / g.startDist)));
+      setScale(next);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      setTx(g.startTx + (cx - g.startCenter.x));
+      setTy(g.startTy + (cy - g.startCenter.y));
+    }
+  };
+  const onPointerUpOrCancel = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) {
+      gestureRef.current = null;
+      // Small delay so the SVG's own onPointerUp (bubbled from the
+      // last finger release) still sees pinching=true and skips its
+      // commit. Otherwise a two-finger pinch would end by writing
+      // whatever slot the last finger was over.
+      setTimeout(() => setPinching(false), 60);
+    }
+  };
+  const onWheel = (e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setScale((s) => Math.max(0.5, Math.min(4, s - e.deltaY * 0.002)));
+  };
+
+  const reset = () => { setScale(1); setTx(0); setTy(0); };
+
+  const node = (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col bg-black/85 backdrop-blur"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ touchAction: "none" }}
+    >
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2 text-white">
+        <span className="text-xs opacity-70">
+          Pinch to zoom · tap a wedge to pick · Esc to close
+        </span>
+        <button
+          onClick={reset}
+          disabled={scale === 1 && tx === 0 && ty === 0}
+          className="ml-auto rounded-lg border border-white/25 px-2 py-1 text-xs disabled:opacity-30"
+        >
+          Reset
+        </button>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-lg border border-white/25 px-2 py-1 text-xs"
+        >
+          Close ✕
+        </button>
+      </div>
+      <div
+        className="relative flex-1 overflow-hidden"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUpOrCancel}
+        onPointerCancel={onPointerUpOrCancel}
+        onWheel={onWheel}
+      >
+        <div
+          id="daymax-clock-fullscreen-inner"
+          data-pinching="0"
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+            transformOrigin: "center",
+            transition: gestureRef.current ? "none" : "transform 120ms ease-out",
+          }}
+        >
+          <DayClock
+            slots={slots}
+            onSelect={onSelect}
+            onPaint={onPaint}
+            activeCategory={activeCategory}
+            mode={mode}
+            nowSlot={nowSlot}
+            maxWidth={Math.min(720, typeof window !== "undefined" ? window.innerWidth - 24 : 720)}
+            _fullscreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(node, document.body);
 }

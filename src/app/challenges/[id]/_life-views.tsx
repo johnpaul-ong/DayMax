@@ -196,8 +196,15 @@ export function MembersDayColumns({
   // Every 6 hours gets a labelled tick so the eye can find dawn /
   // noon / dusk / midnight without counting stripes.
   const TICKS = [0, 24, 48, 72]; // slot indices for 00, 06, 12, 18
+  // How wide the card actually needs to be: axis column + N columns
+  // + gaps + padding. Prevents the card from stretching to the full
+  // 85% carousel-slide width and leaving huge empty space to the
+  // right of a handful of members.
+  const AXIS_W = 32;
+  const GAP = 8; // matches gap-2
+  const contentW = AXIS_W + withData.length * (COL_W + GAP) + 16;
   return (
-    <div className="card p-3">
+    <div className="card mx-auto p-3" style={{ maxWidth: `${contentW}px` }}>
       <div className="mb-2 flex items-baseline justify-between text-xs text-muted">
         <span>00:00 up top, 23:45 at the bottom.</span>
         <span className="text-faint">{withData.length} {withData.length === 1 ? "person" : "people"}</span>
