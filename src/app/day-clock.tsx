@@ -80,11 +80,15 @@ function wedge(r0: number, r1: number, a0: number, a1: number): string {
 /**
  * slot -> which ring, and the angles it occupies.
  *
- * The -15 offset makes each hour's band CENTRED on its clock position, so 12
- * sits at the top and 3 at the right exactly as on a real dial. Without it the
- * band for 12 runs from the top clockwise and the whole face reads rotated.
+ * The number "N" sits at the START of hour N's band (running clockwise), the
+ * way a real analog clock face works: at 3:00 exactly the hand points to the
+ * "3"; at 3:30 it is halfway to the "4". The previous -15 offset centred each
+ * band on its number, which meant slot 60 (15:00) landed ~1/2 an hour before
+ * the "3" -- fine as decoration, wrong for a live "you are here" marker,
+ * and confusing when a user taps the wedge under a number expecting that
+ * hour's start.
  */
-const HOUR_OFFSET = -15;
+const HOUR_OFFSET = 0;
 
 function geom(slot: number) {
   const hour = Math.floor(slot / 4);
@@ -158,8 +162,8 @@ export default function DayClock({
   subtitle,
   activeCategory,
   mode = "rings",
-  zoomable = false,
   nowSlot = null,
+  maxWidth = 560,
 }: {
   slots: Map<number, ClockSlot>;
   mode?: ClockMode;
@@ -171,24 +175,23 @@ export default function DayClock({
   subtitle?: string;
   activeCategory?: number | null;
   /**
-   * When true, show a +/-/1x chip strip so a user can enlarge the clock
-   * beyond its default max width. 96 wedges around a 460 px circle end
-   * up ~5.5 px wide each, which is fine on a phone (thick finger + real
-   * touch hit-boxes) but is small for a mouse cursor and reportedly
-   * misaligned in Brave. Zooming grows the CSS width while the viewBox
-   * is unchanged, so wedges scale up crisply and stay hit-testable
-   * through elementFromPoint. Container becomes horizontally
-   * scrollable at the larger sizes.
-   */
-  zoomable?: boolean;
-  /**
-   * A slot index (0..95) to mark as "now". Renders a pulsing halo on
-   * that wedge and a small ▶ tick outside the rim pointing at it, so
-   * "the day is up to here" is visible even when the wedge itself is
-   * unfilled. The caller decides when to pass it -- /today does when
-   * the shown date is actually today; aggregate views leave it null.
+   * A slot index (0..95) to mark as "now". Renders a subtle accent
+   * outline on that wedge and a small tick outside the rim pointing
+   * at it, so "the day is up to here" is visible even when the wedge
+   * itself is unfilled. The caller decides when to pass it -- /today
+   * does when the shown date is actually today; aggregate views
+   * leave it null.
    */
   nowSlot?: number | null;
+  /**
+   * CSS max-width in pixels for the rendered SVG. Defaults to 560,
+   * which is a step up from the old 460 -- 96 wedges around a 460 px
+   * circle came out ~5.5 px wide each, too fiddly on desktop and
+   * reportedly misaligned in Brave. Callers with a wide card (the
+   * challenge Average Day slide, say) can push this to 640-720 to
+   * fill their container.
+   */
+  maxWidth?: number;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
@@ -196,24 +199,6 @@ export default function DayClock({
   const [cursor, setCursor] = useState<number | null>(null);
   const [selection, setSelection] = useState<[number, number] | null>(null);
   const dragging = anchor !== null;
-
-  // Zoom multiplier for the rendered SVG width. 1x fits inside the
-  // card; 1.5x / 2x overflow it (parent scrolls). Persisted per
-  // browser so a user who prefers big wedges doesn't reset every load.
-  const [zoom, setZoom] = useState(1);
-  const zoomLoadedRef = useRef(false);
-  if (typeof window !== "undefined" && !zoomLoadedRef.current) {
-    zoomLoadedRef.current = true;
-    try {
-      const saved = Number(localStorage.getItem("daymax-clock-zoom"));
-      if (Number.isFinite(saved) && saved >= 1 && saved <= 2) setZoom(saved);
-    } catch { /* ignore */ }
-  }
-  const setZoomAndSave = (z: number) => {
-    setZoom(z);
-    try { localStorage.setItem("daymax-clock-zoom", String(z)); } catch { /* ignore */ }
-  };
-  const scaledMax = Math.round(460 * zoom);
 
   /**
    * Two-tap mode alongside drag: if the pointer goes down and comes up
@@ -278,44 +263,11 @@ export default function DayClock({
           {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
       )}
-      {zoomable && (
-        <div className="mb-2 flex items-center justify-end gap-1 text-xs text-muted">
-          <span className="mr-1 text-faint">wedge size</span>
-          {[1, 1.5, 2].map((z) => (
-            <button
-              key={z}
-              onClick={() => setZoomAndSave(z)}
-              className={`rounded-md border px-2 py-0.5 tabular-nums transition ${
-                zoom === z ? "border-accent bg-accent-soft font-semibold text-accent" : "hover:bg-surface-2"
-              }`}
-              aria-pressed={zoom === z}
-              title={`Render the clock at ${z}x. Bigger wedges = easier clicks. Saved for next time.`}
-            >
-              {z}×
-            </button>
-          ))}
-        </div>
-      )}
-      {/*
-        Zoom container. At 1x the SVG lays out the old way -- w-full up
-        to maxWidth 460, centred inside the card. At >1x we drop the
-        percentage-width entirely and set an explicit pixel width; the
-        SVG now genuinely exceeds the card so the wrapper's
-        overflow-x-auto kicks in and you can pan sideways to reach
-        every wedge. Negative margins claw back the card's own padding
-        so the scroll rail spans edge-to-edge instead of a narrow
-        strip in the middle.
-      */}
-      <div className={zoom > 1 ? "-mx-3 overflow-x-auto overflow-y-hidden px-3" : ""}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
-        style={
-          zoom > 1
-            ? { width: `${scaledMax}px`, maxWidth: "none", height: `${scaledMax}px` }
-            : { maxWidth: "460px", width: "100%" }
-        }
-        className={`${zoom > 1 ? "block" : "mx-auto block"} touch-none select-none`}
+        style={{ maxWidth: `${maxWidth}px`, width: "100%" }}
+        className="mx-auto block touch-none select-none"
         onPointerDown={(e) => {
           if (!onSelect && !onPaint) return;
           const s = slotAt(e.clientX, e.clientY);
@@ -670,49 +622,38 @@ export default function DayClock({
             );
           })}
 
-        {/* "Now" indicator. A pulsing accent halo on the current
-            wedge plus a small triangular tick outside the rim
-            pointing at it. Drawn in rings mode only -- spiral mode
-            is niche and doesn't need it. */}
+        {/* "Now" indicator. A single, understated accent outline on
+            the current wedge plus a small triangular tick just
+            outside the rim pointing at it. Previously the halo was a
+            thick pulsing double stroke -- great for "look at me!",
+            but the user found it heavy-handed, so it's back down to
+            one thin stroke with a very gentle pulse on its opacity
+            only. Rings mode only; spiral mode is niche. */}
         {mode === "rings" && nowSlot != null && nowSlot >= 0 && nowSlot < SLOTS_PER_DAY && (() => {
           const g = geom(nowSlot);
-          // outer rim tick: a small triangle just OUTSIDE the ring the
-          // current slot sits on, at the wedge's mid-angle
           const midA = (g.a0 + g.a1) / 2;
-          const tickR = g.ring.r1 + 6;
+          const tickR = g.ring.r1 + 4;
           const [tx, ty] = polar(tickR, midA);
-          const [lx, ly] = polar(tickR + 10, midA - 3);
-          const [rx, ry] = polar(tickR + 10, midA + 3);
+          const [lx, ly] = polar(tickR + 7, midA - 2);
+          const [rx, ry] = polar(tickR + 7, midA + 2);
           return (
             <g pointerEvents="none">
-              {/* wedge halo, thick + slightly outside the wedge so a
-                  filled slot still shows its own colour through the
-                  middle. Two strokes: solid ring under a pulsing
-                  outer stroke for visibility on any background. */}
               <path
-                d={wedge(g.ring.r0 - 1.5, g.ring.r1 + 1.5, g.a0 - 0.2, g.a1 + 0.2)}
+                d={wedge(g.ring.r0 - 0.5, g.ring.r1 + 0.5, g.a0, g.a1)}
                 fill="none"
                 stroke="var(--accent)"
-                strokeWidth={2.5}
-                opacity={0.95}
+                strokeWidth={1.5}
+                opacity={0.85}
+                style={{ animation: "daymax-clock-now-pulse 2.4s ease-in-out infinite" }}
               />
-              <path
-                d={wedge(g.ring.r0 - 1.5, g.ring.r1 + 1.5, g.a0 - 0.2, g.a1 + 0.2)}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth={5}
-                opacity={0.35}
-                style={{ animation: "daymax-clock-now-pulse 1.8s ease-in-out infinite" }}
-              />
-              {/* pointer tick just outside the rim */}
               <polygon
                 points={`${tx},${ty} ${lx},${ly} ${rx},${ry}`}
                 fill="var(--accent)"
                 stroke="var(--surface)"
-                strokeWidth={0.6}
+                strokeWidth={0.5}
+                opacity={0.9}
               />
-              {/* keyframes; inlined so callers don't need a global stylesheet touch */}
-              <style>{`@keyframes daymax-clock-now-pulse{0%,100%{opacity:.15;stroke-width:5}50%{opacity:.55;stroke-width:9}}`}</style>
+              <style>{`@keyframes daymax-clock-now-pulse{0%,100%{opacity:.55}50%{opacity:.95}}`}</style>
             </g>
           );
         })()}
@@ -750,7 +691,6 @@ export default function DayClock({
           ) : null
         )}
       </svg>
-      </div>
     </div>
   );
 }

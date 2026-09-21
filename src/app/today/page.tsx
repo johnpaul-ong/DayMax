@@ -320,7 +320,6 @@ export default function TodayPage() {
         <DayClock
           slots={clockSlots}
           activeCategory={cat}
-          zoomable
           nowSlot={nowSlot}
           onSelect={(a, b) => {
             // Drag SELECTS. The existing Fill/Clear buttons below commit.

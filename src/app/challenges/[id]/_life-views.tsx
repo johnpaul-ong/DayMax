@@ -123,7 +123,9 @@ export function AverageDayClock({
           Nothing logged yet by anyone in the challenge window — the average kicks in as soon as one person starts.
         </p>
       ) : (
-        <DayClock slots={clockSlots} />
+        // Bigger than the default -- this slide's whole job is to
+        // show the clock, so let it fill the slide's card.
+        <DayClock slots={clockSlots} maxWidth={720} />
       )}
     </section>
   );
