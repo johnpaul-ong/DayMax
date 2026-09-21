@@ -432,56 +432,61 @@ function ComparePicker({
         </select>
       </label>
 
-      {/* Multi-select dropdown for individuals */}
-      <div className="relative" ref={dropRef}>
-        <button
-          onClick={() => setPeopleOpen((o) => !o)}
-          className="inline-flex items-center gap-1.5 rounded-lg border bg-surface px-3 py-1.5 text-sm hover:bg-surface-2"
-        >
-          {summary}
-          <span className="text-xs text-faint">▾</span>
-        </button>
+      {/* Multi-select "People" picker. Sized and styled to match the
+          Group <select> next to it so the two read as siblings --
+          same border, background, padding, chevron. The panel that
+          opens uses the same border+bg-surface as the native select
+          dropdown rather than the card shadow that was there before,
+          per feedback that the fancy card popover clashed with the
+          native Group menu. */}
+      <label className="inline-flex items-center gap-1.5 text-xs text-muted">
+        People:
+        <div className="relative" ref={dropRef}>
+          <button
+            onClick={() => setPeopleOpen((o) => !o)}
+            aria-expanded={peopleOpen}
+            className="inline-flex items-center gap-1.5 rounded-lg border bg-surface px-2 py-1.5 text-sm text-ink hover:bg-surface-2"
+          >
+            <span>{summary}</span>
+            <span className="text-[10px] text-faint">▾</span>
+          </button>
 
-        {peopleOpen && (
-          /* Compact floating panel. Was w-64 (256 px) + max-w-[80vw]
-             which sprawled across a narrow viewport and read as
-             half-page-wide; user asked for a proper 'over' popover.
-             Narrowed to w-52 (208 px), capped list to 10 rows
-             (max-h-52) so a group of 30 doesn't push the panel down
-             the page, and anchored right-0 to the button so it opens
-             leftward and never juts out over the graph area on the
-             right. */
-          <div className="card absolute right-0 top-10 z-40 w-52 max-w-[92vw] p-2 shadow-2xl">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-faint">
-              <button onClick={() => setSelected(presets.everyone())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">All</button>
-              <button onClick={() => setSelected(new Set())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">None</button>
-              <span className="ml-auto normal-case tracking-normal">{selected.size}/{roster.length}</span>
+          {peopleOpen && (
+            <div className="absolute right-0 top-full z-40 mt-1 w-52 max-w-[92vw] rounded-lg border bg-surface text-ink shadow-md">
+              {/* Same visual weight as an <option>: single line,
+                  compact vertical rhythm, no card chrome. Sticky
+                  header keeps All/None reachable while scrolling. */}
+              <div className="sticky top-0 flex items-center gap-1.5 border-b bg-surface px-2 py-1.5 text-[10px] uppercase tracking-wider text-faint">
+                <button onClick={() => setSelected(presets.everyone())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">All</button>
+                <button onClick={() => setSelected(new Set())} className="rounded px-1.5 py-0.5 hover:bg-surface-2">None</button>
+                <span className="ml-auto normal-case tracking-normal">{selected.size}/{roster.length}</span>
+              </div>
+              <ul className="max-h-52 overflow-y-auto py-1">
+                {roster.map((r) => {
+                  const on = selected.has(r.id);
+                  return (
+                    <li key={r.id}>
+                      <label className="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-surface-2">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => {
+                            const next = new Set(selected);
+                            if (on) next.delete(r.id); else next.add(r.id);
+                            setSelected(next);
+                          }}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                        {r.isDemo && <span className="text-[9px] text-faint">legend</span>}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-            <ul className="max-h-52 space-y-0.5 overflow-y-auto">
-              {roster.map((r) => {
-                const on = selected.has(r.id);
-                return (
-                  <li key={r.id}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-surface-2">
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={() => {
-                          const next = new Set(selected);
-                          if (on) next.delete(r.id); else next.add(r.id);
-                          setSelected(next);
-                        }}
-                      />
-                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                      {r.isDemo && <span className="text-[9px] text-faint">legend</span>}
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </label>
     </div>
   );
 }
