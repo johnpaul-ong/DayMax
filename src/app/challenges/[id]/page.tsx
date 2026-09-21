@@ -686,7 +686,7 @@ export default function ChallengePage() {
           <section>
             <h2 className="mb-2 font-semibold">Graphs</h2>
             {family === "life" ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <AverageDayClock
                     members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
@@ -704,12 +704,14 @@ export default function ChallengePage() {
                   />
                 </div>
 
-                {/* Horizontal lollipops of per-person hours in each
-                    bucket, scoped strictly to the challenge window
-                    (server-side via member_day_strip). Sized to
-                    match the Average Day clock cell so the picture
-                    balances on either side of the grid. */}
-                <div className="md:col-start-1">
+                {/* Horizontal lollipops of per-person hours per
+                    bucket. Now sits in the THIRD column on lg+
+                    screens so it lands to the right of the vertical
+                    columns rather than under the clock, per the last
+                    round of feedback. On md it wraps to a new row
+                    below columns; on mobile the whole grid stacks
+                    single-file. */}
+                <div>
                   <h3 className="mb-2 font-semibold">Hours by person</h3>
                   <MembersHoursBars
                     members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
@@ -724,7 +726,7 @@ export default function ChallengePage() {
                     with something in the race, non-zero total, and
                     someone actually running. */}
                 {raceData.length >= 2 && raceMagnitude > 0 && (
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-2 lg:col-span-3">
                     <h3 className="mb-2 font-semibold">
                       The race
                       <span className="ml-2 text-xs font-normal text-muted">

@@ -240,19 +240,18 @@ export function MembersDayColumns({
   // Every 6 hours gets a labelled tick so the eye can find dawn /
   // noon / dusk / midnight without counting stripes.
   const TICKS = [0, 24, 48, 72]; // slot indices for 00, 06, 12, 18
-  // How wide the card actually needs to be: axis column + N columns
-  // + gaps + padding. Prevents the card from stretching to the full
-  // grid-cell width and leaving huge empty space to the right of a
-  // handful of members.
-  const AXIS_W = 32;
-  const GAP = 8; // matches gap-2
-  const contentW = AXIS_W + withData.length * (COL_W + GAP) + 16;
   // Custom tooltip content -- memberised by hover state.
   const hoveredMember = hover ? withData.find((m) => m.id === hover.memberId) : null;
   const hoveredCell = hover && hoveredMember ? hoveredMember.clock.get(hover.slot) : null;
 
   return (
-    <div className="card p-3" style={{ maxWidth: `${contentW}px` }}>
+    // w-fit shrinks the card to exactly its content -- previously
+    // a manual contentW estimate over-shot by ~one gap width so the
+    // right edge sat further from the last column than the left
+    // edge sat from the axis. Letting the browser measure removes
+    // the asymmetry entirely; card padding p-3 then supplies equal
+    // 12 px whitespace on all four sides.
+    <div className="card w-fit p-3">
       {/* Redundant '00:00 up top / N people' caption killed on
           feedback -- the axis on the left already labels the times
           and each column has a name under it. */}

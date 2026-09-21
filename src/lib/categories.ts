@@ -29,7 +29,7 @@ export interface Category {
  */
 export const CATEGORIES: Category[] = [
   { code: 0, name: "Sleep", aliases: ["sleep"], defaultBucket: "other", color: "#94a3b8" },
-  { code: 1, name: "Work", aliases: ["work"], defaultBucket: "productive", color: "#2563eb" },
+  { code: 1, name: "Work/School", aliases: ["work", "school", "work/school", "study", "studying"], defaultBucket: "productive", color: "#2563eb" },
   { code: 2, name: "Sports", aliases: ["gym / judo", "gym", "judo"], defaultBucket: "productive", color: "#16a34a" },
   { code: 3, name: "Social", aliases: ["social"], defaultBucket: "other", color: "#f59e0b" },
   { code: 4, name: "Travel", aliases: ["travel"], defaultBucket: "other", color: "#0ea5e9" },
