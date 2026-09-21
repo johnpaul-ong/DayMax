@@ -77,13 +77,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             every ordinary card, and comfortably above the Capture
             Widget (z-55) so the dropdown always wins.
 
+            The position/top/z-index are ALSO inline. Reason: a
+            broad theme rule like `[data-theme="dark"] body > * {
+            position: relative; z-index: 1 }` has specificity
+            (0,1,1) which silently beats Tailwind's `.sticky` /
+            `.z-\[100\]` (each (0,1,0)) and flattens the nav to
+            a non-sticky z:1 sibling of <main>. Main paints later
+            in DOM order, so it ends up ON TOP of nav -- and the
+            notifications dropdown gets overpainted by cards. Inline
+            styles have effective (1,0,0,0) specificity, so no
+            future theme selector can accidentally re-break this.
+
             Split into two containers on purpose: LEFT half (logo +
             tabs) scrolls horizontally on narrow viewports without
             dragging the bell + theme switcher with it. Bell +
             theme are a shrink-0 sibling of the scroll rail so they
             sit at the right edge no matter what the tabs are
             doing. */}
-        <nav className="sticky top-0 z-[100] border-b bg-surface">
+        <nav
+          className="sticky top-0 z-[100] border-b bg-surface"
+          style={{ position: "sticky", top: 0, zIndex: 100 }}
+        >
           <div className="mx-auto flex max-w-6xl items-center px-3">
             <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2.5">
               <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
@@ -102,13 +116,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <WelcomeGate />
         {/*
          * isolation: isolate forms a NEW stacking context on main
-         * that CONTAINS every card / transform inside it. Without
-         * this, cards that use transform (hover:-translate-y-*,
-         * scroll-snap tricks) create their own root-level stacking
-         * contexts that can overpaint the sticky nav's dropdowns
-         * -- exactly what was making the notification panel appear
-         * behind Life/Money cards. Isolation walls them off inside
-         * main; the nav (outside main, z-100) always wins.
+         * that CONTAINS every card / transform inside it. Cards
+         * that use transform (hover:-translate-y-*, scroll-snap
+         * tricks) would otherwise create their own root-level
+         * stacking contexts that can escape main and start
+         * competing with the sticky nav. Isolation keeps them
+         * bottled up inside main; combined with the nav's
+         * z-index 100 (see nav comment) the notification dropdown
+         * always paints above every card.
          */}
         <main
           className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:pb-8"

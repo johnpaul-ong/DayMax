@@ -578,8 +578,17 @@ textarea::placeholder {
   [data-theme="dark"] body::after { animation: none; opacity: 0; }
 }
 
-/* Keep app chrome above the scan lines. */
-[data-theme="dark"] body > * { position: relative; z-index: 1; }
+/* Lift <main> above the fixed scan-line pseudo-elements (which live at
+   z:0). Deliberately NARROW -- previous version was `body > *`, which
+   has specificity (0,1,1) and quietly beat Tailwind's `.sticky` /
+   `.z-\[100\]` on <nav> (each (0,1,0)). That flattened nav to
+   position:relative, z-index:1 in dark/cottage themes, so the sticky
+   nav wasn't actually sticky AND its z-100 was gone. Nav and main both
+   ended up at z:1 as siblings; main comes later in DOM order and has
+   isolation:isolate, so it painted OVER the nav -- including the
+   notifications dropdown living inside the nav. Targeting `main`
+   specifically leaves nav alone and lets Tailwind's classes stand. */
+[data-theme="dark"] body > main { position: relative; z-index: 1; }
 
 
 /* ============================================================================
@@ -782,5 +791,9 @@ textarea::placeholder {
   [data-theme="cottage"] body::after { animation: none; opacity: 0; }
 }
 
-/* Keep app chrome above the leaves. */
-[data-theme="cottage"] body > * { position: relative; z-index: 1; }
+/* Lift <main> above the fixed leaf backdrop / drifting leaves (all at
+   z:0). Same narrowing as the dark-theme rule above -- do NOT touch
+   nav, or its Tailwind `sticky z-[100]` gets clobbered by this rule's
+   (0,1,1) specificity and the notifications dropdown gets overpainted
+   by main content. */
+[data-theme="cottage"] body > main { position: relative; z-index: 1; }
