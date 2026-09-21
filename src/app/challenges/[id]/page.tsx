@@ -728,12 +728,12 @@ export default function ChallengePage() {
                   </div>
 
                   <div className="shrink-0 snap-start">
-                    <h3 className="mb-2 font-semibold">Hours by person</h3>
+                    <h3 className="mb-2 font-semibold">Day shape</h3>
                     <MembersHoursBars
                       members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
                       from={challenge.startsOn}
                       to={challenge.endsOn}
-                      maxWidth={360}
+                      maxWidth={420}
                     />
                   </div>
                 </div>

@@ -408,110 +408,93 @@ export function MembersHoursBars({
   maxWidth?: number;
 }) {
   const { strips, loaded } = useMemberStrips(members, from, to);
+  // Bucketing: productive / social / brainrot / other. Social gets
+  // its own slice (rather than falling into 'other' via
+  // defaultBuckets) so the picture matches the Arena Day Shape --
+  // social is a big enough chunk of most people's day that folding
+  // it into 'other' hid the actual story. Social = category 3.
   const buckets = defaultBuckets();
-  const bucketOf = (cat: number): Bucket | undefined => buckets[cat];
+  const bucketOf = (cat: number): "productive" | "social" | "brainrot" | "other" => {
+    if (cat === 3) return "social";
+    const b = buckets[cat] as Bucket | undefined;
+    if (b === "productive") return "productive";
+    if (b === "brainrot") return "brainrot";
+    return "other";
+  };
 
-  // Per-person totals across the challenge window ONLY -- the
-  // useMemberStrips hook passes from/to straight through to the
-  // member_day_strip RPC, which filters server-side. Anything logged
-  // outside [from, to] is never returned, so these hours are strictly
-  // the challenge window.
+  // Per-person AVERAGE-DAY breakdown across the challenge window.
+  // Divides bucket totals by days-logged so a 7-day member is
+  // comparable to a 1-day member -- otherwise the person who
+  // logged more days always wins the hours race regardless of
+  // quality. Server-side filtered to [from, to] via
+  // fetchMemberDayStrip.
   const data = useMemo(
     () =>
-      members.map((m) => {
-        const rows = strips.get(m.id) ?? [];
-        let p = 0, b = 0, o = 0;
-        for (const r of rows) {
-          const bk = bucketOf(r.category);
-          if (bk === "productive") p += HOURS_PER_SLOT;
-          else if (bk === "brainrot") b += HOURS_PER_SLOT;
-          else o += HOURS_PER_SLOT;
-        }
-        return {
-          name: m.name.split(/\s+/)[0],
-          productive: Math.round(p * 10) / 10,
-          brainrot: Math.round(b * 10) / 10,
-          other: Math.round(o * 10) / 10,
-        };
-      }),
+      members
+        .map((m) => {
+          const rows = strips.get(m.id) ?? [];
+          const days = new Set(rows.map((r) => r.date)).size || 1;
+          let p = 0, s = 0, b = 0, o = 0;
+          for (const r of rows) {
+            const bk = bucketOf(r.category);
+            if (bk === "productive") p += HOURS_PER_SLOT;
+            else if (bk === "social") s += HOURS_PER_SLOT;
+            else if (bk === "brainrot") b += HOURS_PER_SLOT;
+            else o += HOURS_PER_SLOT;
+          }
+          return {
+            name: m.name.split(/\s+/)[0],
+            productive: Math.round((p / days) * 10) / 10,
+            social: Math.round((s / days) * 10) / 10,
+            brainrot: Math.round((b / days) * 10) / 10,
+            other: Math.round((o / days) * 10) / 10,
+          };
+        })
+        .filter((d) => d.productive + d.social + d.brainrot + d.other > 0)
+        .sort((a, b) => (b.productive + b.social + b.brainrot + b.other) - (a.productive + a.social + a.brainrot + a.other)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [members, strips]
   );
 
   if (!loaded) return <p className="text-sm text-faint">Loading…</p>;
-  const any = data.some((d) => d.productive + d.brainrot + d.other > 0);
-  if (!any)
+  if (data.length === 0)
     return (
       <p className="text-sm text-faint">
         No hours logged yet by anyone in the window.
       </p>
     );
 
-  // Bucket colours -- keep the productive/brainrot palette that the
-  // rest of the app uses, so 'productive' is always the same blue.
+  // Colours match the app-wide category palette so 'productive' is
+  // always the same blue, 'brainrot' the same red.
   const catByCode = new Map(CATEGORIES.map((c) => [c.code, c]));
   const P = catByCode.get(1)?.color ?? "#2563eb";
+  const S = catByCode.get(3)?.color ?? "#f59e0b";
   const B = catByCode.get(6)?.color ?? "#ef4444";
   const O = "var(--muted)";
 
-  // Horizontal lollipop: each person contributes three rows
-  // (productive, unproductive, other), each row a thin rail with a
-  // dot at its right end. Rail length is proportional to hours vs
-  // the max value across everything, so the x-axis 'scales to fit'
-  // the group's biggest number regardless of challenge length.
-  const rows: Array<{
-    key: string;
-    person: string;
-    bucket: "productive" | "unproductive" | "other";
-    hours: number;
-    color: string;
-    firstOfPerson: boolean;
-  }> = [];
-  for (const d of data) {
-    rows.push({ key: `${d.name}-p`, person: d.name, bucket: "productive", hours: d.productive, color: P, firstOfPerson: true });
-    rows.push({ key: `${d.name}-b`, person: d.name, bucket: "unproductive", hours: d.brainrot, color: B, firstOfPerson: false });
-    rows.push({ key: `${d.name}-o`, person: d.name, bucket: "other", hours: d.other, color: O, firstOfPerson: false });
-  }
-  const max = Math.max(1, ...rows.map((r) => r.hours));
+  // Height scales with member count so 2 people don't get a huge
+  // empty card. 32 px per row + 60 px chrome (legend + axis).
+  const height = Math.max(160, data.length * 34 + 60);
 
   return (
     <div className="card p-3" style={{ maxWidth: `${maxWidth}px` }}>
-      <div className="mb-2 flex items-center gap-3 text-[10px] text-muted">
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: P }} />productive</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: B }} />unproductive</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: O }} />other</span>
-        <span className="ml-auto text-faint">0 – {Math.ceil(max)}h</span>
+      <div className="mb-1 text-xs text-muted">
+        An average day each, split by bucket.
       </div>
-      <div className="space-y-1">
-        {rows.map((r) => {
-          const pct = Math.max(1, (r.hours / max) * 100);
-          return (
-            <div key={r.key} className="grid grid-cols-[56px_1fr_44px] items-center gap-2 text-[11px]">
-              <span className={`truncate ${r.firstOfPerson ? "font-semibold text-ink" : "text-faint"}`} title={r.person}>
-                {r.firstOfPerson ? r.person : ""}
-              </span>
-              <div className="relative h-3">
-                <div className="absolute inset-y-1/2 left-0 right-0 -translate-y-1/2 border-t border-dashed border-border/60" />
-                <div
-                  className="absolute inset-y-1/2 left-0 -translate-y-1/2 rounded-full"
-                  style={{ width: `${pct}%`, height: 2, background: r.color, opacity: r.hours > 0 ? 1 : 0.2 }}
-                />
-                <div
-                  className="absolute -translate-y-1/2 -translate-x-1/2 rounded-full ring-2 ring-surface"
-                  style={{
-                    top: "50%",
-                    left: `${pct}%`,
-                    width: 8,
-                    height: 8,
-                    background: r.color,
-                    opacity: r.hours > 0 ? 1 : 0.3,
-                  }}
-                />
-              </div>
-              <span className="tabular-nums text-right text-faint">{r.hours}h</span>
-            </div>
-          );
-        })}
+      <div style={{ height }}>
+        <ResponsiveContainer>
+          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis type="number" tick={{ fontSize: 10 }} unit="h" />
+            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={70} />
+            <Tooltip formatter={(v: number) => `${v}h`} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Bar dataKey="productive" stackId="a" fill={P} />
+            <Bar dataKey="social" stackId="a" fill={S} />
+            <Bar dataKey="brainrot" stackId="a" fill={B} />
+            <Bar dataKey="other" stackId="a" fill={O} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
