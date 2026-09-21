@@ -77,7 +77,7 @@ import { TeamDot } from "../../team-name";
 import { ChartEmpty, emptyCause } from "../../empty-chart";
 import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
-import { AverageDayClock, MembersDayColumns } from "./_life-views";
+import { AverageDayClock, MembersDayColumns, MembersHoursBars } from "./_life-views";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -692,13 +692,25 @@ export default function ChallengePage() {
                   />
                 </div>
 
+                {/* Columns on the left, grouped-bar breakdown on
+                    the right. Both draw from the same day-strip
+                    fetch so the extra chart doesn't cost another
+                    request. On narrow screens the bars stack under
+                    the columns. */}
                 <div>
                   <h3 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h3>
-                  <MembersDayColumns
-                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                    from={challenge.startsOn}
-                    to={challenge.endsOn}
-                  />
+                  <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+                    <MembersDayColumns
+                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                      from={challenge.startsOn}
+                      to={challenge.endsOn}
+                    />
+                    <MembersHoursBars
+                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                      from={challenge.startsOn}
+                      to={challenge.endsOn}
+                    />
+                  </div>
                 </div>
 
                 {/* The race is hidden entirely on life challenges
@@ -764,31 +776,31 @@ export default function ChallengePage() {
                   const flag = (c: ChallengeCategory) =>
                     c.people > 0 && median > 0 && c.total / c.people >= median * 2;
                   const flagged = ess.filter(flag);
-                  const solo = rows.length <= 1;
                   return (
                     <div>
-                      <h3 className="mb-2 font-semibold">Essentials — where the fixed costs go</h3>
+                      <h3 className="mb-2 font-semibold">Essentials</h3>
                       {flagged.length > 0 && (
                         <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
                           <b>Heads up:</b> per-person spend on <b>{flagged.map((c) => c.name).join(", ")}</b> is
                           well above the median. Worth checking for a doubled-up entry.
                         </p>
                       )}
-                      <div className={solo ? "" : "grid gap-3 sm:grid-cols-2"}>
-                        {!solo && (
-                          <div className="h-56 card p-2">
-                            <ResponsiveContainer>
-                              <PieChart>
-                                <Pie data={ess.slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
-                                  {ess.slice(0, 8).map((_, i) => (
-                                    <Cell key={i} fill={SERIES[i % SERIES.length]} />
-                                  ))}
-                                </Pie>
-                                <Tooltip formatter={(v: number) => money(Number(v), currency)} />
-                              </PieChart>
-                            </ResponsiveContainer>
-                          </div>
-                        )}
+                      {/* Pie + list side-by-side ALWAYS -- was solo-only-hidden
+                          before, but a pie of one person's essentials still
+                          answers 'where does my fixed cost live' cleanly. */}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="h-56 card p-2">
+                          <ResponsiveContainer>
+                            <PieChart>
+                              <Pie data={ess.slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
+                                {ess.slice(0, 8).map((_, i) => (
+                                  <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: number) => money(Number(v), currency)} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
                         <div className="card divide-y">
                           {ess.slice(0, 8).map((c) => (
                             <div key={c.name} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
@@ -809,14 +821,20 @@ export default function ChallengePage() {
                   );
                 })()}
 
-                {/* Group's non-essentials -- only when there's
-                    someone else to make the aggregation meaningful.
-                    Solo user is looking at their own numbers only. */}
-                {isMoney && rows.length > 1 && cats.some((c) => !c.essential) && group.ne > 0 && (
+                {/* Non-essentials breakdown. Renders whenever there
+                    is data, solo included -- 'where did my
+                    discretionary spend go' is a fair question with
+                    one person too. Heading changes to reflect
+                    whether it's 'the group' or just 'you'. */}
+                {isMoney && cats.some((c) => !c.essential) && group.ne > 0 && (
                   <div className="md:col-span-2">
-                    <h3 className="mb-1 font-semibold">What the group is spending on</h3>
+                    <h3 className="mb-1 font-semibold">
+                      {rows.length > 1 ? "What the group is spending on" : "Where your non-essentials went"}
+                    </h3>
                     <p className="mb-2 text-sm text-muted">
-                      Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.
+                      {rows.length > 1
+                        ? <>Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.</>
+                        : <>{money(group.ne, currency)} in discretionary spending this window.</>}
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="h-60 card p-2">

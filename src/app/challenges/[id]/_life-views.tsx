@@ -22,9 +22,29 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import DayClock, { type ClockSlot } from "../../day-clock";
 import type { DayStripRow } from "@/lib/friends";
-import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
+import {
+  CATEGORIES,
+  categoryColor,
+  categoryName,
+  defaultBuckets,
+  HOURS_PER_SLOT,
+  slotToTime,
+  SLOTS_PER_DAY,
+  type Bucket,
+} from "@/lib/categories";
 
 type Member = { id: string; name: string };
 
@@ -338,6 +358,92 @@ export function MembersDayColumns({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Hours-per-person bucket totals: three clustered bars per member --
+ * productive, brainrot ("unproductive"), other -- so a viewer can
+ * eyeball who's heavy in each bucket without decoding the vertical
+ * columns to the left. Uses the same day-strip fetch as the columns
+ * chart via the cachedRpcAll on lib/friends, so it doesn't
+ * re-request when it renders in the same section as MembersDayColumns.
+ *
+ * Bucketing follows the app's default (Work + Sports = productive,
+ * Other + Leisure = brainrot, everything else = other). Bucket
+ * personalisation isn't per-viewer here because a challenge is a
+ * shared board -- everyone sees the same numbers.
+ */
+export function MembersHoursBars({
+  members,
+  from,
+  to,
+}: {
+  members: Member[];
+  from?: string;
+  to?: string;
+}) {
+  const { strips, loaded } = useMemberStrips(members, from, to);
+  const buckets = defaultBuckets();
+  const bucketOf = (cat: number): Bucket | undefined => buckets[cat];
+
+  const data = useMemo(
+    () =>
+      members.map((m) => {
+        const rows = strips.get(m.id) ?? [];
+        let p = 0, b = 0, o = 0;
+        for (const r of rows) {
+          const bk = bucketOf(r.category);
+          if (bk === "productive") p += HOURS_PER_SLOT;
+          else if (bk === "brainrot") b += HOURS_PER_SLOT;
+          else o += HOURS_PER_SLOT;
+        }
+        return {
+          name: m.name.split(/\s+/)[0],
+          productive: Math.round(p * 10) / 10,
+          brainrot: Math.round(b * 10) / 10,
+          other: Math.round(o * 10) / 10,
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [members, strips]
+  );
+
+  if (!loaded) return <p className="text-sm text-faint">Loading…</p>;
+  const any = data.some((d) => d.productive + d.brainrot + d.other > 0);
+  if (!any)
+    return (
+      <p className="text-sm text-faint">
+        No hours logged yet by anyone in the window.
+      </p>
+    );
+
+  // Pull the standard bucket colours off the category registry so this
+  // chart matches every other productive/brainrot rendering in the app.
+  const catByCode = new Map(CATEGORIES.map((c) => [c.code, c]));
+  const P = catByCode.get(1)?.color ?? "#2563eb"; // Work
+  const B = catByCode.get(6)?.color ?? "#ef4444"; // Other
+  const O = "var(--muted)";
+
+  return (
+    <div className="card p-2" style={{ height: 288 }}>
+      <ResponsiveContainer>
+        <BarChart data={data} margin={{ top: 6, right: 6, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+          <YAxis tick={{ fontSize: 10 }} unit="h" />
+          <Tooltip formatter={(v: number) => `${v}h`} />
+          <Legend wrapperStyle={{ fontSize: 10 }} />
+          <Bar dataKey="productive" fill={P} radius={[3, 3, 0, 0]} />
+          <Bar dataKey="brainrot" fill={B} name="unproductive" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="other" name="other" radius={[3, 3, 0, 0]}>
+            {data.map((d) => (
+              <Cell key={d.name} fill={O} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
