@@ -253,31 +253,76 @@ export default function SignInPage() {
 }
 
 /**
- * A 12-column mini "year strip" hook. Every column is a coloured
- * gradient in the app's category colours. Fully decorative -- no data
- * fetched -- but shows the shape a signed-in user builds up.
+ * A live "year strip" hook: 40 stacked column bars in the app's
+ * category colours, each split into three sub-slots that slowly
+ * cycle through the palette on staggered timers. Purely decorative,
+ * fetches nothing, but ambient enough that landing on the sign-in
+ * page feels like watching a live board rather than a static gradient.
+ *
+ * Animation is a single CSS keyframe (hue-rotate + brightness pulse)
+ * with the delay staggered by column index, so the effect ripples
+ * left-to-right across the strip. Sub-slot heights + starting
+ * colours stay deterministic so the SSR / hydration match is
+ * pixel-exact.
  */
 function YearStripHook() {
   const cats = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   return (
-    <div className="mx-auto mt-4 flex h-14 max-w-[340px] gap-[2px] overflow-hidden rounded-md" aria-hidden="true">
-      {Array.from({ length: 40 }, (_, i) => {
-        // deterministic pseudo-random layout so it doesn't reshuffle
-        const seed = (i * 7 + 3) % 100;
-        const parts = [
-          { c: cats[(seed * 3) % cats.length], h: 45 },
-          { c: cats[(seed * 5) % cats.length], h: 30 },
-          { c: cats[(seed * 11) % cats.length], h: 25 },
-        ];
-        return (
-          <div key={i} className="flex h-full flex-1 flex-col overflow-hidden" style={{ minWidth: 0 }}>
-            {parts.map((p, j) => (
-              <div key={j} style={{ height: `${p.h}%`, background: `var(--cat-${p.c})`, opacity: 0.9 }} />
-            ))}
-          </div>
-        );
-      })}
-    </div>
+    <>
+      <style>{`
+        @keyframes daymax-signin-strip {
+          0%   { filter: hue-rotate(0deg)   brightness(1);    opacity: 0.9; }
+          25%  { filter: hue-rotate(45deg)  brightness(1.15); opacity: 1;   }
+          50%  { filter: hue-rotate(120deg) brightness(1);    opacity: 0.85;}
+          75%  { filter: hue-rotate(220deg) brightness(1.1);  opacity: 1;   }
+          100% { filter: hue-rotate(360deg) brightness(1);    opacity: 0.9; }
+        }
+        @keyframes daymax-signin-strip-flow {
+          0%   { transform: translateY(0);    }
+          50%  { transform: translateY(-2px); }
+          100% { transform: translateY(0);    }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .daymax-signin-cell, .daymax-signin-col { animation: none !important; }
+        }
+      `}</style>
+      <div className="mx-auto mt-4 flex h-14 max-w-[340px] gap-[2px] overflow-hidden rounded-md" aria-hidden="true">
+        {Array.from({ length: 40 }, (_, i) => {
+          const seed = (i * 7 + 3) % 100;
+          const parts = [
+            { c: cats[(seed * 3) % cats.length], h: 45 },
+            { c: cats[(seed * 5) % cats.length], h: 30 },
+            { c: cats[(seed * 11) % cats.length], h: 25 },
+          ];
+          // Stagger the hue-cycle by column so the wave travels
+          // across the strip. 40 cols × 90 ms = one full pass every
+          // ~3.6 s at 8 s cycle length.
+          const colDelay = `${(i * -0.09).toFixed(2)}s`;
+          return (
+            <div
+              key={i}
+              className="daymax-signin-col flex h-full flex-1 flex-col overflow-hidden"
+              style={{
+                minWidth: 0,
+                animation: `daymax-signin-strip-flow 3.2s ease-in-out ${colDelay} infinite`,
+              }}
+            >
+              {parts.map((p, j) => (
+                <div
+                  key={j}
+                  className="daymax-signin-cell"
+                  style={{
+                    height: `${p.h}%`,
+                    background: `var(--cat-${p.c})`,
+                    animation: `daymax-signin-strip 8s linear ${((i * 0.09) + j * 0.4).toFixed(2)}s infinite`,
+                  }}
+                />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
