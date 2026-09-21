@@ -85,7 +85,14 @@ function Board({
   );
 }
 
-/** Light vs Midnight vs Cottage, across everyone — WorkMax averaged per member. */
+/**
+ * Light vs Midnight vs Cottage, across everyone. Ranked by FOCUS %
+ * (productive / (productive + brainrot)) rather than raw WorkMax --
+ * WorkMax is volume-heavy, so a team that's been logging for months
+ * beats a team that joined yesterday even at higher quality. Focus %
+ * is volume-neutral so brand-new members can still contribute
+ * meaningfully on day one.
+ */
 function TeamBoard({ scope, trackId }: { scope: ArenaScope; trackId: string | null }) {
   const [rows, setRows] = useState<TeamTotal[]>([]);
   const [mine, setMine] = useState<string | null>(null);
@@ -96,37 +103,44 @@ function TeamBoard({ scope, trackId }: { scope: ArenaScope; trackId: string | nu
   }, [scope, trackId]);
 
   if (rows.length === 0) return null;
-  const max = Math.max(...rows.map((r) => r.workMax), 1);
+
+  const ranked = [...rows]
+    .map((r) => {
+      const denom = r.productive + r.brainrot;
+      const focus = denom > 0 ? (r.productive / denom) * 100 : 0;
+      return { ...r, focus };
+    })
+    .sort((a, b) => b.focus - a.focus);
 
   return (
     <div className="mb-4 card p-4">
       <h2 className="font-semibold">Teams</h2>
       <p className="mb-3 text-xs text-muted">
-        WorkMax averaged per member, so size doesn&apos;t win it. Your team is your theme.
+        Focus % (productive ÷ productive + brainrot). Volume-neutral, so brand-new members can still lift the score. Your team is your theme.
       </p>
       <div className="space-y-2.5">
-        {rows.map((r, i) => {
-          const t = teamMeta(r.team);
-          return (
-            <div key={r.team} className="flex items-center gap-3">
-              <span className="w-4 text-center text-xs font-bold text-faint">{i + 1}</span>
-              <span className="text-lg">{t.icon}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
-                  {t.label}
-                  {r.team === mine && <span className="ml-1.5 text-xs text-accent">you</span>}
-                  <span className="ml-1.5 text-xs font-normal text-faint">
-                    {r.members} · {r.productive.toLocaleString()}h productive
-                  </span>
-                </p>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div className="h-full rounded-full" style={{ width: `${(r.workMax / max) * 100}%`, background: t.color }} />
-                </div>
+        {ranked.map((r, i) => (
+          <div key={r.team} className="flex items-center gap-3">
+            <span className="w-4 text-center text-xs font-bold text-faint">{i + 1}</span>
+            <span className="text-lg">{teamMeta(r.team).icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                {teamMeta(r.team).label}
+                {r.team === mine && <span className="ml-1.5 text-xs text-accent">you</span>}
+                <span className="ml-1.5 text-xs font-normal text-faint">
+                  {r.members} · {r.productive.toLocaleString()}h P / {r.brainrot.toLocaleString()}h B
+                </span>
+              </p>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${r.focus}%`, background: teamMeta(r.team).color }}
+                />
               </div>
-              <span className="tabular-nums font-bold">{r.workMax}</span>
             </div>
-          );
-        })}
+            <span className="tabular-nums font-bold">{r.focus.toFixed(1)}%</span>
+          </div>
+        ))}
       </div>
     </div>
   );

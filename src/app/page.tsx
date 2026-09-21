@@ -410,14 +410,22 @@ export default function HomePage() {
         {/* Today AND this week in ONE compact card. The old layout rendered
             a full 5-tile row twice -- once for Today, once for This week --
             so WorkMax and Focus each appeared FIVE times down the page. */}
-        <div className="mb-3 flex flex-wrap items-baseline gap-2">
+        <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h2 className="font-semibold">Today &amp; this week</h2>
           <span className="text-xs text-faint">·</span>
           <span className="text-xs text-muted">from {ws.slice(5)}</span>
-          {todayTopCats.slice(0, 3).map((c) => (
-            <span key={c.code} className="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-surface px-2.5 py-0.5 text-xs font-medium last:mr-0">
+          {/* Today's top-three categories as INLINE LABELS -- were
+              rendering with border + bg-surface + rounded-full which
+              read as clickable buttons (they aren't). Now just a dot
+              + name + hours, muted, so they read as glanceable
+              context rather than actions. */}
+          {todayTopCats.slice(0, 3).map((c, i) => (
+            <span
+              key={c.code}
+              className={`inline-flex items-center gap-1.5 text-xs text-muted ${i === 0 ? "ml-auto" : ""}`}
+            >
               <span className="h-2 w-2 rounded-full" style={{ background: categoryColor(c.code) }} />
-              {categoryName(c.code)} · {c.hours.toFixed(1)}h
+              {categoryName(c.code)} · <span className="tabular-nums">{c.hours.toFixed(1)}h</span>
             </span>
           ))}
         </div>
