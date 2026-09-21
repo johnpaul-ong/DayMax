@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DayClock, { type ClockSlot } from "../../day-clock";
 import type { DayStripRow } from "@/lib/friends";
-import { categoryColor, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
+import { categoryColor, categoryName, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 
 type Member = { id: string; name: string };
 
@@ -170,10 +170,15 @@ export function MembersDayColumns({
             const mm = perSlot.get(r.slot)!;
             mm.set(r.category, (mm.get(r.category) ?? 0) + 1);
           }
-          const clock = new Map<number, number>();
+          // Per slot: which category won, how many days for that
+          // category at that slot, total days with anything logged
+          // at that slot. Feeds the hover tooltip and the stripe
+          // colour.
+          const clock = new Map<number, { cat: number; count: number; total: number }>();
           for (const [slot, counts] of perSlot) {
             const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-            if (top) clock.set(slot, top[0]);
+            const total = [...counts.values()].reduce((s, v) => s + v, 0);
+            if (top) clock.set(slot, { cat: top[0], count: top[1], total });
           }
           const days = new Set(rows.map((r) => r.date)).size;
           return { ...m, clock, days };
@@ -195,17 +200,16 @@ export function MembersDayColumns({
   const TICKS = [0, 24, 48, 72]; // slot indices for 00, 06, 12, 18
   // How wide the card actually needs to be: axis column + N columns
   // + gaps + padding. Prevents the card from stretching to the full
-  // 85% carousel-slide width and leaving huge empty space to the
-  // right of a handful of members.
+  // grid-cell width and leaving huge empty space to the right of a
+  // handful of members.
   const AXIS_W = 32;
   const GAP = 8; // matches gap-2
   const contentW = AXIS_W + withData.length * (COL_W + GAP) + 16;
   return (
-    <div className="card mx-auto p-3" style={{ maxWidth: `${contentW}px` }}>
-      <div className="mb-2 flex items-baseline justify-between text-xs text-muted">
-        <span>00:00 up top, 23:45 at the bottom.</span>
-        <span className="text-faint">{withData.length} {withData.length === 1 ? "person" : "people"}</span>
-      </div>
+    <div className="card p-3" style={{ maxWidth: `${contentW}px` }}>
+      {/* Redundant '00:00 up top / N people' caption killed on
+          feedback -- the axis on the left already labels the times
+          and each column has a name under it. */}
       <div className="-mx-3 overflow-x-auto px-3">
         <div className="flex items-start gap-2" style={{ minHeight: totalH + 24 }}>
           {/* Left-side time axis */}
@@ -226,21 +230,43 @@ export function MembersDayColumns({
               <div
                 className="relative overflow-hidden rounded-md border"
                 style={{ width: COL_W, height: totalH, background: "var(--surface-2)" }}
-                title={`${m.name} · ${m.days} day${m.days === 1 ? "" : "s"} logged`}
               >
                 {Array.from({ length: SLOTS_PER_DAY }, (_, s) => {
-                  const cat = m.clock.get(s);
-                  if (cat == null) return null;
+                  const cell = m.clock.get(s);
+                  if (!cell) {
+                    // Empty stripe still gets a tooltip target so
+                    // hovering an unlogged slot tells you it's unlogged
+                    // rather than looking dead.
+                    return (
+                      <div
+                        key={s}
+                        title={`${m.name} · ${slotToTime(s)} — not logged`}
+                        style={{
+                          position: "absolute",
+                          top: s * STRIPE_H,
+                          left: 0,
+                          right: 0,
+                          height: STRIPE_H,
+                        }}
+                      />
+                    );
+                  }
+                  const share = cell.total > 0 ? Math.round((cell.count / cell.total) * 100) : 0;
+                  const tip = `${m.name} · ${slotToTime(s)}\n${categoryName(cell.cat)}${
+                    cell.total > 1 ? ` · ${cell.count}/${cell.total} days (${share}%)` : ""
+                  }`;
                   return (
                     <div
                       key={s}
+                      title={tip}
                       style={{
                         position: "absolute",
                         top: s * STRIPE_H,
                         left: 0,
                         right: 0,
                         height: STRIPE_H,
-                        background: categoryColor(cat),
+                        background: categoryColor(cell.cat),
+                        cursor: "help",
                       }}
                     />
                   );

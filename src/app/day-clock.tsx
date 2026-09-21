@@ -273,12 +273,12 @@ export default function DayClock({
 
   return (
     <div
-      className={_fullscreen ? "" : "card mx-auto p-3"}
-      // Cap the card to just what it needs -- previously the card
-      // stretched to fill its parent (85% of the challenge carousel
-      // slide, hundreds of empty px on either side of a 360 px
-      // clock). max-width honours the maxWidth prop plus a hair for
-      // padding.
+      className={_fullscreen ? "" : "card p-3"}
+      // Cap the card to just what it needs so it doesn't stretch to
+      // fill its parent (a wide grid cell would otherwise leave
+      // hundreds of empty px around a 360 px clock). Left-aligned
+      // rather than centred so the card matches the left edge of
+      // any section title above it.
       style={_fullscreen ? undefined : { maxWidth: `${maxWidth + 24}px` }}
     >
       {!_fullscreen && (title || subtitle || showExpand) && (

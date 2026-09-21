@@ -609,30 +609,25 @@ export default function ChallengePage() {
             </div>
           </section>
 
-          {/* GRAPHS -- horizontal swipe carousel. Each chart is a
-              full-width snap card; scroll sideways to move between
-              them. Two layouts:
+          {/* GRAPHS. Two layouts:
 
-              LIFE challenges (Grindset Goblins, sleep, etc) get a
-              three-slide picture: the group's typical day as a single
-              clock, then everyone's day as vertical 24-hour columns
-              side-by-side, then the race. Everything else was noise
-              on top of that trio, so it went.
+              LIFE challenges (Grindset Goblins, sleep, etc) get three
+              tiles: the group's typical day as a single clock, then
+              everyone's day as vertical 24-hour columns side-by-side,
+              then the race. Laid out as a real grid so they sit next
+              to each other on wide screens and stack on phones; the
+              old horizontal snap-carousel forced a swipe-per-graph
+              even when both fit at once.
 
               MONEY / STAT challenges keep the money-specific pie +
               share-of-income + daily-damage set, since those views
-              are what the metric is actually about. */}
+              are what the metric is actually about, and stay in the
+              carousel because there are more of them. */}
           <section>
-            <h2 className="mb-1 font-semibold">Graphs</h2>
-            <p className="mb-2 text-sm text-muted">Swipe or scroll sideways to move between graphs.</p>
-            <div
-              className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
-              style={{ scrollbarWidth: "thin" }}
-            >
-
+            <h2 className="mb-2 font-semibold">Graphs</h2>
             {family === "life" ? (
-              <>
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
                   <AverageDayClock
                     members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
                     from={challenge.startsOn}
@@ -640,8 +635,8 @@ export default function ChallengePage() {
                   />
                 </div>
 
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  <h2 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h2>
+                <div>
+                  <h3 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h3>
                   <MembersDayColumns
                     members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
                     from={challenge.startsOn}
@@ -652,18 +647,15 @@ export default function ChallengePage() {
                 {/* The race is hidden entirely on life challenges
                     until there is real data to plot -- >=2 days
                     with something in the race, non-zero total, and
-                    someone actually running. An empty-state
-                    placeholder card on top of the two rich views
-                    above just added noise; the slide comes back the
-                    moment there is something to show. */}
+                    someone actually running. */}
                 {raceData.length >= 2 && raceMagnitude > 0 && (
-                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                    <h2 className="mb-2 font-semibold">
+                  <div className="md:col-span-2">
+                    <h3 className="mb-2 font-semibold">
                       The race
                       <span className="ml-2 text-xs font-normal text-muted">
                         Running {noun}. {rankLess ? "Flattest" : "Highest"} line wins.
                       </span>
-                    </h2>
+                    </h3>
                     <div className="h-36 card p-2">
                       <ResponsiveContainer>
                         <LineChart data={raceData}>
@@ -680,9 +672,14 @@ export default function ChallengePage() {
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             ) : (
               <>
+              <p className="mb-2 text-sm text-muted">Swipe or scroll sideways to move between graphs.</p>
+              <div
+                className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
+                style={{ scrollbarWidth: "thin" }}
+              >
                 <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
                   {/* the race */}
                   <Guarded
@@ -878,10 +875,9 @@ export default function ChallengePage() {
                     </div>
                   </Guarded>
                 </div>
-              </>
+              </div>{/* /carousel scroll container */}
+            </>
             )}
-
-            </div>{/* /carousel scroll container */}
           </section>{/* /Graphs */}
         </>
       )}
