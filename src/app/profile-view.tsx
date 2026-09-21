@@ -507,7 +507,11 @@ function TypicalDay({ strip, name, isSelf, loading }: { strip: DayStripRow[]; na
           </>
         )}
       </p>
-      <DayClock slots={slots} />
+      {/* Sized down from the 560 px default -- the clock was
+          dominating the profile page and dwarfing the year strip
+          right below it. 360 keeps the dial readable without
+          hijacking the whole viewport on desktop. */}
+      <DayClock slots={slots} maxWidth={360} />
     </section>
   );
 }
