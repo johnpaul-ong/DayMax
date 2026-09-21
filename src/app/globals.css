@@ -593,17 +593,39 @@ textarea::placeholder {
    ============================================================================ */
 
 [data-theme="cottage"] body {
-  /* Sun from the upper-left, moss vignette bottom-right, and a barely-
-     there leaf motif tiled across the whole page. The leaf SVG is
-     inlined as a data URI so there's no image request and it drops
-     out with prefers-reduced-motion untouched (motion is added
-     below, not baked into the pattern). */
+  /* Sun from the upper-left, moss vignette bottom-right. The scattered
+     leaf tile that used to live on this layer moved out to a real
+     element (.cottage-leaves in layout.tsx) so it can be tinted by
+     var(--accent) via a mask -- a plain background-image is stuck
+     with whatever colour is baked into the SVG data URI, which is
+     why the old tile ignored the user's accent choice. */
   background:
     radial-gradient(ellipse at 20% 0%, rgba(215, 178, 105, 0.14), transparent 60%),
     radial-gradient(ellipse at 90% 100%, rgba(92, 138, 78, 0.10), transparent 55%),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><g fill='%235c8a4e' fill-opacity='0.06'><path d='M30 40 C 30 22 44 12 62 12 C 62 30 48 42 30 42 Z'/><path d='M30 40 L 62 12' stroke='%235c8a4e' stroke-opacity='0.10' stroke-width='0.6' fill='none'/><path d='M120 130 C 120 118 130 110 144 110 C 144 122 134 132 120 132 Z'/><path d='M120 130 L 144 110' stroke='%235c8a4e' stroke-opacity='0.10' stroke-width='0.6' fill='none'/><path d='M100 60 C 108 52 118 52 128 60 C 120 68 108 68 100 60 Z' fill='%2396700f' fill-opacity='0.05'/></g></svg>") 0 0 / 180px 180px,
     var(--page);
   background-attachment: fixed;
+}
+
+/* The leaf-tile backdrop. Hidden outside cottage, so light and
+   midnight get untouched pages. Painted as `background-color:
+   var(--accent)` through a leaf-shaped mask, so whichever accent
+   the user picked is what the leaves wear. Fixed to the viewport
+   with negative z-index so it sits behind everything -- the
+   `body > * { z-index: 1 }` rule below already lifts app chrome
+   above it. */
+.cottage-leaves { display: none; }
+[data-theme="cottage"] .cottage-leaves {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--accent);
+  opacity: 0.09;
+  -webkit-mask:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><g><path d='M30 40 C 30 22 44 12 62 12 C 62 30 48 42 30 42 Z'/><path d='M30 40 L 62 12' stroke='black' stroke-width='0.6' fill='none'/><path d='M120 130 C 120 118 130 110 144 110 C 144 122 134 132 120 132 Z'/><path d='M120 130 L 144 110' stroke='black' stroke-width='0.6' fill='none'/><path d='M100 60 C 108 52 118 52 128 60 C 120 68 108 68 100 60 Z'/></g></svg>") 0 0 / 180px 180px repeat;
+          mask:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><g><path d='M30 40 C 30 22 44 12 62 12 C 62 30 48 42 30 42 Z'/><path d='M30 40 L 62 12' stroke='black' stroke-width='0.6' fill='none'/><path d='M120 130 C 120 118 130 110 144 110 C 144 122 134 132 120 132 Z'/><path d='M120 130 L 144 110' stroke='black' stroke-width='0.6' fill='none'/><path d='M100 60 C 108 52 118 52 128 60 C 120 68 108 68 100 60 Z'/></g></svg>") 0 0 / 180px 180px repeat;
 }
 
 /* Cards: paper with a soft moss hairline along the top edge (the

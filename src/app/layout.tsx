@@ -52,6 +52,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-page text-ink">
+        {/*
+         * Cottage-theme leaf backdrop. Hidden by default, made
+         * visible in globals.css only when data-theme="cottage".
+         * Lives here (not in a body::before) because the two body
+         * pseudo-elements are already spoken for by the drifting
+         * leaves, AND because we need an element with a real
+         * background so we can use `mask` -- background-images on
+         * the body can't be tinted by a CSS variable, so the old
+         * hardcoded moss-green tile was unresponsive to the user's
+         * accent choice. This layer paints the accent through a
+         * leaf-shaped mask, so pink accent = pink leaves.
+         */}
+        <div className="cottage-leaves" aria-hidden="true" />
         <nav className="sticky top-0 z-40 border-b bg-surface">
           <div className="mx-auto flex max-w-6xl items-center gap-0.5 overflow-x-auto px-3 py-2.5">
             <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
