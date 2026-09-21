@@ -267,35 +267,63 @@ function YourSpendingLollipop({
 }
 
 /**
- * A one-line category legend for life-family challenges. What each
- * coloured stripe / wedge / column actually is, in the same colour
- * the rest of the page uses. Bucket (productive / brainrot / other)
- * is included as a small tag so 'why does that count in the score?'
- * is visible without flipping to Settings.
+ * Category legend for life-family challenges, grouped by BUCKET
+ * (productive / brainrot / other) so the story is instantly
+ * "these two count for the score, these two count against it, and
+ * the rest are neutral background hours". Chips carry the same
+ * per-theme colour every stripe / wedge / column below uses.
+ *
+ * Layout: three labelled rows, one per bucket. On desktop each row
+ * is a compact chip strip; on mobile they stack. Empty buckets
+ * (unlikely with the defaults but possible if a user hides a
+ * category) hide themselves.
  */
 function CategoryLegend() {
   const buckets = defaultBuckets();
+  const grouped: Record<"productive" | "brainrot" | "other", typeof CATEGORIES> = {
+    productive: [],
+    brainrot: [],
+    other: [],
+  };
+  for (const c of CATEGORIES) grouped[buckets[c.code]].push(c);
+
+  const rows: Array<{
+    key: "productive" | "brainrot" | "other";
+    label: string;
+    tone: string;
+  }> = [
+    { key: "productive", label: "Productive", tone: "text-ok" },
+    { key: "brainrot", label: "Brainrot", tone: "text-danger" },
+    { key: "other", label: "Other", tone: "text-faint" },
+  ];
+
+  const Chip = ({ code, name }: { code: number; name: string }) => (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+        style={{ background: categoryColor(code) }}
+      />
+      <span className="text-xs font-medium">{name}</span>
+    </span>
+  );
+
   return (
     <div className="card px-3 py-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">
-          Categories
-        </span>
-        {CATEGORIES.map((c) => {
-          const bk = buckets[c.code];
+      <div className="grid gap-y-1.5">
+        {rows.map((row) => {
+          const cats = grouped[row.key];
+          if (cats.length === 0) return null;
           return (
-            <span key={c.code} className="inline-flex items-center gap-1.5">
+            <div key={row.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span
-                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ background: categoryColor(c.code) }}
-              />
-              <span className="font-medium">{c.name}</span>
-              {bk !== "other" && (
-                <span className={`text-[9px] uppercase tracking-wider ${bk === "productive" ? "text-ok" : "text-danger"}`}>
-                  {bk === "productive" ? "P" : "B"}
-                </span>
-              )}
-            </span>
+                className={`w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider ${row.tone}`}
+              >
+                {row.label}
+              </span>
+              {cats.map((c) => (
+                <Chip key={c.code} code={c.code} name={c.name} />
+              ))}
+            </div>
           );
         })}
       </div>
