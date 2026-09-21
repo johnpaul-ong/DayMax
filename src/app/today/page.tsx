@@ -13,6 +13,7 @@ import type { DayMetrics } from "@/lib/types";
 import { localToday } from "@/lib/dates";
 import ViewZoom from "../view-zoom";
 import DayClock, { type ClockSlot } from "../day-clock";
+import CategoryLegend from "../category-legend";
 
 /** Step a local ISO date by n days without tripping over month ends or DST. */
 function shiftDay(iso: string, n: number): string {
@@ -211,6 +212,14 @@ export default function TodayPage() {
       </div>
 
       {error && <p className="mb-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
+
+      {/* Which category counts as what. Same three-row layout the
+          challenge pages use so a slot chip and its bucket are
+          visible together -- 'pick Sports and it counts as
+          productive', without a Settings detour. */}
+      <div className="mb-3">
+        <CategoryLegend />
+      </div>
 
       <div className="mb-3 grid grid-cols-2 gap-1.5">
         {CATEGORIES.map((c) => (

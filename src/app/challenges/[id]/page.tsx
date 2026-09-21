@@ -78,8 +78,7 @@ import { ChartEmpty, emptyCause } from "../../empty-chart";
 import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
 import { AverageDayClock, MembersDayColumns, MembersHoursBars } from "./_life-views";
-import { CATEGORIES, categoryColor } from "@/lib/categories";
-import { defaultBuckets } from "@/lib/categories";
+import CategoryLegend from "../../category-legend";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -262,71 +261,6 @@ function YourSpendingLollipop({
           <b>{money((me.income ?? 0) - (me.total ?? 0), currency)}</b> left of income after all spend.
         </p>
       )}
-    </div>
-  );
-}
-
-/**
- * Category legend for life-family challenges, grouped by BUCKET
- * (productive / brainrot / other) so the story is instantly
- * "these two count for the score, these two count against it, and
- * the rest are neutral background hours". Chips carry the same
- * per-theme colour every stripe / wedge / column below uses.
- *
- * Layout: three labelled rows, one per bucket. On desktop each row
- * is a compact chip strip; on mobile they stack. Empty buckets
- * (unlikely with the defaults but possible if a user hides a
- * category) hide themselves.
- */
-function CategoryLegend() {
-  const buckets = defaultBuckets();
-  const grouped: Record<"productive" | "brainrot" | "other", typeof CATEGORIES> = {
-    productive: [],
-    brainrot: [],
-    other: [],
-  };
-  for (const c of CATEGORIES) grouped[buckets[c.code]].push(c);
-
-  const rows: Array<{
-    key: "productive" | "brainrot" | "other";
-    label: string;
-    tone: string;
-  }> = [
-    { key: "productive", label: "Productive", tone: "text-ok" },
-    { key: "brainrot", label: "Brainrot", tone: "text-danger" },
-    { key: "other", label: "Other", tone: "text-faint" },
-  ];
-
-  const Chip = ({ code, name }: { code: number; name: string }) => (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-        style={{ background: categoryColor(code) }}
-      />
-      <span className="text-xs font-medium">{name}</span>
-    </span>
-  );
-
-  return (
-    <div className="card px-3 py-2">
-      <div className="grid gap-y-1.5">
-        {rows.map((row) => {
-          const cats = grouped[row.key];
-          if (cats.length === 0) return null;
-          return (
-            <div key={row.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span
-                className={`w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider ${row.tone}`}
-              >
-                {row.label}
-              </span>
-              {cats.map((c) => (
-                <Chip key={c.code} code={c.code} name={c.name} />
-              ))}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -764,39 +698,44 @@ export default function ChallengePage() {
           <section>
             <h2 className="mb-2 font-semibold">Graphs</h2>
             {family === "life" ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <AverageDayClock
-                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                    from={challenge.startsOn}
-                    to={challenge.endsOn}
-                  />
-                </div>
+              /* One horizontally-scrollable strip containing all
+                 three life-challenge cards. Each card keeps its own
+                 fixed width so nothing stretches or squishes; the
+                 outer strip scrolls with mouse-wheel, trackpad
+                 swipe, or touch drag. Snap points on each card mean
+                 a swipe lands on the next card, not halfway between.
+                 Race chart still hangs full-width underneath. */
+              <div className="space-y-4">
+                <div
+                  className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
+                  style={{ scrollbarWidth: "thin" }}
+                >
+                  <div className="shrink-0 snap-start">
+                    <AverageDayClock
+                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                      from={challenge.startsOn}
+                      to={challenge.endsOn}
+                    />
+                  </div>
 
-                <div>
-                  <h3 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h3>
-                  <MembersDayColumns
-                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                    from={challenge.startsOn}
-                    to={challenge.endsOn}
-                  />
-                </div>
+                  <div className="shrink-0 snap-start">
+                    <h3 className="mb-2 font-semibold">Everyone&apos;s day, side by side</h3>
+                    <MembersDayColumns
+                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                      from={challenge.startsOn}
+                      to={challenge.endsOn}
+                    />
+                  </div>
 
-                {/* Horizontal lollipops of per-person hours per
-                    bucket. Now sits in the THIRD column on lg+
-                    screens so it lands to the right of the vertical
-                    columns rather than under the clock, per the last
-                    round of feedback. On md it wraps to a new row
-                    below columns; on mobile the whole grid stacks
-                    single-file. */}
-                <div>
-                  <h3 className="mb-2 font-semibold">Hours by person</h3>
-                  <MembersHoursBars
-                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
-                    from={challenge.startsOn}
-                    to={challenge.endsOn}
-                    maxWidth={360}
-                  />
+                  <div className="shrink-0 snap-start">
+                    <h3 className="mb-2 font-semibold">Hours by person</h3>
+                    <MembersHoursBars
+                      members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                      from={challenge.startsOn}
+                      to={challenge.endsOn}
+                      maxWidth={360}
+                    />
+                  </div>
                 </div>
 
                 {/* The race is hidden entirely on life challenges
@@ -804,7 +743,7 @@ export default function ChallengePage() {
                     with something in the race, non-zero total, and
                     someone actually running. */}
                 {raceData.length >= 2 && raceMagnitude > 0 && (
-                  <div className="md:col-span-2 lg:col-span-3">
+                  <div>
                     <h3 className="mb-2 font-semibold">
                       The race
                       <span className="ml-2 text-xs font-normal text-muted">

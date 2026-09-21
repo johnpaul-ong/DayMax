@@ -65,7 +65,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
          * leaf-shaped mask, so pink accent = pink leaves.
          */}
         <div className="cottage-leaves" aria-hidden="true" />
-        <nav className="sticky top-0 z-40 border-b bg-surface">
+        {/* Nav lives at z-50 (was z-40) so the notification bell
+            sitting inside it is above the Quick Capture widget
+            (z-55) minus one? No, the widget is bottom-right and the
+            nav is top-full-width; bumping to z-50 keeps the sticky
+            nav above every ordinary in-flow card on the page,
+            which is what a nav bar should do. The bell's own
+            portalled panel uses z-100 so it lives above everyone. */}
+        <nav className="sticky top-0 z-50 border-b bg-surface">
           <div className="mx-auto flex max-w-6xl items-center gap-0.5 overflow-x-auto px-3 py-2.5">
             <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
               Day<span className="text-accent">Max</span>
