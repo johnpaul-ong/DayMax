@@ -16,7 +16,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import {
   fetchNotifications,
@@ -56,16 +55,9 @@ export default function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
-  // drawerRef points at the trigger, panelRef at the floating panel
-  // inside the portal. Outside-click closure needs both so a click
-  // inside the panel (which lives outside the bell's DOM subtree
-  // once portalled) doesn't count as 'outside'.
+  // drawerRef wraps the trigger + panel so an outside-click check
+  // covers both.
   const drawerRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  // Client-rect anchor for the portalled panel. Recomputed on open,
-  // on window resize and on scroll so the panel tracks the bell.
-  const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null);
 
   // Whoever's signed in — the bell only mounts realtime for that person.
   useEffect(() => {
@@ -101,16 +93,12 @@ export default function NotificationsBell() {
     if (open) refresh();
   }, [open, refresh]);
 
-  // Close on outside click / Escape, when open. Panel is portalled
-  // so outside-click has to check both the trigger and the panel.
+  // Close on outside click / Escape, when open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     const onClick = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (drawerRef.current?.contains(t)) return;
-      if (panelRef.current?.contains(t)) return;
-      setOpen(false);
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onClick);
@@ -118,33 +106,6 @@ export default function NotificationsBell() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onClick);
     };
-  }, [open]);
-
-  // Continuously track the button's real client rect while the
-  // panel is open. Previously used a resize + scroll listener, but
-  // if the nav re-flowed for any other reason (a tab appearing, an
-  // overflow-x-auto container shifting, a font finishing loading)
-  // the panel was left stuck at the anchor point it measured at
-  // open time -- reported as 'the notifications come up in a
-  // random area of the page'. RAF loop measures every paint frame,
-  // updates state only when the rect actually changed, and stops
-  // when the panel closes.
-  useEffect(() => {
-    if (!open) return;
-    let raf = 0;
-    const tick = () => {
-      const r = buttonRef.current?.getBoundingClientRect();
-      if (r && r.width > 0 && r.height > 0) {
-        const next = {
-          right: Math.max(4, Math.round(window.innerWidth - r.right)),
-          top: Math.round(r.bottom + 4),
-        };
-        setAnchor((prev) => (prev && prev.right === next.right && prev.top === next.top ? prev : next));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
   }, [open]);
 
   if (!me) return null;
@@ -157,7 +118,6 @@ export default function NotificationsBell() {
   return (
     <div className="relative shrink-0" ref={drawerRef}>
       <button
-        ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications (${unread} unread)`}
         // Fixed 32x32 button, matches nav-link sizing so opening the
@@ -194,17 +154,15 @@ export default function NotificationsBell() {
         )}
       </button>
 
-      {open && anchor && typeof document !== "undefined" && createPortal(
-        /* Portalled to <body> so the panel escapes the nav's
-           overflow-x-auto clipping (which was hiding the whole
-           thing behind page content). Fixed positioning tracks the
-           bell's client rect via the anchor state -- follows scroll
-           + resize. Same compact popover styling as the Group /
-           People pickers. */
+      {open && (
+        /* Plain absolute-positioned dropdown, right-aligned to the
+           bell. Works because the bell wrapper now lives OUTSIDE
+           the nav's overflow-x-auto container (see layout.tsx nav
+           split) -- no more clipping, no need for a portal or
+           computed viewport anchor that had the panel drifting to
+           the middle of the page. */
         <div
-          ref={panelRef}
-          className="fixed z-[100] w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-lg"
-          style={{ top: anchor.top, right: anchor.right }}
+          className="absolute right-0 top-full z-[60] mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-surface text-ink shadow-lg"
           role="dialog"
           aria-label="Notifications"
         >
@@ -258,8 +216,7 @@ export default function NotificationsBell() {
               })}
             </ul>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
