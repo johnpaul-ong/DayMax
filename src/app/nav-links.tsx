@@ -33,9 +33,13 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Pursuits",
+    // Money used to sit here between My pursuits and Challenges, from
+    // back when Money was a peer top-level tool. It's the Money PURSUIT
+    // now -- reachable straight from the My pursuits list -- so having
+    // it in the sub-nav double-billed the same page. Killed on
+    // feedback. /money still resolves, just isn't tabbed.
     subs: [
       { href: "/pursuits", label: "My pursuits" },
-      { href: "/money", label: "Money" },
       { href: "/challenges", label: "Challenges" },
     ],
   },
