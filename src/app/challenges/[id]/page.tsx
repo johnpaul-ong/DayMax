@@ -204,6 +204,63 @@ function MetricRules({
   );
 }
 
+/**
+ * Your own money at a glance: three lollipops -- income, essentials,
+ * non-essentials -- all on the same scale so you can eyeball the
+ * runway rather than reading three separate cards. Solo user's
+ * headline card on Budget-Baddies-style money challenges, where the
+ * comparison charts are meaningless with only one person.
+ */
+function YourSpendingLollipop({
+  me,
+  currency,
+}: {
+  me: Standing;
+  currency?: string;
+}) {
+  const rows = [
+    { label: "Income", value: me.income ?? 0, color: "#16a34a", hint: "Take-home this window" },
+    { label: "Essential", value: me.essential ?? 0, color: "#0ea5e9", hint: "Rent, groceries, bills — the fixed side" },
+    { label: "Non-essential", value: me.nonEssential ?? 0, color: "#dc2626", hint: "What you spent on discretionary things" },
+  ];
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return (
+    <div className="card p-4">
+      <div className="space-y-3">
+        {rows.map((r) => {
+          const pct = Math.max(2, Math.round((r.value / max) * 100));
+          return (
+            <div key={r.label} className="text-sm">
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="font-medium">{r.label}</span>
+                <span className="tabular-nums font-semibold" style={{ color: r.color }}>{money(r.value, currency)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative h-1 flex-1 rounded-full bg-surface-2">
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-full"
+                    style={{ width: `${pct}%`, background: r.color }}
+                  />
+                  <div
+                    className="absolute -top-1 h-3 w-3 rounded-full ring-2 ring-surface"
+                    style={{ left: `calc(${pct}% - 6px)`, background: r.color }}
+                  />
+                </div>
+              </div>
+              <p className="mt-0.5 text-[10px] text-faint">{r.hint}</p>
+            </div>
+          );
+        })}
+      </div>
+      {(me.income ?? 0) > 0 && (
+        <p className="mt-3 border-t pt-2 text-xs text-muted">
+          <b>{money((me.income ?? 0) - (me.total ?? 0), currency)}</b> left of income after all spend.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function ChallengePage() {
   const { id } = useParams<{ id: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -674,32 +731,129 @@ export default function ChallengePage() {
                 )}
               </div>
             ) : (
-              <>
-              <p className="mb-2 text-sm text-muted">Swipe or scroll sideways to move between graphs.</p>
-              <div
-                className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
-                style={{ scrollbarWidth: "thin" }}
-              >
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  {/* the race */}
-                  <Guarded
-                    title="The race"
-                    sub={`Running ${noun}. ${rankLess ? "Flattest" : "Highest"} line wins.`}
-                    cause={emptyCause({
-                      ...base,
-                      plotted: raceMagnitude,
-                      logged: isMoney ? loggedMoney : undefined,
-                      moneySubset: ranksNonEssential,
-                      days: raceData.length,
-                      minDays: 2,
-                    })}
-                    noun={noun}
-                    loggedLabel={loggedLabel}
-                    startsOn={challenge.startsOn}
-                    days={raceData.length}
-                    action={{ href: logHref, label: logLabel }}
-                  >
-                    <div className="h-64 card p-2">
+              /* Money / stat branch. Every card renders ONLY when it
+                 has real data -- the old snap-carousel forced empty
+                 placeholders through, which showed 'no race yet' and
+                 half a dozen 'nothing plotted' cards on a solo
+                 challenge with three receipts. Grid layout matches
+                 the life branch: side-by-side on wide screens,
+                 stacks on phones. */
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {/* YOUR spending, broken out. Always renders once
+                    you've logged anything, so a solo user still
+                    gets a picture. Lollipop rather than pie so
+                    income sits alongside the two spend rails at the
+                    same scale. */}
+                {isMoney && me && ((me.essential ?? 0) + (me.nonEssential ?? 0) + (me.income ?? 0) > 0) && (
+                  <div>
+                    <h3 className="mb-2 font-semibold">Your spending</h3>
+                    <YourSpendingLollipop me={me} currency={currency} />
+                  </div>
+                )}
+
+                {/* Essentials list. Solo-friendly: no pie when
+                    you're the only member (a pie of one slice reads
+                    as noise), just the compact list with per-head
+                    totals and the duplicate-hint chip. */}
+                {isMoney && cats.some((c) => c.essential) && (() => {
+                  const ess = cats.filter((c) => c.essential);
+                  const perPerson = ess.map((c) => (c.people > 0 ? c.total / c.people : 0)).filter((v) => v > 0);
+                  const median = perPerson.length > 0
+                    ? [...perPerson].sort((a, b) => a - b)[Math.floor(perPerson.length / 2)]
+                    : 0;
+                  const flag = (c: ChallengeCategory) =>
+                    c.people > 0 && median > 0 && c.total / c.people >= median * 2;
+                  const flagged = ess.filter(flag);
+                  const solo = rows.length <= 1;
+                  return (
+                    <div>
+                      <h3 className="mb-2 font-semibold">Essentials — where the fixed costs go</h3>
+                      {flagged.length > 0 && (
+                        <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
+                          <b>Heads up:</b> per-person spend on <b>{flagged.map((c) => c.name).join(", ")}</b> is
+                          well above the median. Worth checking for a doubled-up entry.
+                        </p>
+                      )}
+                      <div className={solo ? "" : "grid gap-3 sm:grid-cols-2"}>
+                        {!solo && (
+                          <div className="h-56 card p-2">
+                            <ResponsiveContainer>
+                              <PieChart>
+                                <Pie data={ess.slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
+                                  {ess.slice(0, 8).map((_, i) => (
+                                    <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(v: number) => money(Number(v), currency)} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                        <div className="card divide-y">
+                          {ess.slice(0, 8).map((c) => (
+                            <div key={c.name} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
+                              <span className="min-w-0 flex-1 truncate">
+                                {c.name}
+                                {flag(c) && (
+                                  <span className="ml-1.5 rounded-full bg-warn-soft px-1.5 py-0.5 text-[9px] font-semibold text-warn">
+                                    2× median
+                                  </span>
+                                )}
+                              </span>
+                              <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Group's non-essentials -- only when there's
+                    someone else to make the aggregation meaningful.
+                    Solo user is looking at their own numbers only. */}
+                {isMoney && rows.length > 1 && cats.some((c) => !c.essential) && group.ne > 0 && (
+                  <div className="md:col-span-2">
+                    <h3 className="mb-1 font-semibold">What the group is spending on</h3>
+                    <p className="mb-2 text-sm text-muted">
+                      Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="h-60 card p-2">
+                        <ResponsiveContainer>
+                          <PieChart>
+                            <Pie data={cats.filter((c) => !c.essential).slice(0, 8)} dataKey="total" nameKey="name" label={(p: any) => p.name}>
+                              {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
+                                <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(v: number) => money(Number(v), currency)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="card divide-y">
+                        {cats.filter((c) => !c.essential).slice(0, 8).map((c) => (
+                          <div key={c.name} className="flex items-baseline gap-2 px-3 py-1.5 text-sm">
+                            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                            <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* The race. Only when >=2 days and someone's
+                    moving. */}
+                {raceData.length >= 2 && raceMagnitude > 0 && rows.length > 1 && (
+                  <div className="md:col-span-2">
+                    <h3 className="mb-2 font-semibold">
+                      The race
+                      <span className="ml-2 text-xs font-normal text-muted">
+                        Running {noun}. {rankLess ? "Flattest" : "Highest"} line wins.
+                      </span>
+                    </h3>
+                    <div className="h-36 card p-2">
                       <ResponsiveContainer>
                         <LineChart data={raceData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -713,25 +867,15 @@ export default function ChallengePage() {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                  </Guarded>
-                </div>
+                  </div>
+                )}
 
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  <Guarded
-                    small
-                    title={unit === "currency" ? "In dollars" : sentenceCase(noun)}
-                    cause={emptyCause({
-                      ...base,
-                      comparesPeople: true,
-                      plotted: scoreTotal,
-                      logged: isMoney ? loggedMoney : undefined,
-                      moneySubset: ranksNonEssential,
-                    })}
-                    noun={noun}
-                    loggedLabel={loggedLabel}
-                    startsOn={challenge.startsOn}
-                    action={{ href: logHref, label: logLabel }}
-                  >
+                {/* Score-by-person bar and %-of-income bar: only
+                    meaningful once there's someone to compare
+                    against. Hidden when solo. */}
+                {rows.length > 1 && scoreTotal > 0 && (
+                  <div>
+                    <h3 className="mb-2 font-semibold">{unit === "currency" ? "In dollars" : sentenceCase(noun)}</h3>
                     <div className="h-56 card p-2">
                       <ResponsiveContainer>
                         <BarChart data={rows.map((r) => ({ name: r.displayName, score: r.score ?? 0 }))}>
@@ -747,197 +891,37 @@ export default function ChallengePage() {
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
-                  </Guarded>
-                </div>
-
-                {isMoney && (
-                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                    <Guarded
-                      small
-                      title="As a share of income"
-                      cause={emptyCause({
-                        ...base,
-                        comparesPeople: true,
-                        income: rows.some((r) => r.pct != null) ? 1 : 0,
-                        plotted: rows.reduce((s, r) => s + (r.pct ?? 0), 0),
-                        logged: loggedMoney,
-                        moneySubset: ranksNonEssential,
-                      })}
-                      noun="spending as a share of income"
-                      loggedLabel={loggedLabel}
-                      startsOn={challenge.startsOn}
-                      action={{ href: "/money", label: "Add your income →" }}
-                    >
-                      <div className="h-56 card p-2">
-                        <ResponsiveContainer>
-                          <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} unit="%" />
-                            <Tooltip formatter={(v: number) => `${v}% of income`} />
-                            <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </Guarded>
-                    {canon === "money_nonessential" && (
-                      <p className="mt-1 text-xs text-faint">
-                        Rankings use dollars, but this is the fairer comparison across different incomes.
-                      </p>
-                    )}
                   </div>
                 )}
 
-                {isMoney && (
-                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                    <h2 className="mb-1 font-semibold">What the group is spending on</h2>
-                    {cats.length > 0 && (
-                      <p className="mb-2 text-sm text-muted">
-                        Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.
-                        Nobody&apos;s individual spending is shown here.
-                      </p>
-                    )}
-                    {group.ne === 0 ? (
-                      <ChartEmpty
-                        cause={emptyCause({ ...base, plotted: group.ne, logged: group.total, moneySubset: true }) ?? "no-data"}
-                        noun="non-essential spending"
-                        loggedLabel={loggedLabel}
-                        startsOn={challenge.startsOn}
-                        action={{ href: "/money", label: "Review your categories →" }}
-                      />
-                    ) : (
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="h-60 card p-2">
-                          <ResponsiveContainer>
-                            <PieChart>
-                              <Pie
-                                data={cats.filter((c) => !c.essential).slice(0, 8)}
-                                dataKey="total"
-                                nameKey="name"
-                                label={(p: any) => p.name}
-                              >
-                                {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
-                                  <Cell key={i} fill={SERIES[i % SERIES.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(v: number) => money(Number(v), currency)} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="card divide-y">
-                          {cats.filter((c) => !c.essential).slice(0, 7).map((c) => (
-                            <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
-                              <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                              <span className="text-xs text-faint">{c.people} {c.people === 1 ? "person" : "people"}</span>
-                              <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Essentials breakdown. Budget Baddies ranks on NON-
-                    essential spending, so the essentials aren't part
-                    of the score -- but they're where most of the
-                    money actually goes, and the user wanted them
-                    charted alongside so 'where does the group's fixed
-                    cost live' is answerable. Also flags categories
-                    where per-person spend is 2x the median as a
-                    heuristic 'possible duplicate' hint (e.g. Car
-                    logged twice as a $200 fill-up AND a $600
-                    service). */}
-                {isMoney && cats.some((c) => c.essential) && (() => {
-                  const ess = cats.filter((c) => c.essential);
-                  const perPerson = ess.map((c) => (c.people > 0 ? c.total / c.people : 0)).filter((v) => v > 0);
-                  const median = perPerson.length > 0
-                    ? [...perPerson].sort((a, b) => a - b)[Math.floor(perPerson.length / 2)]
-                    : 0;
-                  const flag = (c: ChallengeCategory) =>
-                    c.people > 0 && median > 0 && c.total / c.people >= median * 2;
-                  const flagged = ess.filter(flag);
-                  return (
-                    <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                      <h2 className="mb-1 font-semibold">Essentials — where the fixed costs go</h2>
-                      <p className="mb-2 text-sm text-muted">
-                        {money(group.es, currency)} across the group. These don&apos;t count toward the ranking on this
-                        challenge — {noun.toLowerCase()} is what wins — but they&apos;re usually the bulk of anyone&apos;s spend.
-                      </p>
-                      {flagged.length > 0 && (
-                        <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">
-                          <b>Heads up:</b> per-person spend on <b>{flagged.map((c) => c.name).join(", ")}</b> is well
-                          above the median. Worth checking whether the same bill was logged twice — a doubled-up rent
-                          or utilities entry throws the whole essentials picture off.
-                        </p>
-                      )}
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <div className="h-60 card p-2">
-                          <ResponsiveContainer>
-                            <PieChart>
-                              <Pie
-                                data={ess.slice(0, 8)}
-                                dataKey="total"
-                                nameKey="name"
-                                label={(p: any) => p.name}
-                              >
-                                {ess.slice(0, 8).map((_, i) => (
-                                  <Cell key={i} fill={SERIES[i % SERIES.length]} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(v: number) => money(Number(v), currency)} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="card divide-y">
-                          {ess.slice(0, 7).map((c) => (
-                            <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
-                              <span className="min-w-0 flex-1 truncate">
-                                {c.name}
-                                {flag(c) && (
-                                  <span className="ml-1.5 rounded-full bg-warn-soft px-1.5 py-0.5 text-[9px] font-semibold text-warn">
-                                    2× median
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-xs text-faint">
-                                {c.people} {c.people === 1 ? "person" : "people"}
-                                {c.people > 0 && <> · {money(c.total / c.people, currency)}/head</>}
-                              </span>
-                              <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                {isMoney && rows.length > 1 && rows.some((r) => r.pct != null && r.pct > 0) && (
+                  <div>
+                    <h3 className="mb-2 font-semibold">As a share of income</h3>
+                    <div className="h-56 card p-2">
+                      <ResponsiveContainer>
+                        <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} unit="%" />
+                          <Tooltip formatter={(v: number) => `${v}% of income`} />
+                          <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
 
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  <Guarded
-                    title={isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}
-                    cause={emptyCause({
-                      ...base,
-                      plotted: dailyMagnitude,
-                      logged: isMoney ? loggedMoney : undefined,
-                      moneySubset: ranksNonEssential,
-                      days: groupDaily.length,
-                      minDays: 2,
-                    })}
-                    noun={noun}
-                    loggedLabel={loggedLabel}
-                    startsOn={challenge.startsOn}
-                    days={groupDaily.length}
-                    action={{ href: logHref, label: logLabel }}
-                  >
-                    <div className="h-52 card p-2">
+                {/* Daily damage. >=2 days and some magnitude. */}
+                {groupDaily.length >= 2 && dailyMagnitude > 0 && (
+                  <div className="md:col-span-2">
+                    <h3 className="mb-2 font-semibold">{isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}</h3>
+                    <div className="h-40 card p-2">
                       <ResponsiveContainer>
                         <AreaChart data={groupDaily}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                           <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip formatter={(v: number) => fmt(Number(v))} />
-                          {/* red when you want less of it, green when you want more */}
                           <Area
                             type="monotone"
                             dataKey="spent"
@@ -948,10 +932,9 @@ export default function ChallengePage() {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                  </Guarded>
-                </div>
-              </div>{/* /carousel scroll container */}
-            </>
+                  </div>
+                )}
+              </div>
             )}
           </section>{/* /Graphs */}
         </>

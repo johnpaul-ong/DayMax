@@ -125,11 +125,13 @@ export default function ChallengeFeed({
 
       {isMember && <PostComposer challengeId={challengeId} date={date} onPosted={refresh} />}
 
-      {/* Scrollable feed region -- capped at ~half a viewport so the
-          full challenge page doesn't stretch to the length of the
-          conversation. Interior scroll keeps the day picker and
-          composer visible above. */}
-      <div className="mt-3 max-h-[60vh] overflow-y-auto rounded-xl border border-border/60 bg-surface-2/30 p-2">
+      {/* Feed content -- no inner scroll region anymore. The old
+          max-h-[60vh] capped it and hid posts behind a nested
+          scrollbar, so switching days felt like it 'ate' the rest
+          of the page. Now the feed flows with the page: pick a
+          day, scroll the browser to see everything on that day,
+          scroll back up to switch days again. */}
+      <div className="mt-3 rounded-xl border border-border/60 bg-surface-2/30 p-2">
         {loading && posts.length === 0 && <p className="p-2 text-sm text-faint">Loading…</p>}
         {!loading && posts.length === 0 && (
           <p className="p-4 text-center text-sm text-muted">
