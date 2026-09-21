@@ -60,12 +60,21 @@ export default function YearPage() {
     if (!list || !settings) return null;
     const catHours = hoursByCategory(list);
     if (mode === "dominant") {
-      const top = Object.entries(catHours).sort(([, a], [, b]) => b - a)[0];
-      const code = Number(top[0]);
+      // 'Dominant WAKING category' -- Sleep (code 0) wins on almost
+      // every day since 8h of sleep beats 8h split across several
+      // waking categories. That makes the picture read as 'you slept
+      // a lot' every day, which is useless. Exclude Sleep from the
+      // ranking; fall back to Sleep only when literally nothing else
+      // was logged that day.
+      const ranked = Object.entries(catHours).sort(([, a], [, b]) => b - a);
+      const nonSleep = ranked.filter(([code]) => Number(code) !== 0);
+      const winner = nonSleep[0] ?? ranked[0];
+      const code = Number(winner[0]);
+      const hours = winner[1];
       return {
         color: categoryColor(code),
         opacity: Math.min(1, list.length / 96 + 0.25),
-        tip: `${date}: mostly ${categoryName(code)} (${top[1].toFixed(1)}h), ${(list.length * HOURS_PER_SLOT).toFixed(1)}h logged`,
+        tip: `${date}: mostly ${categoryName(code)} (${hours.toFixed(1)}h waking), ${(list.length * HOURS_PER_SLOT).toFixed(1)}h logged`,
       };
     }
     const t = bucketize(catHours, settings);
@@ -149,7 +158,7 @@ export default function YearPage() {
           <p className="mt-3 text-xs text-faint">
             {mode === "buckets"
               ? "Productive vs brainrot colors from your Settings. Faded = partially logged. Hover for numbers, click to open the grid."
-              : "Colored by the category you spent the most time on. Hover for details."}
+              : "Colored by the category you spent the most WAKING time on -- Sleep is excluded so the picture doesn't just read 'you slept'. Hover for details."}
           </p>
         </div>
       )}

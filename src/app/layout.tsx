@@ -65,26 +65,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
          * leaf-shaped mask, so pink accent = pink leaves.
          */}
         <div className="cottage-leaves" aria-hidden="true" />
-        {/* Nav lives at z-50 (was z-40) so the notification bell
-            sitting inside it is above the Quick Capture widget
-            (z-55) minus one? No, the widget is bottom-right and the
-            nav is top-full-width; bumping to z-50 keeps the sticky
-            nav above every ordinary in-flow card on the page,
-            which is what a nav bar should do. The bell's own
-            portalled panel uses z-100 so it lives above everyone. */}
+        {/* Nav at z-50 -- above every ordinary in-flow card so the
+            sticky bar always wins the paint order. Split into two
+            containers on purpose: the LEFT half (logo + tabs) can
+            horizontally scroll on narrow viewports without dragging
+            the bell + theme switcher along with it. Previously the
+            whole nav shared one overflow-x-auto so on narrow
+            screens the bell wandered off with the scroll and its
+            dropdown followed, ending up in the middle of the page.
+            Bell wrapper is now a fixed sibling of the scroll rail,
+            so it lives at the right edge of the nav no matter what
+            the tabs are doing. */}
         <nav className="sticky top-0 z-50 border-b bg-surface">
-          <div className="mx-auto flex max-w-6xl items-center gap-0.5 overflow-x-auto px-3 py-2.5">
-            <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
-              Day<span className="text-accent">Max</span>
-            </Link>
-            <NavLinks />
-            {/* Bell sits after nav links, before ThemeSync -- the
-                right-hand corner of the nav bar. Renders nothing when
-                signed out. */}
-            <div className="ml-auto flex items-center">
-              <NotificationsBell />
+          <div className="mx-auto flex max-w-6xl items-center px-3">
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto py-2.5">
+              <Link href="/" className="mr-4 whitespace-nowrap text-lg font-bold tracking-tight">
+                Day<span className="text-accent">Max</span>
+              </Link>
+              <NavLinks />
             </div>
-            <ThemeSync />
+            {/* Right-side controls -- always pinned. shrink-0 so a
+                narrow viewport doesn't squeeze the bell to zero. */}
+            <div className="flex shrink-0 items-center gap-1 py-2.5 pl-2">
+              <NotificationsBell />
+              <ThemeSync />
+            </div>
           </div>
         </nav>
         <WelcomeGate />
