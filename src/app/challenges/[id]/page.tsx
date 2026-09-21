@@ -649,25 +649,21 @@ export default function ChallengePage() {
                   />
                 </div>
 
-                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                  <Guarded
-                    title="The race"
-                    sub={`Running ${noun}. ${rankLess ? "Flattest" : "Highest"} line wins.`}
-                    cause={emptyCause({
-                      ...base,
-                      plotted: raceMagnitude,
-                      logged: undefined,
-                      moneySubset: false,
-                      days: raceData.length,
-                      minDays: 2,
-                    })}
-                    noun={noun}
-                    loggedLabel={loggedLabel}
-                    startsOn={challenge.startsOn}
-                    days={raceData.length}
-                    action={{ href: logHref, label: logLabel }}
-                  >
-                    {/* Halved from h-64 -> h-36 on feedback. */}
+                {/* The race is hidden entirely on life challenges
+                    until there is real data to plot -- >=2 days
+                    with something in the race, non-zero total, and
+                    someone actually running. An empty-state
+                    placeholder card on top of the two rich views
+                    above just added noise; the slide comes back the
+                    moment there is something to show. */}
+                {raceData.length >= 2 && raceMagnitude > 0 && (
+                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                    <h2 className="mb-2 font-semibold">
+                      The race
+                      <span className="ml-2 text-xs font-normal text-muted">
+                        Running {noun}. {rankLess ? "Flattest" : "Highest"} line wins.
+                      </span>
+                    </h2>
                     <div className="h-36 card p-2">
                       <ResponsiveContainer>
                         <LineChart data={raceData}>
@@ -682,8 +678,8 @@ export default function ChallengePage() {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
-                  </Guarded>
-                </div>
+                  </div>
+                )}
               </>
             ) : (
               <>
