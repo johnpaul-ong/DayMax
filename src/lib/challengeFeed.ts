@@ -91,6 +91,26 @@ export async function fetchFeed(challengeId: string, date: string): Promise<Feed
   }));
 }
 
+/**
+ * Every post across a challenge's whole window, newest-first.
+ * Fires one challenge_day_feed RPC per date in parallel and merges;
+ * a per-day RPC exists already and is SECURITY DEFINER, so this
+ * keeps permissions intact without a schema change. Suitable up to
+ * ~90 day challenges (90 requests is fine on Supabase's HTTP/2
+ * pool); if a challenge got bigger we'd add a proper range RPC.
+ */
+export async function fetchAllPosts(
+  challengeId: string,
+  dates: string[],
+): Promise<FeedPost[]> {
+  if (dates.length === 0) return [];
+  const chunks = await Promise.all(dates.map((d) => fetchFeed(challengeId, d).catch(() => [] as FeedPost[])));
+  const all = chunks.flat();
+  // Newest first so a check-in post lands at the top of a scroll.
+  all.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return all;
+}
+
 export async function fetchComments(postId: string): Promise<FeedComment[]> {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("challenge_post_comments_for", { p_post: postId });

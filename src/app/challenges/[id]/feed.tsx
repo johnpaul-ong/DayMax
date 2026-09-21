@@ -21,8 +21,8 @@ import {
   createPost,
   deleteComment,
   deletePost,
+  fetchAllPosts,
   fetchComments,
-  fetchFeed,
   subscribeToFeed,
   toggleCommentLike,
   togglePostLike,
@@ -53,8 +53,28 @@ function relTime(iso: string): string {
   return `${Math.round(s / 86400)}d`;
 }
 
-const dowShort = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString(undefined, { weekday: "short" });
-const dayNum = (iso: string) => Number(iso.slice(8, 10));
+/**
+ * "5m · 15:32" -- relative age plus the actual clock time, since
+ * 'now' alone doesn't say *when* now was, and readers wanted 'more
+ * info of when posted what time'. If the post is older than 24h,
+ * the clock time gets a date prefix ("Sep 21, 15:32") so it's
+ * unambiguous. Full ISO stays in the caller's title attribute for
+ * long-press / hover, so anyone can pin down the exact second.
+ */
+function postedAt(iso: string): string {
+  const d = new Date(iso);
+  const clock = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const ageMs = Date.now() - d.getTime();
+  const olderThanDay = ageMs > 86400 * 1000;
+  const rel = relTime(iso);
+  const stamp = olderThanDay
+    ? `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${clock}`
+    : clock;
+  return `${rel} · ${stamp}`;
+}
+function fullStamp(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
 
 export default function ChallengeFeed({
   challengeId,
@@ -71,22 +91,20 @@ export default function ChallengeFeed({
 }) {
   const today = localToday();
   const days = useMemo(() => dateRange(startsOn, endsOn), [startsOn, endsOn]);
-  // Default to today when it's inside the window, otherwise the last
-  // day of the challenge (so a post-challenge visit lands on the end).
-  const [date, setDate] = useState<string>(() => {
-    if (today >= startsOn && today <= endsOn) return today;
-    return endsOn < today ? endsOn : startsOn;
-  });
+  // Composer defaults to today when it's inside the window,
+  // otherwise the last day of the challenge -- so a post-challenge
+  // 'what happened' post gets attached to a day inside the window.
+  const composeDate = today >= startsOn && today <= endsOn ? today : endsOn < today ? endsOn : startsOn;
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetchFeed(challengeId, date)
+    fetchAllPosts(challengeId, days)
       .then(setPosts)
       .catch(() => setPosts([]))
       .finally(() => setLoading(false));
-  }, [challengeId, date]);
+  }, [challengeId, days]);
 
   useEffect(refresh, [refresh]);
   // realtime -- any change on the challenge's feed tables refetches
@@ -96,46 +114,23 @@ export default function ChallengeFeed({
     <section>
       <div className="mb-2 flex items-baseline gap-2">
         <h2 className="font-semibold">Feed</h2>
-        <span className="text-xs text-faint">{date}</span>
+        <span className="text-xs text-faint">{startsOn} → {endsOn}</span>
       </div>
 
-      {/* Day picker: one chip per day of the challenge. Today has an
-          accent ring; the active day is filled. Wrapped in its own
-          horizontal-scroll container so a 30-day challenge doesn't
-          wrap into six rows. */}
-      <div className="mb-3 flex snap-x snap-mandatory gap-1.5 overflow-x-auto pb-1">
-        {days.map((d) => {
-          const active = d === date;
-          const isToday = d === today;
-          return (
-            <button
-              key={d}
-              onClick={() => setDate(d)}
-              className={`min-w-[3rem] shrink-0 snap-start rounded-lg border px-2 py-1 text-center text-xs transition ${
-                active ? "bg-accent text-accent-contrast font-semibold" : "bg-surface hover:bg-surface-2"
-              } ${isToday && !active ? "ring-1 ring-accent" : ""}`}
-              title={d}
-            >
-              <div className="text-[9px] uppercase tracking-wider opacity-80">{dowShort(d)}</div>
-              <div className="text-sm font-bold leading-tight">{dayNum(d)}</div>
-            </button>
-          );
-        })}
-      </div>
+      {/* Day picker was here. Killed on feedback -- users wanted
+          the whole challenge's feed in one scroll, not one day at a
+          time. Composer still writes to a specific day (today, or
+          the challenge's end if the challenge already finished);
+          the feed now shows every post across the whole window,
+          newest first. */}
 
-      {isMember && <PostComposer challengeId={challengeId} date={date} onPosted={refresh} />}
+      {isMember && <PostComposer challengeId={challengeId} date={composeDate} onPosted={refresh} />}
 
-      {/* Feed content -- no inner scroll region anymore. The old
-          max-h-[60vh] capped it and hid posts behind a nested
-          scrollbar, so switching days felt like it 'ate' the rest
-          of the page. Now the feed flows with the page: pick a
-          day, scroll the browser to see everything on that day,
-          scroll back up to switch days again. */}
       <div className="mt-3 rounded-xl border border-border/60 bg-surface-2/30 p-2">
         {loading && posts.length === 0 && <p className="p-2 text-sm text-faint">Loading…</p>}
         {!loading && posts.length === 0 && (
           <p className="p-4 text-center text-sm text-muted">
-            Nothing here yet for {date}. {isMember ? "Be the first to post." : "Members' posts will show here."}
+            Nothing posted yet. {isMember ? "Be the first." : "Members' posts will show here."}
           </p>
         )}
         <div className="space-y-2">
@@ -188,7 +183,7 @@ function PostComposer({
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder={`How did ${date} go?`}
+        placeholder="Share how it's going…"
         rows={2}
         className="w-full resize-none rounded-lg border bg-surface px-3 py-2 text-sm"
       />
@@ -264,7 +259,12 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
           {post.displayName}
         </Link>
         {post.username && <span className="text-xs text-faint">@{post.username}</span>}
-        <span className="ml-auto text-[10px] text-faint">{relTime(post.createdAt)}</span>
+        <span
+          className="ml-auto text-[10px] text-faint"
+          title={fullStamp(post.createdAt)}
+        >
+          {postedAt(post.createdAt)}
+        </span>
         {post.mine && (
           <button
             onClick={() => { if (confirm("Delete this post?")) void deletePost(post.id).then(onChanged); }}
@@ -364,7 +364,12 @@ function CommentRow({
           <Link href={`/friends/${comment.userId}`} className="text-xs font-semibold hover:text-accent hover:underline">
             {comment.displayName}
           </Link>
-          <span className="text-[10px] text-faint">{relTime(comment.createdAt)}</span>
+          <span
+            className="text-[10px] text-faint"
+            title={fullStamp(comment.createdAt)}
+          >
+            {postedAt(comment.createdAt)}
+          </span>
           {comment.mine && (
             <button
               onClick={() => { if (confirm("Delete this comment?")) void deleteComment(comment.id).then(async () => { onReloaded(await fetchComments(postId)); onChanged(); }); }}
