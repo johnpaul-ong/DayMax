@@ -15,8 +15,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   fetchNotifications,
@@ -57,11 +56,6 @@ export default function NotificationsBell() {
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  // Fixed-position anchor for the portalled panel. Recomputed
-  // every frame while open so nav re-flow can't leave it behind.
-  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
 
   // Whoever's signed in — the bell only mounts realtime for that person.
   useEffect(() => {
@@ -97,16 +91,12 @@ export default function NotificationsBell() {
     if (open) refresh();
   }, [open, refresh]);
 
-  // Close on outside click / Escape, when open. Panel is portalled
-  // so outside-click must check both the trigger AND the panel.
+  // Close on outside click / Escape, when open.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     const onClick = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (drawerRef.current?.contains(t)) return;
-      if (panelRef.current?.contains(t)) return;
-      setOpen(false);
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onClick);
@@ -114,29 +104,6 @@ export default function NotificationsBell() {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onClick);
     };
-  }, [open]);
-
-  // Track the bell's real client rect frame-by-frame while open so
-  // any nav reflow (sticky repaint, resize, whatever) can't leave
-  // the panel stranded. Now that the bell wrapper lives outside
-  // overflow-x-auto (see layout.tsx), rect is stable and this loop
-  // just confirms the anchor each paint.
-  useLayoutEffect(() => {
-    if (!open) return;
-    let raf = 0;
-    const tick = () => {
-      const r = buttonRef.current?.getBoundingClientRect();
-      if (r && r.width > 0) {
-        const next = {
-          top: Math.round(r.bottom + 4),
-          right: Math.max(4, Math.round(window.innerWidth - r.right)),
-        };
-        setAnchor((prev) => (prev && prev.top === next.top && prev.right === next.right ? prev : next));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
   }, [open]);
 
   if (!me) return null;
@@ -149,7 +116,6 @@ export default function NotificationsBell() {
   return (
     <div className="relative shrink-0" ref={drawerRef}>
       <button
-        ref={buttonRef}
         onClick={() => setOpen((o) => !o)}
         aria-label={`Notifications (${unread} unread)`}
         // Fixed 32x32 button, matches nav-link sizing so opening the
@@ -186,19 +152,16 @@ export default function NotificationsBell() {
         )}
       </button>
 
-      {open && anchor && typeof document !== "undefined" && createPortal(
-        /* Portalled to <body> so the panel escapes not just the
-           nav's stacking context but also every card's -- pursuit
-           cards, main-page tiles etc. use hover:-translate-y-*
-           which creates its OWN stacking context that was
-           overpainting the panel when it stayed inside the nav.
-           A portal to body sidesteps that entirely.
-           z-[9999] + bg-page + shadow-xl so it wins visually and
-           in paint order. */
+      {open && (
+        /* Plain absolute-positioned dropdown, right-aligned to the
+           bell. Works because (a) the bell wrapper lives OUTSIDE
+           the nav's overflow-x-auto rail so its position is stable,
+           and (b) <main> now has isolation:isolate (layout.tsx) so
+           card stacking contexts inside main can't overpaint the
+           nav's dropdown. No portal, no computed anchor, no RAF --
+           the browser just puts it under the button. */
         <div
-          ref={panelRef}
-          className="fixed z-[9999] w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-page text-ink shadow-xl"
-          style={{ top: anchor.top, right: anchor.right }}
+          className="absolute right-0 top-full mt-1 w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-lg border bg-page text-ink shadow-xl"
           role="dialog"
           aria-label="Notifications"
         >
@@ -252,8 +215,7 @@ export default function NotificationsBell() {
               })}
             </ul>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

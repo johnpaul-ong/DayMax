@@ -100,7 +100,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </nav>
         <WelcomeGate />
-        <main className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:pb-8">{children}</main>
+        {/*
+         * isolation: isolate forms a NEW stacking context on main
+         * that CONTAINS every card / transform inside it. Without
+         * this, cards that use transform (hover:-translate-y-*,
+         * scroll-snap tricks) create their own root-level stacking
+         * contexts that can overpaint the sticky nav's dropdowns
+         * -- exactly what was making the notification panel appear
+         * behind Life/Money cards. Isolation walls them off inside
+         * main; the nav (outside main, z-100) always wins.
+         */}
+        <main
+          className="mx-auto max-w-6xl px-4 py-8 pb-24 sm:pb-8"
+          style={{ isolation: "isolate" }}
+        >
+          {children}
+        </main>
         <CaptureWidgetBoot />
         <MobileNav />
       </body>
