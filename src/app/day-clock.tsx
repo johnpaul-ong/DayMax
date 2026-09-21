@@ -287,12 +287,26 @@ export default function DayClock({
           ))}
         </div>
       )}
-      <div className={zoom > 1 ? "-mx-3 overflow-x-auto px-3" : ""}>
+      {/*
+        Zoom container. At 1x the SVG lays out the old way -- w-full up
+        to maxWidth 460, centred inside the card. At >1x we drop the
+        percentage-width entirely and set an explicit pixel width; the
+        SVG now genuinely exceeds the card so the wrapper's
+        overflow-x-auto kicks in and you can pan sideways to reach
+        every wedge. Negative margins claw back the card's own padding
+        so the scroll rail spans edge-to-edge instead of a narrow
+        strip in the middle.
+      */}
+      <div className={zoom > 1 ? "-mx-3 overflow-x-auto overflow-y-hidden px-3" : ""}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
-        style={{ maxWidth: `${scaledMax}px`, width: "100%" }}
-        className="mx-auto block touch-none select-none"
+        style={
+          zoom > 1
+            ? { width: `${scaledMax}px`, maxWidth: "none", height: `${scaledMax}px` }
+            : { maxWidth: "460px", width: "100%" }
+        }
+        className={`${zoom > 1 ? "block" : "mx-auto block"} touch-none select-none`}
         onPointerDown={(e) => {
           if (!onSelect && !onPaint) return;
           const s = slotAt(e.clientX, e.clientY);

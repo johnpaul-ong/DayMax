@@ -77,7 +77,7 @@ import { TeamDot } from "../../team-name";
 import { ChartEmpty, emptyCause } from "../../empty-chart";
 import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
-import { PeopleClocksGrid } from "../../pursuits/[id]/_community";
+import { AverageDayClock, MembersDayColumns } from "./_life-views";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -609,11 +609,19 @@ export default function ChallengePage() {
             </div>
           </section>
 
-          {/* GRAPHS -- horizontal swipe carousel. Each chart is a full-
-              width snap card; scroll sideways to move between them.
-              Replaces the tall vertical stack, and matches how graph
-              carousels work on other social apps. Wheel + touch swipe
-              + arrow keys all scroll. */}
+          {/* GRAPHS -- horizontal swipe carousel. Each chart is a
+              full-width snap card; scroll sideways to move between
+              them. Two layouts:
+
+              LIFE challenges (Grindset Goblins, sleep, etc) get a
+              three-slide picture: the group's typical day as a single
+              clock, then everyone's day as vertical 24-hour columns
+              side-by-side, then the race. Everything else was noise
+              on top of that trio, so it went.
+
+              MONEY / STAT challenges keep the money-specific pie +
+              share-of-income + daily-damage set, since those views
+              are what the metric is actually about. */}
           <section>
             <h2 className="mb-1 font-semibold">Graphs</h2>
             <p className="mb-2 text-sm text-muted">Swipe or scroll sideways to move between graphs.</p>
@@ -621,284 +629,263 @@ export default function ChallengePage() {
               className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2"
               style={{ scrollbarWidth: "thin" }}
             >
-              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
 
-          {/* the race */}
-          <Guarded
-            title="The race"
-            sub={`Running ${noun}. ${rankLess ? "Flattest" : "Highest"} line wins.`}
-            cause={emptyCause({
-              ...base,
-              plotted: raceMagnitude,
-              logged: isMoney ? loggedMoney : undefined,
-              moneySubset: ranksNonEssential,
-              days: raceData.length,
-              minDays: 2,
-            })}
-            noun={noun}
-            loggedLabel={loggedLabel}
-            startsOn={challenge.startsOn}
-            days={raceData.length}
-            action={{ href: logHref, label: logLabel }}
-          >
-            <div className="h-64 card p-2">
-              <ResponsiveContainer>
-                <LineChart data={raceData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: number) => fmt(Number(v))} labelFormatter={(d) => String(d)} />
-                  <Legend />
-                  {names.map((n, i) => (
-                    <Line key={n} type="monotone" dataKey={n} stroke={SERIES[i % SERIES.length]} strokeWidth={2.5} dot={false} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Guarded>
-
-              </div>{/* /race slide */}
-
-              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-            <Guarded
-              small
-              title={unit === "currency" ? "In dollars" : sentenceCase(noun)}
-              cause={emptyCause({
-                ...base,
-                comparesPeople: true,
-                plotted: scoreTotal,
-                logged: isMoney ? loggedMoney : undefined,
-                moneySubset: ranksNonEssential,
-              })}
-              noun={noun}
-              loggedLabel={loggedLabel}
-              startsOn={challenge.startsOn}
-              action={{ href: logHref, label: logLabel }}
-            >
-              <div className="h-56 card p-2">
-                <ResponsiveContainer>
-                  <BarChart data={rows.map((r) => ({ name: r.displayName, score: r.score ?? 0 }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => fmt(Number(v))} />
-                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-                      {rows.map((r, i) => (
-                        <Cell key={r.userId} fill={i === 0 ? "#16a34a" : teamMeta(r.team).color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Guarded>
-
-              </div>{/* /bar slide */}
-
-            {/* % of income only exists for money challenges — challenge_income()
-                is not even consulted for the others. */}
-            {isMoney && (
-              <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-                <Guarded
-                  small
-                  title="As a share of income"
-                  cause={emptyCause({
-                    ...base,
-                    comparesPeople: true,
-                    income: rows.some((r) => r.pct != null) ? 1 : 0,
-                    plotted: rows.reduce((s, r) => s + (r.pct ?? 0), 0),
-                    logged: loggedMoney,
-                    moneySubset: ranksNonEssential,
-                  })}
-                  noun="spending as a share of income"
-                  loggedLabel={loggedLabel}
-                  startsOn={challenge.startsOn}
-                  action={{ href: "/money", label: "Add your income →" }}
-                >
-                  <div className="h-56 card p-2">
-                    <ResponsiveContainer>
-                      <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} unit="%" />
-                        <Tooltip formatter={(v: number) => `${v}% of income`} />
-                        <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Guarded>
-                {canon === "money_nonessential" && (
-                  <p className="mt-1 text-xs text-faint">
-                    Rankings use dollars, but this is the fairer comparison across different incomes.
-                  </p>
-                )}
-              </div>
-            )}
-
-          {/* What the group is spending on. challenge_categories() returns
-              nothing at all for a non-money challenge, by design — joining a
-              sleep challenge must not publish your spending — so this section
-              is absent rather than empty for those. */}
-          {isMoney && (
-            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-              <h2 className="mb-1 font-semibold">What the group is spending on</h2>
-              {cats.length > 0 && (
-                <p className="mb-2 text-sm text-muted">
-                  Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.
-                  Nobody&apos;s individual spending is shown here.
-                </p>
-              )}
-              {group.ne === 0 ? (
-                <ChartEmpty
-                  cause={emptyCause({ ...base, plotted: group.ne, logged: group.total, moneySubset: true }) ?? "no-data"}
-                  noun="non-essential spending"
-                  loggedLabel={loggedLabel}
-                  startsOn={challenge.startsOn}
-                  action={{ href: "/money", label: "Review your categories →" }}
-                />
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="h-60 card p-2">
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <Pie
-                          data={cats.filter((c) => !c.essential).slice(0, 8)}
-                          dataKey="total"
-                          nameKey="name"
-                          label={(p: any) => p.name}
-                        >
-                          {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
-                            <Cell key={i} fill={SERIES[i % SERIES.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => money(Number(v), currency)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="card divide-y">
-                    {cats.filter((c) => !c.essential).slice(0, 7).map((c) => (
-                      <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
-                        <span className="min-w-0 flex-1 truncate">{c.name}</span>
-                        <span className="text-xs text-faint">{c.people} {c.people === 1 ? "person" : "people"}</span>
-                        <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Side-by-side per-member view: score, entries, per-day
-              clustered as three bars per person so you can see who is
-              winning on volume vs consistency vs pace at a glance.
-              Recharts renders BarChart groups side-by-side by default
-              when there is more than one <Bar> child. */}
-          {rows.length > 1 && (
-            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-              <Guarded
-                small
-                title="Side by side"
-                sub={`Same ${rows.length} people, three bars each — ${metricLabel.toLowerCase()}, days logged, and per-day pace, clustered so nobody is compared on volume alone.`}
-                cause={emptyCause({
-                  ...base,
-                  comparesPeople: true,
-                  plotted: scoreTotal,
-                  logged: isMoney ? loggedMoney : undefined,
-                  moneySubset: ranksNonEssential,
-                })}
-                noun={noun}
-                loggedLabel={loggedLabel}
-                startsOn={challenge.startsOn}
-                action={{ href: logHref, label: logLabel }}
-              >
-                <div className="h-64 card p-2">
-                  <ResponsiveContainer>
-                    <BarChart
-                      data={rows.map((r) => ({
-                        name: r.displayName,
-                        score: r.score ?? 0,
-                        perDay: r.perDay ?? 0,
-                        entries: r.entries ?? 0,
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip
-                        formatter={(v: number, key: string) => {
-                          if (key === "entries") return [v, "days logged"];
-                          if (key === "perDay") return [formatScore(v, unit, currency), "per day"];
-                          return [formatScore(v, unit, currency), metricLabel.toLowerCase()];
-                        }}
-                      />
-                      <Legend
-                        formatter={(v: string) =>
-                          v === "score" ? metricLabel.toLowerCase() : v === "perDay" ? "per day" : "days logged"
-                        }
-                      />
-                      <Bar dataKey="score" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="perDay" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="entries" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Guarded>
-            </div>
-          )}
-
-          {/* Everyone's typical day — only for life challenges, where a
-              clock face means something. Money and pursuit-stat
-              challenges have no per-slot data to draw one from, so the
-              slide is skipped rather than empty. Reads member day
-              strips through the same RPC as the Life community page. */}
-          {family === "life" && rows.length > 0 && (
-            <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-              <h2 className="mb-1 font-semibold">Everyone&apos;s typical day</h2>
-              <p className="mb-2 text-sm text-muted">
-                One dial per person — every day they&apos;ve logged, collapsed onto a clock. Neighbours show whose days rhyme.
-              </p>
-              <PeopleClocksGrid members={rows.map((r) => ({ id: r.userId, name: r.displayName }))} />
-            </div>
-          )}
-
-          {/* group pace over time */}
-          <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
-          <Guarded
-            title={isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}
-            cause={emptyCause({
-              ...base,
-              plotted: dailyMagnitude,
-              logged: isMoney ? loggedMoney : undefined,
-              moneySubset: ranksNonEssential,
-              days: groupDaily.length,
-              minDays: 2,
-            })}
-            noun={noun}
-            loggedLabel={loggedLabel}
-            startsOn={challenge.startsOn}
-            days={groupDaily.length}
-            action={{ href: logHref, label: logLabel }}
-          >
-            <div className="h-52 card p-2">
-              <ResponsiveContainer>
-                <AreaChart data={groupDaily}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v: number) => fmt(Number(v))} />
-                  {/* red when you want less of it, green when you want more */}
-                  <Area
-                    type="monotone"
-                    dataKey="spent"
-                    stroke={rankLess ? "#dc2626" : "#16a34a"}
-                    fill={rankLess ? "#dc2626" : "#16a34a"}
-                    fillOpacity={0.18}
+            {family === "life" ? (
+              <>
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  <AverageDayClock
+                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                    from={challenge.startsOn}
+                    to={challenge.endsOn}
                   />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Guarded>
-          </div>{/* /daily slide */}
+                </div>
+
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  <h2 className="mb-1 font-semibold">Everyone&apos;s day, side by side</h2>
+                  <p className="mb-2 text-sm text-muted">
+                    Each column is one person&apos;s 24 hours during the challenge, top to bottom. Neighbours show who&apos;s a morning person and who lives at night.
+                  </p>
+                  <MembersDayColumns
+                    members={rows.map((r) => ({ id: r.userId, name: r.displayName }))}
+                    from={challenge.startsOn}
+                    to={challenge.endsOn}
+                  />
+                </div>
+
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  <Guarded
+                    title="The race"
+                    sub={`Running ${noun}. ${rankLess ? "Flattest" : "Highest"} line wins.`}
+                    cause={emptyCause({
+                      ...base,
+                      plotted: raceMagnitude,
+                      logged: undefined,
+                      moneySubset: false,
+                      days: raceData.length,
+                      minDays: 2,
+                    })}
+                    noun={noun}
+                    loggedLabel={loggedLabel}
+                    startsOn={challenge.startsOn}
+                    days={raceData.length}
+                    action={{ href: logHref, label: logLabel }}
+                  >
+                    <div className="h-64 card p-2">
+                      <ResponsiveContainer>
+                        <LineChart data={raceData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => fmt(Number(v))} labelFormatter={(d) => String(d)} />
+                          <Legend />
+                          {names.map((n, i) => (
+                            <Line key={n} type="monotone" dataKey={n} stroke={SERIES[i % SERIES.length]} strokeWidth={2.5} dot={false} />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Guarded>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  {/* the race */}
+                  <Guarded
+                    title="The race"
+                    sub={`Running ${noun}. ${rankLess ? "Flattest" : "Highest"} line wins.`}
+                    cause={emptyCause({
+                      ...base,
+                      plotted: raceMagnitude,
+                      logged: isMoney ? loggedMoney : undefined,
+                      moneySubset: ranksNonEssential,
+                      days: raceData.length,
+                      minDays: 2,
+                    })}
+                    noun={noun}
+                    loggedLabel={loggedLabel}
+                    startsOn={challenge.startsOn}
+                    days={raceData.length}
+                    action={{ href: logHref, label: logLabel }}
+                  >
+                    <div className="h-64 card p-2">
+                      <ResponsiveContainer>
+                        <LineChart data={raceData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => fmt(Number(v))} labelFormatter={(d) => String(d)} />
+                          <Legend />
+                          {names.map((n, i) => (
+                            <Line key={n} type="monotone" dataKey={n} stroke={SERIES[i % SERIES.length]} strokeWidth={2.5} dot={false} />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Guarded>
+                </div>
+
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  <Guarded
+                    small
+                    title={unit === "currency" ? "In dollars" : sentenceCase(noun)}
+                    cause={emptyCause({
+                      ...base,
+                      comparesPeople: true,
+                      plotted: scoreTotal,
+                      logged: isMoney ? loggedMoney : undefined,
+                      moneySubset: ranksNonEssential,
+                    })}
+                    noun={noun}
+                    loggedLabel={loggedLabel}
+                    startsOn={challenge.startsOn}
+                    action={{ href: logHref, label: logLabel }}
+                  >
+                    <div className="h-56 card p-2">
+                      <ResponsiveContainer>
+                        <BarChart data={rows.map((r) => ({ name: r.displayName, score: r.score ?? 0 }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => fmt(Number(v))} />
+                          <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                            {rows.map((r, i) => (
+                              <Cell key={r.userId} fill={i === 0 ? "#16a34a" : teamMeta(r.team).color} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Guarded>
+                </div>
+
+                {isMoney && (
+                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                    <Guarded
+                      small
+                      title="As a share of income"
+                      cause={emptyCause({
+                        ...base,
+                        comparesPeople: true,
+                        income: rows.some((r) => r.pct != null) ? 1 : 0,
+                        plotted: rows.reduce((s, r) => s + (r.pct ?? 0), 0),
+                        logged: loggedMoney,
+                        moneySubset: ranksNonEssential,
+                      })}
+                      noun="spending as a share of income"
+                      loggedLabel={loggedLabel}
+                      startsOn={challenge.startsOn}
+                      action={{ href: "/money", label: "Add your income →" }}
+                    >
+                      <div className="h-56 card p-2">
+                        <ResponsiveContainer>
+                          <BarChart data={rows.filter((r) => r.pct != null).map((r) => ({ name: r.displayName, pct: r.pct }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} unit="%" />
+                            <Tooltip formatter={(v: number) => `${v}% of income`} />
+                            <Bar dataKey="pct" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </Guarded>
+                    {canon === "money_nonessential" && (
+                      <p className="mt-1 text-xs text-faint">
+                        Rankings use dollars, but this is the fairer comparison across different incomes.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {isMoney && (
+                  <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                    <h2 className="mb-1 font-semibold">What the group is spending on</h2>
+                    {cats.length > 0 && (
+                      <p className="mb-2 text-sm text-muted">
+                        Everyone combined — {money(group.ne, currency)} non-essential against {money(group.es, currency)} essential.
+                        Nobody&apos;s individual spending is shown here.
+                      </p>
+                    )}
+                    {group.ne === 0 ? (
+                      <ChartEmpty
+                        cause={emptyCause({ ...base, plotted: group.ne, logged: group.total, moneySubset: true }) ?? "no-data"}
+                        noun="non-essential spending"
+                        loggedLabel={loggedLabel}
+                        startsOn={challenge.startsOn}
+                        action={{ href: "/money", label: "Review your categories →" }}
+                      />
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="h-60 card p-2">
+                          <ResponsiveContainer>
+                            <PieChart>
+                              <Pie
+                                data={cats.filter((c) => !c.essential).slice(0, 8)}
+                                dataKey="total"
+                                nameKey="name"
+                                label={(p: any) => p.name}
+                              >
+                                {cats.filter((c) => !c.essential).slice(0, 8).map((_, i) => (
+                                  <Cell key={i} fill={SERIES[i % SERIES.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: number) => money(Number(v), currency)} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                        <div className="card divide-y">
+                          {cats.filter((c) => !c.essential).slice(0, 7).map((c) => (
+                            <div key={c.name} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                              <span className="text-xs text-faint">{c.people} {c.people === 1 ? "person" : "people"}</span>
+                              <span className="tabular-nums font-semibold">{money(c.total, currency)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="min-w-[85%] shrink-0 snap-start sm:min-w-[520px]">
+                  <Guarded
+                    title={isMoney ? "Daily damage, everyone combined" : "Day by day, everyone combined"}
+                    cause={emptyCause({
+                      ...base,
+                      plotted: dailyMagnitude,
+                      logged: isMoney ? loggedMoney : undefined,
+                      moneySubset: ranksNonEssential,
+                      days: groupDaily.length,
+                      minDays: 2,
+                    })}
+                    noun={noun}
+                    loggedLabel={loggedLabel}
+                    startsOn={challenge.startsOn}
+                    days={groupDaily.length}
+                    action={{ href: logHref, label: logLabel }}
+                  >
+                    <div className="h-52 card p-2">
+                      <ResponsiveContainer>
+                        <AreaChart data={groupDaily}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
+                          <YAxis tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => fmt(Number(v))} />
+                          {/* red when you want less of it, green when you want more */}
+                          <Area
+                            type="monotone"
+                            dataKey="spent"
+                            stroke={rankLess ? "#dc2626" : "#16a34a"}
+                            fill={rankLess ? "#dc2626" : "#16a34a"}
+                            fillOpacity={0.18}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Guarded>
+                </div>
+              </>
+            )}
 
             </div>{/* /carousel scroll container */}
           </section>{/* /Graphs */}
