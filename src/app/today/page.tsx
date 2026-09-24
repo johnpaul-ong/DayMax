@@ -6,7 +6,7 @@
  * "I just woke up, backfill Sleep 00:00–06:30" and gym logging breaks.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CATEGORIES, categoryColor, slotToTime, SLOTS_PER_DAY } from "@/lib/categories";
 import { deleteDayEntries, fetchDayEntries, fetchDayMetrics, upsertDayEntries, upsertDayMetrics } from "@/lib/data";
 import type { DayMetrics } from "@/lib/types";
@@ -46,15 +46,39 @@ export default function TodayPage() {
     return date === localToday(n) ? n.getHours() * 4 + Math.floor(n.getMinutes() / 15) : null;
   });
   useEffect(() => {
+    // Interval-only ticking meant the halo could sit on a stale slot in two
+    // ways the user actually hit: (1) a background tab has setInterval
+    // throttled by the browser, so the marker lagged the wall clock for
+    // seconds-to-minutes after refocus, and (2) the tick fires every 30s but
+    // is not phase-aligned to the 15-min slot boundary, so the transition
+    // from HH:14 to HH:15 could sit on the wrong wedge for up to 30s. Fix:
+    // reschedule each tick to fire at the NEXT quarter-hour boundary (plus
+    // a small guard), and re-tick immediately on visibility / focus so a
+    // returning tab is never wrong at first paint.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
     const tick = () => {
+      if (cancelled) return;
       const n = new Date();
       setNowSlot(date === localToday(n) ? n.getHours() * 4 + Math.floor(n.getMinutes() / 15) : null);
+      // ms until the next quarter-hour boundary (rolls to slot n+1)
+      const msIntoSlot = ((n.getMinutes() % 15) * 60 + n.getSeconds()) * 1000 + n.getMilliseconds();
+      const nextBoundary = Math.max(1000, 15 * 60 * 1000 - msIntoSlot + 50);
+      // Also cap at 30s so we still recover if the tab was throttled and
+      // the timeout is not honoured tightly across sleep/wake.
+      const delay = Math.min(nextBoundary, 30_000);
+      timer = setTimeout(tick, delay);
     };
     tick();
-    // 30s tick is plenty -- the slot only changes every 15 min and
-    // half-min tick means the halo is never more than a slot off.
-    const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
+    const onVisible = () => document.visibilityState === "visible" && tick();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", tick);
+    return () => {
+      cancelled = true;
+      if (timer !== null) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", tick);
+    };
   }, [date]);
 
   const [saving, setSaving] = useState(false);
@@ -74,7 +98,11 @@ export default function TodayPage() {
   const step2Done = hasSelection;
   const step3Done = justFilled;
 
-  useEffect(() => {
+  // Reload today's cells (and metrics). Extracted so we can call it both on
+  // date change AND whenever a save happens elsewhere -- notably from the
+  // Quick Capture popup, which used to save cleanly but leave the /today
+  // clock rendering the pre-save state until manual reload.
+  const reload = useCallback(() => {
     fetchDayEntries(date, date)
       .then((es) => setCells(new Map(es.map((e) => [e.slot, { category: e.category, label: e.label }]))))
       .catch((e) => setError(String(e.message ?? e)));
@@ -96,6 +124,26 @@ export default function TodayPage() {
       .catch(() => {});
   }, [date]);
 
+  useEffect(() => {
+    reload();
+    // The Quick Capture widget fires `daymax-day-saved` after every write.
+    // Without this listener the /today circle would ignore those writes
+    // completely -- the popup's own state advanced, the DB was written,
+    // but the clock the user was staring at kept the pre-save fills.
+    // visibilitychange/focus cover the "left tab open, saved from phone,
+    // came back" case where no event fires in this tab at all.
+    const onSaved = () => reload();
+    const onVisible = () => document.visibilityState === "visible" && reload();
+    window.addEventListener("daymax-day-saved", onSaved);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onSaved);
+    return () => {
+      window.removeEventListener("daymax-day-saved", onSaved);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onSaved);
+    };
+  }, [reload]);
+
   const filled = cells.size;
 
   async function fill(overrideFrom?: number, overrideTo?: number) {
@@ -115,6 +163,10 @@ export default function TodayPage() {
       }
       setCells(next);
       await upsertDayEntries(entries);
+      // Broadcast so the capture widget (and any other listening view)
+      // sees the newly-filled slots immediately, same contract used by
+      // the popup itself.
+      window.dispatchEvent(new Event("daymax-day-saved"));
       // Flash step 3 green, then reset the whole tracker: category
       // un-picked, selection cleared, back to a fresh step-1 state.
       setJustFilled(true);
@@ -144,6 +196,8 @@ export default function TodayPage() {
       }
       setCells(next);
       await deleteDayEntries(date, slots);
+      // Deleting slots is also a state change other views need to see.
+      window.dispatchEvent(new Event("daymax-day-saved"));
       setFrom(null);
       setUntil(null);
     } catch (e: any) {

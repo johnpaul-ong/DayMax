@@ -18,6 +18,7 @@ import {
   pursuitHref,
   type Pursuit,
 } from "@/lib/pursuits";
+import RequestCard from "./_request-card";
 
 interface Spark {
   statName: string;
@@ -206,6 +207,8 @@ export default function PursuitsPage() {
           make it invite-only — nobody else will see it exists.
         </p>
       </div>
+
+      <RequestCard />
     </div>
   );
 }

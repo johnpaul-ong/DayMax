@@ -13,6 +13,35 @@ import { parseLiftSheet, type LiftParseResult } from "./liftParse";
 import { parseSheet2, type Sheet2ParseResult } from "./sheet2Parse";
 import type { DayEntry, DayMetrics, SheetMatrix } from "./types";
 
+// INTERIM MITIGATION for the SheetJS `xlsx` package prototype-pollution + ReDoS
+// vulnerability (no upstream patch on the community build). The real fix is a
+// dep swap to `exceljs`, which is a multi-file migration queued as a follow-up.
+// Until then: hard-cap the input file size so a malicious workbook cannot pin
+// the parser (ReDoS) or expand into memory during read. 5 MB is generous for
+// DayMax's personal-tracker use case — a full multi-year workbook exports well
+// under 1 MB — and is easy to raise if a legit file ever bounces off.
+export const MAX_XLSX_BYTES = 5 * 1024 * 1024;
+
+const ALLOWED_XLSX_EXTS = [".xlsx", ".xls"] as const;
+
+/**
+ * Reject files that must not reach the vulnerable parser: oversize (ReDoS /
+ * memory-bomb amplification) or non-Excel extensions (the parser also accepts
+ * ODS/CSV/etc. — narrow that here). Returns null when the file is acceptable,
+ * or a user-facing error message when it should be rejected.
+ */
+export function validateWorkbookFile(file: File): string | null {
+  const name = file.name.toLowerCase();
+  if (!ALLOWED_XLSX_EXTS.some((ext) => name.endsWith(ext))) {
+    return "Only .xlsx and .xls files supported";
+  }
+  if (file.size > MAX_XLSX_BYTES) {
+    const mb = (file.size / (1024 * 1024)).toFixed(1);
+    return `File too large (${mb} MB) — max 5 MB`;
+  }
+  return null;
+}
+
 export interface WorkbookParseResult {
   grids: Array<{ sheet: string } & GridParseResult>;
   lifts: Array<{ sheet: string } & LiftParseResult>;
@@ -54,6 +83,11 @@ function headerNames(m: SheetMatrix): string[] {
 
 /** Parse an uploaded workbook file into DayMax data with per-sheet results. */
 export async function parseWorkbook(file: File): Promise<WorkbookParseResult> {
+  // Defence in depth — the file picker at src/app/import/page.tsx also gates
+  // via validateWorkbookFile(), but a bare parseWorkbook() call from anywhere
+  // else must not reach the vulnerable XLSX.read() on unchecked input.
+  const rejection = validateWorkbookFile(file);
+  if (rejection) throw new Error(rejection);
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { cellDates: true });
   const result: WorkbookParseResult = { grids: [], lifts: [], daily: [], skipped: [] };

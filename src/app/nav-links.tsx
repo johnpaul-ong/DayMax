@@ -41,6 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
     subs: [
       { href: "/pursuits", label: "My pursuits" },
       { href: "/challenges", label: "Challenges" },
+      { href: "/chess", label: "Chess" },
     ],
   },
   {
@@ -98,7 +99,7 @@ function groupFor(pathname: string): NavGroup | null {
   // otherwise landing on /import or /year leaves the whole bar looking inert.
   const startsWithAny = (...ps: string[]) => ps.some((x) => pathname === x || pathname.startsWith(x + "/"));
   if (startsWithAny("/today", "/day", "/year")) return NAV_GROUPS[0];
-  if (startsWithAny("/pursuits", "/money", "/challenges", "/lifts", "/habits")) return NAV_GROUPS[1];
+  if (startsWithAny("/pursuits", "/money", "/challenges", "/lifts", "/habits", "/chess")) return NAV_GROUPS[1];
   if (startsWithAny("/friends", "/arena", "/join", "/search")) return NAV_GROUPS[2];
   if (startsWithAny("/profile", "/overview", "/settings", "/metrics", "/import", "/export", "/gaps")) return NAV_GROUPS[3];
   for (const g of NAV_GROUPS) {

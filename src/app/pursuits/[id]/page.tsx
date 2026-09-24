@@ -80,6 +80,8 @@ import type { DayStripRow } from "@/lib/friends";
 import MineView from "./_mine-view";
 import StatSection from "./_stat-section";
 import { LifeCommunity, LiftsCommunity } from "./_community";
+import ChessPursuit from "./_chess-pursuit";
+import { createClient } from "@/lib/supabase/client";
 
 const MONEY_PURSUIT_ID = "33333333-3333-4333-8333-333333333305";
 
@@ -116,6 +118,10 @@ export default function PursuitPage() {
   const todayISO = localToday();
   const ws = weekStart(todayISO);
   const [pursuit, setPursuit] = useState<Pursuit | null>(null);
+  // template + config live outside the `pursuit_directory` RPC (which pre-dates
+  // them) — direct select on the pursuits row keeps the RPC surface unchanged.
+  const [meta, setMeta] = useState<{ template: string | null; config: unknown } | null>(null);
+  const [convertBusy, setConvertBusy] = useState(false);
   const [stats, setStats] = useState<PursuitStat[]>([]);
   const [friends, setFriends] = useState<Friendship[]>([]);
   const [members, setMembers] = useState<PursuitMember[]>([]);
@@ -156,6 +162,21 @@ export default function PursuitPage() {
     listFriends().then((fs) => setFriends(fs.filter((f) => f.status === "accepted"))).catch(() => {});
     fetchPursuitMembers(id).then(setMembers).catch(() => setMembers([]));
     fetchMyMembership(id).then((m) => setShowOnProfileState(!!m?.showOnProfile)).catch(() => {});
+    // template/config: separate select so the pursuit_directory RPC signature
+    // stays untouched. Null on error is fine — falls back to standard renderer.
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase
+          .from("pursuits")
+          .select("template, config")
+          .eq("id", id)
+          .maybeSingle();
+        setMeta(data ? { template: data.template ?? null, config: data.config ?? {} } : { template: null, config: {} });
+      } catch {
+        setMeta({ template: null, config: {} });
+      }
+    })();
   }
   useEffect(reload, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -184,6 +205,13 @@ export default function PursuitPage() {
 
   if (error) return <p className="rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">{error}</p>;
   if (!pursuit) return <p className="text-sm text-muted">Loading pursuit…</p>;
+
+  // Chess-templated pursuits get their own renderer — bespoke UI for
+  // per-game data + review board that doesn't fit the tabular stats model.
+  // Wait for meta so we don't briefly render the generic page and then swap.
+  if (meta && meta.template === "chess") {
+    return <ChessPursuit pursuit={pursuit} initialConfig={meta.config} />;
+  }
 
   const visibleStats = stats.filter((s) => !s.hidden || pursuit.isOwner);
   const logHref = pursuitLogHref(pursuit);
@@ -291,6 +319,40 @@ export default function PursuitPage() {
               <button onClick={() => void setPursuitPublic(id, !pursuit.isPublic).then(reload).catch((e) => setMsg(String(e.message ?? e)))} className="btn-ghost py-1">
                 Make {pursuit.isPublic ? "invite-only" : "public"}
               </button>
+              {/* Chess conversion: only offered on standard custom pursuits (kind=custom,
+                  template null). Not on Life/Lifts. Prompts once for the essentials so the
+                  chess view has something to render immediately after conversion. */}
+              {pursuit.kind === "custom" && meta && meta.template !== "chess" && (
+                <button
+                  onClick={async () => {
+                    if (convertBusy) return;
+                    if (!confirm(`Convert "${pursuit.name}" to a Chess pursuit? The stats list will be hidden in favour of the chess review board.`)) return;
+                    const username = prompt("Your chess.com username?")?.trim() ?? "";
+                    if (!username) return;
+                    const oppsRaw = prompt("Opponents' chess.com usernames (comma-separated). Add more later on the page.") ?? "";
+                    const opponents = oppsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+                    setConvertBusy(true);
+                    try {
+                      const supabase = createClient();
+                      const { error: uErr } = await supabase
+                        .from("pursuits")
+                        .update({ template: "chess", config: { username, opponents, monthsBack: 1 } })
+                        .eq("id", id);
+                      if (uErr) throw uErr;
+                      // Refresh meta so the chess dispatch triggers.
+                      setMeta({ template: "chess", config: { username, opponents, monthsBack: 1 } });
+                    } catch (e: any) {
+                      setMsg(String(e?.message ?? e));
+                    } finally {
+                      setConvertBusy(false);
+                    }
+                  }}
+                  disabled={convertBusy}
+                  className="btn-ghost py-1"
+                >
+                  {convertBusy ? "Converting…" : "Convert to Chess pursuit"}
+                </button>
+              )}
               <button
                 onClick={() => {
                   if (confirm(`Delete "${pursuit.name}" and all its stats for everyone?`)) void deletePursuit(id).then(() => (location.href = "/pursuits"));

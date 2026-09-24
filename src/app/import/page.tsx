@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { fetchDayEntries, insertLifts, upsertDailyMetrics, upsertDayEntries, upsertDayMetrics } from "@/lib/data";
-import { parsePastedGrid, parseWorkbook, type WorkbookParseResult } from "@/lib/xlsxIO";
+import { parsePastedGrid, parseWorkbook, validateWorkbookFile, type WorkbookParseResult } from "@/lib/xlsxIO";
 import type { DailyMetric, DayEntry, DayMetrics, LiftEntry } from "@/lib/types";
 
 interface Pending {
@@ -44,6 +44,15 @@ export default function ImportPage() {
 
   async function onFile(f: File | null) {
     if (!f) return;
+    // Interim guard: reject oversize / wrong-extension files BEFORE the xlsx
+    // parser sees them (SheetJS community `xlsx` package has an unpatched
+    // prototype-pollution + ReDoS surface). Full fix = dep swap to `exceljs`,
+    // queued as a follow-up.
+    const rejection = validateWorkbookFile(f);
+    if (rejection) {
+      setError(rejection);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

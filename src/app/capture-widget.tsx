@@ -161,18 +161,32 @@ export default function CaptureWidget() {
   // Re-read today's slots whenever you come back to the app or navigate. This
   // is the fix for "it asks about a slot I already filled": logging on /today
   // or /day used to leave this component's idea of the day stale until reload.
+  //
+  // Also: prune the queue of any slots that became filled externally, so the
+  // popup advances/closes as soon as the user paints its current slot on
+  // /today (rather than waiting up to 60s for the ticker to rebuild). Queue
+  // is the source of truth for `current` (L318) and the render gate (L387),
+  // so removing a filled slot from the queue is what actually closes the
+  // widget. dismissedRef is untouched — a manual dismiss stays dismissed,
+  // and a genuinely-new slot still lifts the dismissal via the ticker's
+  // re-arm logic and the topSlot effect below.
   useEffect(() => {
     if (!signedIn || !settings?.enabled) return;
-    void refresh();
-    const onVisible = () => document.visibilityState === "visible" && void refresh();
-    const onSaved = () => void refresh();
+    const syncAfterSave = async () => {
+      const fresh = await refresh();
+      setQueue((q) => q.filter((s) => !fresh.has(s)));
+    };
+    void syncAfterSave();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void syncAfterSave();
+    };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onSaved);
-    window.addEventListener("daymax-day-saved", onSaved);
+    window.addEventListener("focus", syncAfterSave);
+    window.addEventListener("daymax-day-saved", syncAfterSave);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onSaved);
-      window.removeEventListener("daymax-day-saved", onSaved);
+      window.removeEventListener("focus", syncAfterSave);
+      window.removeEventListener("daymax-day-saved", syncAfterSave);
     };
   }, [signedIn, settings?.enabled, refresh, pathname]);
 
