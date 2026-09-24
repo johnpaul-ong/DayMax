@@ -1,25 +1,38 @@
 "use client";
 
 /**
- * Chess-templated pursuit renderer. Wraps the shared <ChessView> with a
- * pursuit-header (name, description, member count, delete) and persists
- * config to `pursuits.config jsonb` under the row's existing RLS.
+ * Chess-templated pursuit renderer.
  *
- * One-time migration: if the pursuit's DB config is empty and a legacy
- * `daymax-chess-config` sits in localStorage, we copy it in on first mount
- * and remove the localStorage key so subsequent edits don't accidentally
- * fork the two stores.
+ * TWO TABS:
+ *   1. "Pursuit overview" (default) — averages across ALL pursuit members
+ *      who have set a chess.com username in their own `pursuit_members.config`.
+ *      See `_pursuit-overview.tsx`.
+ *   2. "My data" — the current per-member view (aggregate + per-opponent
+ *      + move-jumpable board).
+ *
+ * Per-member config lives in `pursuit_members.config` (jsonb, migration 46)
+ * under `.chess.{ username, cache }`. That gives every member their own
+ * chess.com identity + a local cache of the Lichess analysis (per game URL),
+ * so re-visits don't re-analyse anything. The pursuit-wide chess config on
+ * `pursuits.config` is still consulted as a fallback for the current user's
+ * username so existing rows (converted before migration 46) keep working —
+ * once a user edits their username here, it's written to their own
+ * pursuit_members row rather than the shared pursuits row.
+ *
+ * Legacy localStorage `daymax-chess-config` migration lives here too so a
+ * user who set up chess pre-pursuit doesn't have to retype.
  */
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { deletePursuit, leavePursuit, type Pursuit } from "@/lib/pursuits";
 import ChessView, {
-  CHESS_DEFAULTS,
   normaliseChessConfig,
+  type CachedAnalysis,
   type ChessConfig,
 } from "../../chess/_view";
+import PursuitOverview from "./_pursuit-overview";
 
 const STORAGE_KEY = "daymax-chess-config";
 
@@ -33,43 +46,86 @@ function readLocalConfig(): ChessConfig | null {
   }
 }
 
+type MemberChessConfig = {
+  chess?: {
+    username?: string;
+    cache?: Record<string, CachedAnalysis>;
+  };
+};
+
 interface Props {
   pursuit: Pursuit;
-  initialConfig: unknown;
+  initialConfig: unknown; // pursuit-wide config (used only as username fallback)
 }
 
 export default function ChessPursuit({ pursuit, initialConfig }: Props) {
+  // Pursuit-wide opponents list — still on pursuits.config (owner sets it).
   const [config, setConfig] = useState<ChessConfig>(() => normaliseChessConfig(initialConfig));
   const [configLoaded, setConfigLoaded] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // Coalesce writes so typing an opponent name doesn't fire one write per keystroke.
+  const [analysisCache, setAnalysisCache] = useState<Record<string, CachedAnalysis>>({});
+  const [tab, setTab] = useState<"overview" | "mine">("overview");
+  const [userId, setUserId] = useState<string | null>(null);
+
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cacheSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cacheRef = useRef<Record<string, CachedAnalysis>>({});
   const migratedRef = useRef(false);
 
-  // On first mount: if server-side config is empty AND legacy localStorage exists, adopt + clear it.
+  // Load the CURRENT user's pursuit_members.config row: username override +
+  // analysis cache. Falls back to the pursuit-wide config for username so
+  // existing installs (converted before migration 46) keep working.
   useEffect(() => {
     if (migratedRef.current) return;
     migratedRef.current = true;
-    const isEmpty = !config.username && config.opponents.length === 0;
-    if (!isEmpty) {
-      setConfigLoaded(true);
-      return;
-    }
-    const local = readLocalConfig();
-    if (local && (local.username || local.opponents.length > 0)) {
-      setConfig(local);
-      persist(local, /*silent*/ true).then(() => {
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {}
-      });
-    }
-    setConfigLoaded(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData.user?.id ?? null;
+        setUserId(uid);
+        if (!uid) { setConfigLoaded(true); return; }
 
-  async function persist(next: ChessConfig, silent = false) {
-    if (!pursuit.isOwner) return; // Non-owners can view but can't edit config.
+        const { data: memberRow } = await supabase
+          .from("pursuit_members")
+          .select("config")
+          .eq("pursuit_id", pursuit.id)
+          .eq("user_id", uid)
+          .maybeSingle();
+        const memberConfig: MemberChessConfig = (memberRow?.config ?? {}) as MemberChessConfig;
+        const memberChess = memberConfig.chess ?? {};
+
+        if (memberChess.cache) {
+          cacheRef.current = memberChess.cache;
+          setAnalysisCache(memberChess.cache);
+        }
+
+        const base = normaliseChessConfig(initialConfig);
+        const local = base.username || base.opponents.length ? null : readLocalConfig();
+        const merged: ChessConfig = {
+          username: memberChess.username ?? local?.username ?? base.username,
+          opponents: base.opponents.length ? base.opponents : local?.opponents ?? [],
+        };
+        setConfig(merged);
+
+        // Legacy localStorage rescue.
+        if (local && !memberChess.username && !base.username && local.username) {
+          void persistMemberChess({ username: local.username });
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        }
+      } catch {
+        // fall through; ChessView will just show the empty username edit input.
+      } finally {
+        setConfigLoaded(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pursuit.id]);
+
+  // Persist pursuit-wide config (opponents list, and the pre-46-fallback
+  // username so non-owners can still see something).
+  async function persistPursuitConfig(next: ChessConfig, silent = false) {
+    if (!pursuit.isOwner) return;
     try {
       const supabase = createClient();
       const { error } = await supabase
@@ -83,15 +139,64 @@ export default function ChessPursuit({ pursuit, initialConfig }: Props) {
     }
   }
 
+  // Persist THIS user's own pursuit_members.config.chess subtree. RLS-safe:
+  // each member can only update their own row (see migration 13's
+  // `edit own membership` policy).
+  async function persistMemberChess(patch: Partial<{ username: string; cache: Record<string, CachedAnalysis> }>) {
+    if (!userId) return;
+    try {
+      const supabase = createClient();
+      const { data: cur } = await supabase
+        .from("pursuit_members")
+        .select("config")
+        .eq("pursuit_id", pursuit.id)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const existing: MemberChessConfig = (cur?.config ?? {}) as MemberChessConfig;
+      const nextChess = { ...(existing.chess ?? {}), ...patch };
+      const nextConfig = { ...existing, chess: nextChess };
+      const { error } = await supabase
+        .from("pursuit_members")
+        .update({ config: nextConfig })
+        .eq("pursuit_id", pursuit.id)
+        .eq("user_id", userId);
+      if (error) throw error;
+      setSaveError(null);
+    } catch (e: any) {
+      setSaveError(String(e?.message ?? e));
+    }
+  }
+
   function onConfigChange(next: ChessConfig) {
     setConfig(next);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void persist(next), 400);
+    saveTimer.current = setTimeout(() => {
+      // Owner: sync opponents to pursuit-wide config so members see the same list.
+      // Username: always persisted to the CURRENT user's own pursuit_members row.
+      void persistPursuitConfig(next);
+      if (next.username !== (config.username ?? "")) {
+        void persistMemberChess({ username: next.username });
+      }
+    }, 400);
   }
+
+  const onAnalysisCached = useCallback((gameUrl: string, entry: CachedAnalysis) => {
+    cacheRef.current = { ...cacheRef.current, [gameUrl]: entry };
+    setAnalysisCache(cacheRef.current);
+    if (cacheSaveTimer.current) clearTimeout(cacheSaveTimer.current);
+    // Debounce so rapid clicks (or a burst of first-time analyses) don't
+    // fire one write per game; each write reads-modifies-writes the whole
+    // member row's config jsonb.
+    cacheSaveTimer.current = setTimeout(() => {
+      void persistMemberChess({ cache: cacheRef.current });
+    }, 600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, pursuit.id]);
 
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (cacheSaveTimer.current) clearTimeout(cacheSaveTimer.current);
     };
   }, []);
 
@@ -100,9 +205,7 @@ export default function ChessPursuit({ pursuit, initialConfig }: Props) {
       <div className="card p-5">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{pursuit.name}</h1>
-          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-            chess
-          </span>
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">chess</span>
           <span className="text-sm text-faint">
             {pursuit.memberCount} member{pursuit.memberCount === 1 ? "" : "s"} · by {pursuit.ownerName}
             {pursuit.isOwner && " (you)"}
@@ -110,11 +213,6 @@ export default function ChessPursuit({ pursuit, initialConfig }: Props) {
         </div>
         {pursuit.description && (
           <p className="mt-1 text-sm text-muted">{pursuit.description}</p>
-        )}
-        {!pursuit.isOwner && (
-          <p className="mt-2 text-xs text-faint">
-            You&apos;re viewing this owner&apos;s chess review. Only the owner can edit the config.
-          </p>
         )}
         <div className="mt-3 flex flex-wrap gap-2 text-sm">
           <Link href="/pursuits" className="btn-ghost py-1">← All pursuits</Link>
@@ -143,12 +241,31 @@ export default function ChessPursuit({ pursuit, initialConfig }: Props) {
         )}
       </div>
 
-      <ChessView
-        config={config}
-        onConfigChange={onConfigChange}
-        configLoaded={configLoaded}
-        showHeader={false}
-      />
+      {/* Two-tab UX matching the community/mine pattern in pursuits/[id]/page.tsx. */}
+      <div className="flex gap-1 rounded-xl bg-surface-2 p-1 text-sm">
+        {(["overview", "mine"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setTab(v)}
+            className={`flex-1 rounded-lg px-3 py-2.5 ${tab === v ? "bg-surface font-semibold" : "text-muted"}`}
+          >
+            {v === "overview" ? "Pursuit overview" : "My data"}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" ? (
+        <PursuitOverview pursuitId={pursuit.id} pursuitMemberCount={pursuit.memberCount} />
+      ) : (
+        <ChessView
+          config={config}
+          onConfigChange={onConfigChange}
+          configLoaded={configLoaded}
+          showHeader={false}
+          analysisCache={analysisCache}
+          onAnalysisCached={onAnalysisCached}
+        />
+      )}
     </div>
   );
 }

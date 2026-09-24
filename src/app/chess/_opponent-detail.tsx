@@ -37,6 +37,10 @@ interface Props {
   games: ChessComGame[]; // ALREADY filtered vs this opponent, newest-first.
   analyzed: Map<string, AnalyzedGame>;
   me: string;
+  /** Kick off Lichess analysis for one game — parent owns the network + cache. */
+  onAnalyse?: (g: ChessComGame) => void;
+  /** URL currently being analysed, so the button can show a loading state. */
+  analysingUrl?: string | null;
 }
 
 function myResult(g: ChessComGame, meLc: string): "win" | "loss" | "draw" | null {
@@ -49,7 +53,7 @@ function myResult(g: ChessComGame, meLc: string): "win" | "loss" | "draw" | null
   return "draw";
 }
 
-export default function OpponentDetail({ opponent, games, analyzed, me }: Props) {
+export default function OpponentDetail({ opponent, games, analyzed, me, onAnalyse, analysingUrl }: Props) {
   const meLc = me.trim().toLowerCase();
   const [selectedUrl, setSelectedUrl] = useState<string | null>(() => games[0]?.url ?? null);
 
@@ -195,8 +199,10 @@ export default function OpponentDetail({ opponent, games, analyzed, me }: Props)
                         </>
                       ) : a ? (
                         <span className="text-faint">eval unavailable</span>
+                      ) : g.url === analysingUrl ? (
+                        <span className="text-accent">analysing…</span>
                       ) : (
-                        <span className="text-faint">analysing…</span>
+                        <span className="text-faint">not analysed</span>
                       )}
                     </div>
                   </button>
@@ -217,14 +223,31 @@ export default function OpponentDetail({ opponent, games, analyzed, me }: Props)
                 myColour={selectedAnalyzed?.myColour}
                 showMoveList
               />
-              <a
-                href={selected.url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-[11px] text-accent hover:underline"
-              >
-                Open on chess.com ↗
-              </a>
+              <div className="mt-2 flex items-center gap-2">
+                {onAnalyse && !selectedAnalyzed && (
+                  <button
+                    onClick={() => onAnalyse(selected)}
+                    disabled={analysingUrl != null}
+                    className="btn-primary py-1 text-xs disabled:opacity-50"
+                    title="Fetch Lichess cloud eval and score every move"
+                  >
+                    {analysingUrl === selected.url ? "Analysing…" : "Analyse this game"}
+                  </button>
+                )}
+                {selectedAnalyzed && (
+                  <span className="text-[11px] text-faint">
+                    analysed · coverage {Math.round(selectedAnalyzed.coverage * 100)}%
+                  </span>
+                )}
+                <a
+                  href={selected.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto text-[11px] text-accent hover:underline"
+                >
+                  Open on chess.com ↗
+                </a>
+              </div>
             </div>
           ) : (
             <p className="text-xs text-faint">Pick a game to review it move by move.</p>
