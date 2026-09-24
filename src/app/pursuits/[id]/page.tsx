@@ -336,11 +336,11 @@ export default function PursuitPage() {
                       const supabase = createClient();
                       const { error: uErr } = await supabase
                         .from("pursuits")
-                        .update({ template: "chess", config: { username, opponents, monthsBack: 1 } })
+                        .update({ template: "chess", config: { username, opponents } })
                         .eq("id", id);
                       if (uErr) throw uErr;
                       // Refresh meta so the chess dispatch triggers.
-                      setMeta({ template: "chess", config: { username, opponents, monthsBack: 1 } });
+                      setMeta({ template: "chess", config: { username, opponents } });
                     } catch (e: any) {
                       setMsg(String(e?.message ?? e));
                     } finally {

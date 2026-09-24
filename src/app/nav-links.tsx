@@ -38,10 +38,13 @@ export const NAV_GROUPS: NavGroup[] = [
     // now -- reachable straight from the My pursuits list -- so having
     // it in the sub-nav double-billed the same page. Killed on
     // feedback. /money still resolves, just isn't tabbed.
+    // Chess used to appear here as a peer subtab, but Chess is a normal
+    // pursuit (template='chess' at /pursuits/[id]) -- a top-level tab for it
+    // double-billed the same page. Users reach the Chess pursuit through the
+    // My pursuits list. The /chess route still exists as a redirector.
     subs: [
       { href: "/pursuits", label: "My pursuits" },
       { href: "/challenges", label: "Challenges" },
-      { href: "/chess", label: "Chess" },
     ],
   },
   {

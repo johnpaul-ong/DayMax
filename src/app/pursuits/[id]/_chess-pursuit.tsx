@@ -50,8 +50,7 @@ export default function ChessPursuit({ pursuit, initialConfig }: Props) {
   useEffect(() => {
     if (migratedRef.current) return;
     migratedRef.current = true;
-    const isEmpty =
-      !config.username && config.opponents.length === 0 && config.monthsBack === 1;
+    const isEmpty = !config.username && config.opponents.length === 0;
     if (!isEmpty) {
       setConfigLoaded(true);
       return;

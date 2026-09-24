@@ -67,7 +67,7 @@ export default function RequestCard() {
       <div className="card p-4">
         <h2 className="mb-1 font-semibold">Request a custom pursuit</h2>
         <p className="mb-2 text-xs text-muted">
-          Every pursuit in DayMax is real code, hand-built for reliability. If you have an idea for one that&apos;s not here yet, drop it below — John reviews the queue and briefs a build for the ones worth doing.
+          Every pursuit in DayMax is real code, hand-built for reliability. If you have an idea for one that&apos;s not here yet, drop it below — let us know.
         </p>
         <div className="flex flex-col gap-2">
           <input
