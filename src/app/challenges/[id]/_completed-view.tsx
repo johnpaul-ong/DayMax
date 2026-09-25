@@ -25,6 +25,8 @@ import {
   type LifeSummary,
   type Recap,
 } from "@/lib/challengeRecaps";
+import { dayPatterns, MIN_DAYS, type Pattern } from "@/lib/dayPatterns";
+import { fetchMemberDayStrip } from "@/lib/profiles";
 import { TeamDot } from "../../team-name";
 import ChallengeFeed from "./feed";
 
@@ -52,6 +54,18 @@ export default function CompletedView({
   const [results, setResults] = useState<ChallengeResult[]>([]);
   const [life, setLife] = useState<LifeSummary[]>([]);
   const [recaps, setRecaps] = useState<Recap[]>([]);
+  const [myPatterns, setMyPatterns] = useState<Pattern[]>([]);
+  const meId = rows.find((r) => r.isMe)?.userId ?? null;
+
+  // Your own day shape, read in your own browser and shown only to you.
+  useEffect(() => {
+    if (!meId) return;
+    let alive = true;
+    fetchMemberDayStrip(meId, challenge.startsOn, challenge.endsOn)
+      .then((strip) => { if (alive) setMyPatterns(dayPatterns(strip)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [meId, challenge.startsOn, challenge.endsOn]);
 
   useEffect(() => {
     let alive = true;
@@ -213,6 +227,21 @@ export default function CompletedView({
                 </div>
                 {p.recap && (
                   <p className="mt-3 whitespace-pre-line border-l-2 border-accent pl-3 text-sm">{p.recap.body}</p>
+                )}
+                {p.isMe && myPatterns.length > 0 && (
+                  <div className="mt-3 rounded-lg bg-surface-2 p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+                      Your patterns · only you can see this
+                    </div>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm">
+                      {myPatterns.map((x) => <li key={x.kind}>{x.text}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {p.isMe && myPatterns.length === 0 && p.entries < MIN_DAYS && (
+                  <p className="mt-3 text-xs text-faint">
+                    Log at least {MIN_DAYS} full days in a challenge to get your time-of-day patterns here.
+                  </p>
                 )}
               </article>
             ))}
