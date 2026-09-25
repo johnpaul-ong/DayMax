@@ -82,12 +82,15 @@ export default function ChallengeFeed({
   endsOn,
   me,
   isMember,
+  readOnly = false,
 }: {
   challengeId: string;
   startsOn: string;
   endsOn: string;
   me: string | null;
   isMember: boolean;
+  /** Finished challenge: read the feed, no posting, replying, liking or deleting. */
+  readOnly?: boolean;
 }) {
   const today = localToday();
   const days = useMemo(() => dateRange(startsOn, endsOn), [startsOn, endsOn]);
@@ -124,18 +127,18 @@ export default function ChallengeFeed({
           the feed now shows every post across the whole window,
           newest first. */}
 
-      {isMember && <PostComposer challengeId={challengeId} date={composeDate} onPosted={refresh} />}
+      {isMember && !readOnly && <PostComposer challengeId={challengeId} date={composeDate} onPosted={refresh} />}
 
       <div className="mt-3 rounded-xl border border-border/60 bg-surface-2/30 p-2">
         {loading && posts.length === 0 && <p className="p-2 text-sm text-faint">Loading…</p>}
         {!loading && posts.length === 0 && (
           <p className="p-4 text-center text-sm text-muted">
-            Nothing posted yet. {isMember ? "Be the first." : "Members' posts will show here."}
+            Nothing posted yet. {readOnly ? "" : isMember ? "Be the first." : "Members' posts will show here."}
           </p>
         )}
         <div className="space-y-2">
           {posts.map((p) => (
-            <PostCard key={p.id} post={p} me={me} onChanged={refresh} />
+            <PostCard key={p.id} post={p} me={me} onChanged={refresh} readOnly={readOnly} />
           ))}
         </div>
       </div>
@@ -217,7 +220,7 @@ function PostComposer({
   );
 }
 
-function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; onChanged: () => void }) {
+function PostCard({ post, me, onChanged, readOnly }: { post: FeedPost; me: string | null; onChanged: () => void; readOnly: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [comments, setComments] = useState<FeedComment[] | null>(null);
   const [commentBody, setCommentBody] = useState("");
@@ -265,7 +268,7 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
         >
           {postedAt(post.createdAt)}
         </span>
-        {post.mine && (
+        {post.mine && !readOnly && (
           <button
             onClick={() => { if (confirm("Delete this post?")) void deletePost(post.id).then(onChanged); }}
             className="text-[10px] text-danger hover:underline"
@@ -289,7 +292,8 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
       <div className="mt-2 flex items-center gap-3 text-xs">
         <button
           onClick={() => void like()}
-          className={`inline-flex items-center gap-1 hover:text-accent ${post.myLike ? "font-semibold text-accent" : "text-muted"}`}
+          disabled={readOnly}
+          className={`inline-flex items-center gap-1 enabled:hover:text-accent ${post.myLike ? "font-semibold text-accent" : "text-muted"}`}
           aria-pressed={post.myLike}
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill={post.myLike ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -301,7 +305,7 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
-          {post.commentCount || "Reply"}
+          {post.commentCount || (readOnly ? "" : "Reply")}
         </button>
       </div>
 
@@ -312,12 +316,12 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
           ) : (
             <ul className="space-y-2">
               {comments.map((c) => (
-                <CommentRow key={c.id} comment={c} me={me} onChanged={onChanged} onReloaded={(rows) => setComments(rows)} postId={post.id} />
+                <CommentRow key={c.id} comment={c} me={me} onChanged={onChanged} onReloaded={(rows) => setComments(rows)} postId={post.id} readOnly={readOnly} />
               ))}
               {comments.length === 0 && <li className="text-xs text-faint">No comments yet.</li>}
             </ul>
           )}
-          <div className="mt-2 flex items-center gap-2">
+          {!readOnly && <div className="mt-2 flex items-center gap-2">
             <input
               value={commentBody}
               onChange={(e) => setCommentBody(e.target.value)}
@@ -328,7 +332,7 @@ function PostCard({ post, me, onChanged }: { post: FeedPost; me: string | null; 
             <button onClick={() => void comment()} disabled={busy || !commentBody.trim()} className="btn-primary py-1 text-xs">
               {busy ? "…" : "Send"}
             </button>
-          </div>
+          </div>}
           {err && <p className="mt-1 text-xs text-danger">{err}</p>}
         </div>
       )}
@@ -342,12 +346,14 @@ function CommentRow({
   onChanged,
   onReloaded,
   postId,
+  readOnly,
 }: {
   comment: FeedComment;
   me: string | null;
   onChanged: () => void;
   onReloaded: (rows: FeedComment[]) => void;
   postId: string;
+  readOnly: boolean;
 }) {
   async function like() {
     try {
@@ -370,7 +376,7 @@ function CommentRow({
           >
             {postedAt(comment.createdAt)}
           </span>
-          {comment.mine && (
+          {comment.mine && !readOnly && (
             <button
               onClick={() => { if (confirm("Delete this comment?")) void deleteComment(comment.id).then(async () => { onReloaded(await fetchComments(postId)); onChanged(); }); }}
               className="text-[10px] text-danger hover:underline"
@@ -383,7 +389,8 @@ function CommentRow({
       </div>
       <button
         onClick={() => void like()}
-        className={`inline-flex shrink-0 items-center gap-0.5 text-[11px] hover:text-accent ${comment.myLike ? "font-semibold text-accent" : "text-faint"}`}
+        disabled={readOnly}
+        className={`inline-flex shrink-0 items-center gap-0.5 text-[11px] enabled:hover:text-accent ${comment.myLike ? "font-semibold text-accent" : "text-faint"}`}
         aria-pressed={comment.myLike}
       >
         <svg viewBox="0 0 24 24" width="11" height="11" fill={comment.myLike ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

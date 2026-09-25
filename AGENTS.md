@@ -23,6 +23,21 @@ You are the workforce (product, engineering, security, docs). The user is the pr
 | Build phases & what's deliberately deferred | `docs/ROADMAP.md` |
 | Copy-paste prompts for ChatGPT/Claude | `docs/PROMPTS.md` |
 
+## Admin attention queue ("Anything need attention on DayMax?")
+
+The owner has no Anthropic API key, so AI admin work (challenge recaps) is done by a Claude session, not the app. When asked "anything need attention on DayMax?" (or similar):
+
+1. Run `select * from agent_attention();` on the hosted project (`pzsdccocaszqhugzuqgc`, Supabase MCP). It is read-only and revoked from the app's roles (migration 0048). Report each row in plain English, soonest `due_at` first. Nothing returned = nothing to do.
+2. **`recaps_needed`**: a challenge ended and not every member has an approved recap.
+   - Ask the owner to open `/admin/recaps`, pick the challenge, press **Copy brief for Claude**, and paste it here. The brief holds the writing rules (`src/lib/recapPrompt.ts`) and only the numbers the board already shows members.
+   - Write one recap per member, following the rules exactly, and show them all.
+   - When the owner approves, they paste each into its box and press **Save & approve**.
+   - Before `due_at` (12:00 the day after the end) the numbers are provisional: say so. Approving early schedules the recap, and it appears at 12:00 by itself (RLS policy in 0048).
+3. **`recaps_pending_approval`**: drafts are waiting at `/admin/recaps`.
+4. **`pursuit_requests`**: requests are waiting at `/admin/pursuit-requests` (existing "Copy request text" flow).
+
+Do not write to `challenge_recaps` or read members' data over MCP without the owner explicitly asking in that conversation. The brief + paste flow keeps every read and write inside the app's own access rules.
+
 ## Current state (update this when you change it)
 
 - Phase 0 + 1 complete: auth (password + magic link), day grid (zoom levels, cell-label toggle), year heatmap view, today editor, lifts, importer with preview (xlsx / pasted grid / JSON incl. `day_metrics`), month export, home dashboard, overview with ranking, bucket settings. Single-user; RLS locks every table to `auth.uid()`.
@@ -40,4 +55,9 @@ You are the workforce (product, engineering, security, docs). The user is the pr
 - PURSUITS (migration 0013): the unifying concept. `pursuits` (kind life/lifts/custom; is_public with case-insensitive unique names via partial index) / `pursuit_members` (show_on_profile) / `pursuit_stats` (unit, direction, cadence daily|whenever, optional target) / `pursuit_entries` (one value per user/stat/date + PRIVATE note — values shared with members via `pursuit_stat_data()`, notes never). Built-ins: Life (auto-join everyone incl. via handle_new_user) and Lifts (routes to /lifts, users with lift data auto-joined). Nav is GROUPED (`NAV_GROUPS` in nav-links.tsx) and deliberately SHORT — 9 destinations, not 16: Life(Today) · Pursuits(My pursuits/Challenges) · Community(Arena/Friends/Search) · You(Profile/Analytics=old Overview/Settings). Everything cut from the nav kept its route and gained an on-page entry point instead: Month+Year are zoom tabs (`view-zoom.tsx`) on /today, Side by side is a mode toggle (`arena/modes.tsx`) on /arena, Explore is linked from /pursuits and /search, and Metrics/Import/Export live in Settings under "Your data". `groupFor()` maps those orphaned routes back to a group so the bar still highlights. DON'T re-add pages to NAV_GROUPS as peers — four views of one dataset reading as four features is what made the app feel overwhelming. /profile redirects to own /friends/[id]. /search = people + pursuits. Habits page superseded by pursuits (route kept, unlinked).
 - Social v2 (migration 0012): `friendships` (request/accept), `search_profiles` (opt-in `profiles.discoverable`, minors and demo NEVER searchable — minors add people, not vice versa), `is_connected()` now gates profiles/metrics (track OR friendship), `add_track_member()` adds accepted friends to owned tracks with share_rule **hidden** (consent-first — members opt in to sharing themselves). Habits: `metric_types` registry + values in `daily_metrics`, personal-only UI at `/habits`; communities/Arena competition on custom metrics deliberately deferred. Home layout + hidden nav tabs are localStorage (`daymax-home-layout`, `daymax-hidden-tabs` via `NAV_TABS` in nav-links.tsx).
 - Phase 2/3 SHIPPED (migration 0005): `tracks` / `track_members` / `invites` with RLS; Compare goes ONLY through security-definer SQL functions (`compare_day_totals`, `compare_lifts`, `compare_raw_day`, `track_member_list`) that enforce share rules — never query another user's tables from the client. Invite links `/join/<token>` (14-day expiry, optional email lock). Minors: `is_minor()` + guardian_ack enforced in SQL (join + raw_labels). UI: `/friends`, `/join/[token]`, label rename in Settings, signin honors `?next=`.
+- CHALLENGE COMPLETION (migrations 0047 + 0048):
+  - A challenge ends at `ends_on`, but final logs stay open until 12:00 the next day (`challenge_closes_at()`, owner's timezone, Sydney fallback). `finalize_challenge()` refuses before then. The page shows "Finished · waiting on final logs" with a countdown and flips by itself.
+  - After close, `challenges/[id]/_completed-view.tsx` is a read-only record: frozen `challenge_results` podium, group tiles, per-person cards, read-only feed.
+  - Recaps live in `challenge_recaps`. Members see only approved ones, and only after close.
+  - Written either by the server action in `admin/recaps/actions.ts` (needs `ANTHROPIC_API_KEY`, not set yet) or by a Claude session via the brief + paste flow above.
 - Parsers in `src/lib/` are unit-tested (`npm test`) and were validated against the owner's real workbook.

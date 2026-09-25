@@ -37,6 +37,9 @@ import { localToday } from "@/lib/dates";
 import BigThree from "./big-three";
 import DayClock, { type ClockSlot } from "./day-clock";
 import IncomeRing from "./money/income-ring";
+import { formatScore } from "@/lib/challengeMetrics";
+import type { Challenge } from "@/lib/challenges";
+import { challengeClosed, type ChallengeResult } from "@/lib/challengeRecaps";
 
 const tickDate = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 
@@ -69,7 +72,8 @@ export default function ProfileView({ userId }: { userId: string }) {
   // empty state.
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  const [myChallenges, setMyChallenges] = useState<Array<{ id: string; name: string; daysLeft: number }>>([]);
+  const [myChallenges, setMyChallenges] = useState<Challenge[]>([]);
+  const [myResults, setMyResults] = useState<Map<string, ChallengeResult>>(new Map());
   // Bug fix: this used to fetch on EVERY profile view and show them
   // as if they belonged to the profile's owner -- so someone else's
   // page listed YOUR challenges. fetchChallenges() is auth.uid()-
@@ -93,10 +97,15 @@ export default function ProfileView({ userId }: { userId: string }) {
         if (profile.isSelf) {
           import("@/lib/money")
             .then((m) => m.fetchChallenges())
-            .then((cs) => setMyChallenges(cs.filter((c) => c.isMember).map((c) => ({ id: c.id, name: c.name, daysLeft: c.daysLeft }))))
+            .then((cs) => setMyChallenges(cs.filter((c) => c.isMember)))
+            .catch(() => {});
+          import("@/lib/challengeRecaps")
+            .then((m) => m.fetchMyResults())
+            .then((rs) => setMyResults(new Map(rs.map((r) => [r.challengeId, r]))))
             .catch(() => {});
         } else {
           setMyChallenges([]);
+          setMyResults(new Map());
         }
       })
       .catch((e) => setError(String(e.message ?? e)));
@@ -294,24 +303,56 @@ export default function ProfileView({ userId }: { userId: string }) {
               </Link>
             ))}
           </div>
-          {myChallenges.length > 0 && (
+          {myChallenges.some((c) => !challengeClosed(c.endsOn)) && (
             <>
-              <h3 className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-faint">Challenges</h3>
+              <h3 className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-faint">Active challenges</h3>
               <div className="flex flex-wrap gap-2">
-                {myChallenges.map((c) => (
+                {myChallenges.filter((c) => !challengeClosed(c.endsOn)).map((c) => (
                   <Link
                     key={c.id}
                     href={`/challenges/${c.id}`}
                     className="rounded-full border bg-surface px-3 py-1.5 text-sm font-medium hover:text-accent"
                   >
                     {c.name}
-                    {c.daysLeft > 0 ? (
-                      <span className="ml-1 text-xs font-semibold text-accent">{c.daysLeft}d left</span>
-                    ) : (
-                      <span className="ml-1 text-xs text-faint">final</span>
-                    )}
+                    <span className="ml-1 text-xs font-semibold text-accent">
+                      {c.daysLeft > 0 ? `${c.daysLeft}d left` : c.endsOn === todayISO ? "last day" : "final logs till 12:00"}
+                    </span>
                   </Link>
                 ))}
+              </div>
+            </>
+          )}
+          {myChallenges.some((c) => challengeClosed(c.endsOn)) && (
+            <>
+              <h3 className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-faint">Completed challenges</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {myChallenges
+                  .filter((c) => challengeClosed(c.endsOn))
+                  .sort((a, b) => (a.endsOn < b.endsOn ? 1 : -1))
+                  .map((c) => {
+                    const r = myResults.get(c.id);
+                    return (
+                      <Link
+                        key={c.id}
+                        href={`/challenges/${c.id}`}
+                        className="card block p-3 transition hover:-translate-y-0.5 hover:border-accent"
+                      >
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold">{c.name}</span>
+                          {r && (
+                            <span className="ml-auto text-sm font-bold text-accent">
+                              {r.rank === 1 ? "👑 1st" : `#${r.rank}`}
+                              <span className="font-normal text-faint"> of {c.members}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-xs text-faint">{c.startsOn} → {c.endsOn}</div>
+                        <div className="mt-1 text-xs text-muted">
+                          {r ? <>{c.metricLabel}: {formatScore(r.score, c.scoreUnit)}</> : "Results being tallied"}
+                        </div>
+                      </Link>
+                    );
+                  })}
               </div>
             </>
           )}

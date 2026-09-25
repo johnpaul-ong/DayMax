@@ -79,6 +79,8 @@ import ChallengeFeed from "./feed";
 import { BoardDiagnosis, Guarded, YouCard, YouScore } from "./_cards";
 import { AverageDayClock, MembersDayColumns, MembersHoursBars } from "./_life-views";
 import CategoryLegend from "../../category-legend";
+import CompletedView from "./_completed-view";
+import { challengeClosed, challengeClosesAt } from "@/lib/challengeRecaps";
 
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
@@ -89,6 +91,14 @@ function nounOf(label: string | null | undefined): string {
   const m = l.match(/^(?:Most|Least|Longest|Shortest)\s+(.+)$/);
   if (m) return m[1];
   return l ? l.charAt(0).toLowerCase() + l.slice(1) : "the score";
+}
+
+/** "in 3h 40m" / "in 12m" / "any moment now". */
+function untilLabel(ms: number): string {
+  const mins = Math.ceil(ms / 60_000);
+  if (mins <= 0) return "any moment now";
+  const h = Math.floor(mins / 60);
+  return h > 0 ? `in ${h}h ${mins % 60}m` : `in ${mins}m`;
 }
 
 function sentenceCase(s: string): string {
@@ -354,9 +364,20 @@ export default function ChallengePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Ticks during the final-logs window so the page flips to the results at
+  // 12:00 on its own, and the countdown stays current.
+  const [now, setNow] = useState(() => new Date());
+  const inFinalLogs = !!challenge && challenge.endsOn < today && !challengeClosed(challenge.endsOn, now);
+  useEffect(() => {
+    if (!inFinalLogs) return;
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, [inFinalLogs]);
+
   const me = rows.find((r) => r.isMe);
   const running = challenge ? challenge.startsOn <= today && challenge.endsOn >= today : false;
-  const finished = challenge ? challenge.endsOn < today : false;
+  const finished = challenge ? challengeClosed(challenge.endsOn, now) : false;
+  const finalLogs = challenge ? challenge.endsOn < today && !finished : false;
   const started = challenge ? challenge.startsOn <= today : false;
 
   const elapsed = useMemo(() => {
@@ -404,6 +425,21 @@ export default function ChallengePage() {
   const metricLabel = rows[0]?.scoreLabel || challenge.metricLabel || "The score";
   const noun = nounOf(metricLabel);
   const fmt = (v: number | null | undefined) => formatScore(v, unit, currency);
+
+  if (finished) {
+    return (
+      <CompletedView
+        challenge={challenge}
+        rows={rows}
+        daily={daily}
+        currency={currency}
+        metricLabel={metricLabel}
+        noun={noun}
+        roster={rosterNoun(challenge.name)}
+      />
+    );
+  }
+
   /** True only when the ranked number is a SUBSET of what you log. */
   const ranksNonEssential = canon === "money_nonessential" || canon === "money_nonessential_pct";
 
@@ -486,16 +522,28 @@ export default function ChallengePage() {
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{challenge.name}</h1>
           {running && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-contrast">LIVE</span>}
-          {finished && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-muted">FINISHED</span>}
+          {finalLogs && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-muted">FINISHED</span>}
+          {finalLogs && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[10px] font-bold text-warn">WAITING ON FINAL LOGS</span>}
         </div>
         <p className="mt-1 text-sm text-muted">{challenge.description}</p>
         <p className="mt-2 text-xs font-medium text-accent">{metricLabel} wins</p>
         <MetricRules metric={canon} rankLess={rankLess} />
+        {finalLogs && (
+          <div className="mt-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+            <p>
+              <b>{challenge.name} is finished.</b> Results and everyone&apos;s recaps go up at <b>12:00</b>
+              {" "}({untilLabel(challengeClosesAt(challenge.endsOn).getTime() - now.getTime())}).
+            </p>
+            <p className="mt-1">
+              Until then, fill in anything you missed up to {challenge.endsOn}. The standings below are provisional.
+            </p>
+          </div>
+        )}
 
         <div className="mt-3">
           <div className="mb-1 flex justify-between text-xs text-faint">
             <span>{challenge.startsOn}</span>
-            <span>{running ? `${challenge.daysLeft} days left` : finished ? "over" : "not started"}</span>
+            <span>{running ? `${challenge.daysLeft} days left` : finalLogs ? "finished · results at 12:00" : "not started"}</span>
             <span>{challenge.endsOn}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">
@@ -504,7 +552,7 @@ export default function ChallengePage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {!challenge.isMember && !finished && (
+          {!challenge.isMember && !finalLogs && (
             <button
               onClick={() => {
                 setBusy(true);
@@ -518,9 +566,13 @@ export default function ChallengePage() {
           )}
           {challenge.isMember && (
             <>
-              <Link href={logHref} className="btn-primary">{logLabel}</Link>
-              <button onClick={() => setShowInvite(!showInvite)} className="btn-ghost">Invite friends</button>
-              <button onClick={() => void leaveChallenge(id).then(reload)} className="btn-ghost text-xs">Leave</button>
+              <Link href={logHref} className="btn-primary">{finalLogs ? "Add final logs →" : logLabel}</Link>
+              {!finalLogs && (
+                <>
+                  <button onClick={() => setShowInvite(!showInvite)} className="btn-ghost">Invite friends</button>
+                  <button onClick={() => void leaveChallenge(id).then(reload)} className="btn-ghost text-xs">Leave</button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -646,7 +698,7 @@ export default function ChallengePage() {
       {rows.length > 0 && (
         <>
           <section>
-            <h2 className="mb-1 font-semibold">{finished ? "Final standings" : "Standings"}</h2>
+            <h2 className="mb-1 font-semibold">Standings</h2>
             <p className="mb-2 text-sm text-muted">{metricLabel} wins. Updates as people log.</p>
             <div className="card divide-y">
               {rows.map((r, i) => (
