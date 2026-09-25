@@ -54,18 +54,24 @@ export default function CompletedView({
   const [results, setResults] = useState<ChallengeResult[]>([]);
   const [life, setLife] = useState<LifeSummary[]>([]);
   const [recaps, setRecaps] = useState<Recap[]>([]);
-  const [myPatterns, setMyPatterns] = useState<Pattern[]>([]);
-  const meId = rows.find((r) => r.isMe)?.userId ?? null;
+  const [patterns, setPatterns] = useState<Map<string, Pattern[]>>(new Map());
+  const memberKey = rows.filter((r) => r.entries >= MIN_DAYS).map((r) => r.userId).join(",");
 
-  // Your own day shape, read in your own browser and shown only to you.
+  // Each member's day shape, as far as they share it with this viewer:
+  // member_day_strip returns nothing (or refuses) for anyone who keeps their
+  // day private, and they simply get no patterns box.
   useEffect(() => {
-    if (!meId) return;
+    if (!memberKey) return;
     let alive = true;
-    fetchMemberDayStrip(meId, challenge.startsOn, challenge.endsOn)
-      .then((strip) => { if (alive) setMyPatterns(dayPatterns(strip)); })
-      .catch(() => {});
+    Promise.all(
+      memberKey.split(",").map((uid) =>
+        fetchMemberDayStrip(uid, challenge.startsOn, challenge.endsOn)
+          .then((strip) => [uid, dayPatterns(strip)] as const)
+          .catch(() => [uid, [] as Pattern[]] as const),
+      ),
+    ).then((pairs) => { if (alive) setPatterns(new Map(pairs)); });
     return () => { alive = false; };
-  }, [meId, challenge.startsOn, challenge.endsOn]);
+  }, [memberKey, challenge.startsOn, challenge.endsOn]);
 
   useEffect(() => {
     let alive = true;
@@ -228,17 +234,17 @@ export default function CompletedView({
                 {p.recap && (
                   <p className="mt-3 whitespace-pre-line border-l-2 border-accent pl-3 text-sm">{p.recap.body}</p>
                 )}
-                {p.isMe && myPatterns.length > 0 && (
+                {(patterns.get(p.userId) ?? []).length > 0 && (
                   <div className="mt-3 rounded-lg bg-surface-2 p-3">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-                      Your patterns · only you can see this
+                      {p.isMe ? "Your patterns" : `${p.displayName}'s patterns`}
                     </div>
                     <ul className="mt-1.5 list-disc space-y-1 pl-4 text-sm">
-                      {myPatterns.map((x) => <li key={x.kind}>{x.text}</li>)}
+                      {patterns.get(p.userId)!.map((x) => <li key={x.kind}>{x.text}</li>)}
                     </ul>
                   </div>
                 )}
-                {p.isMe && myPatterns.length === 0 && p.entries < MIN_DAYS && (
+                {p.isMe && p.entries < MIN_DAYS && (
                   <p className="mt-3 text-xs text-faint">
                     Log at least {MIN_DAYS} full days in a challenge to get your time-of-day patterns here.
                   </p>

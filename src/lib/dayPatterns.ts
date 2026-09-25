@@ -3,10 +3,11 @@
  * productive 9am–11am", "you switch activities most 4pm–6pm". Pure, so it is
  * pinned by src/lib/__tests__/dayPatterns.test.ts.
  *
- * PRIVACY: this is shown only to the person themself, computed in their own
- * browser from their own day_entries. Day shape is shared per-profile
- * (member_day_strip), so putting it in a recap every member can read would
- * reach people it wasn't shared with. Labels are never read.
+ * PRIVACY: computed in the viewer's browser from member_day_strip, which only
+ * returns a person's slots if they share their day detail with that viewer
+ * (profile visibility + the "days" section). So a pattern is only ever shown
+ * to someone who could already see the day it came from. Labels are never
+ * read. Wording is neutral because it appears on other people's cards too.
  *
  * Only days with at least half the day logged count: a day with three slots
  * painted would otherwise make 9am look like your "most productive" hour.
@@ -84,7 +85,7 @@ export function dayPatterns(rows: SlotRow[], buckets: Record<number, Bucket> = d
   if (peak.perDay >= 2) {
     out.push({
       kind: "peak_productive",
-      text: `Your most productive stretch was ${span(peak.start)}: ${duration(peak.perDay)} of work or sport in those two hours on a typical day.`,
+      text: `Most productive ${span(peak.start)}: ${duration(peak.perDay)} of work or sport in those two hours on a typical day.`,
     });
   }
 
@@ -106,8 +107,8 @@ export function dayPatterns(rows: SlotRow[], buckets: Record<number, Bucket> = d
       kind: "focus_block",
       text:
         median === top
-          ? `Your longest unbroken block of productive time was ${duration(top)}, and you managed a block that long on most days.`
-          : `Your longest unbroken block of productive time was ${duration(top)}; on a typical day your best block was ${duration(median)}.`,
+          ? `Longest unbroken productive block: ${duration(top)}, and a block that long on most days.`
+          : `Longest unbroken productive block: ${duration(top)}; a typical day's best was ${duration(median)}.`,
     });
   }
 
@@ -134,9 +135,9 @@ export function dayPatterns(rows: SlotRow[], buckets: Record<number, Bucket> = d
     out.push({
       kind: "switching",
       text:
-        `You switched between activities most around ${span(bestSw.start)}: about ${Math.round(bestSw.perDay)} changes in those two hours on a typical day` +
+        `Switched activities most around ${span(bestSw.start)}: about ${Math.round(bestSw.perDay)} changes in those two hours on a typical day` +
         (baseline > 0 && bestSw.perDay >= baseline * 1.5
-          ? `, versus about ${Math.max(1, Math.round(baseline))} per two hours across the rest of your waking day.`
+          ? `, versus about ${Math.max(1, Math.round(baseline))} per two hours across the rest of the waking day.`
           : "."),
     });
   }
@@ -145,7 +146,7 @@ export function dayPatterns(rows: SlotRow[], buckets: Record<number, Bucket> = d
   if (social.perDay >= 1.5) {
     out.push({
       kind: "social",
-      text: `You were most social around ${span(social.start)}, averaging ${duration(social.perDay)} of social time in that window.`,
+      text: `Most social around ${span(social.start)}: ${duration(social.perDay)} of social time in that window on average.`,
     });
   }
 
@@ -166,7 +167,7 @@ export function dayPatterns(rows: SlotRow[], buckets: Record<number, Bucket> = d
   if (wakes.length >= MIN_DAYS) {
     out.push({
       kind: "wake",
-      text: `You typically got up around ${clock(wakes[Math.floor(wakes.length / 2)])}.`,
+      text: `Typically up around ${clock(wakes[Math.floor(wakes.length / 2)])}.`,
     });
   }
 
