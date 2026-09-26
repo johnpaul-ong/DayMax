@@ -55,6 +55,11 @@ const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa"
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 const hours = (v: number) => formatScore(v, "h");
 
+/** Every panel in the results carousel is the same square footprint so the
+ *  strip reads as a set, not a jumble. Small on phones, a touch larger from
+ *  sm up so charts breathe on a laptop. */
+const PANEL = 340;
+
 export default function CompletedView({
   challenge,
   rows,
@@ -141,7 +146,7 @@ export default function CompletedView({
     return m;
   }, [people]);
 
-  const scored = people.filter((p) => p.score != null);
+  const scored = people.filter((p) => p.score != null && p.score > 0);
   const winner = scored[0];
   const daysLogged = people.reduce((s, p) => s + p.entries, 0);
   const avgScore = scored.length > 0 ? scored.reduce((s, p) => s + (p.score ?? 0), 0) / scored.length : null;
@@ -158,9 +163,9 @@ export default function CompletedView({
     };
   }, [life]);
 
-  // Cumulative-per-person series over the challenge window: date -> {name -> running}.
-  // Same shape as before, but with the *display name* keyed per person; the
-  // chart uses userId under the hood via `people` for stable colours.
+  // Cumulative-per-person series over the challenge window: date -> {userId -> running}.
+  // Keys are userIds so the line chart maps stable identity to colour; the
+  // tooltip resolves back to the display name via `people`.
   const raceData = useMemo(() => {
     const byDate = new Map<string, Record<string, string | number>>();
     for (const d of daily) {
@@ -170,29 +175,51 @@ export default function CompletedView({
     return [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1));
   }, [daily]);
   const raceMagnitude = daily.reduce((s, d) => Math.max(s, Math.abs(d.running)), 0);
-  // Endpoints: each person's final running value, at the last date they have
-  // data on. Rendered as dots plus a direct name label so the chart doesn't
-  // need a legend box (identity is at the line's tip).
+  // Endpoints: each person's final running value, at the last date in the
+  // window. Members with zero contribution still get an endpoint (at y=0),
+  // so nobody vanishes from the picture just because they didn't log.
   const endpoints = useMemo(() => {
     const last = new Map<string, { date: string; value: number }>();
     for (const d of daily) {
       const prev = last.get(d.userId);
       if (!prev || d.date > prev.date) last.set(d.userId, { date: d.date, value: d.running });
     }
-    return people
-      .filter((p) => last.has(p.userId))
-      .map((p) => ({
+    // Anyone not in daily at all (e.g. joined but daily returned nothing)
+    // gets a zero endpoint at the last date so their row still appears.
+    const lastDate = raceData[raceData.length - 1]?.date as string | undefined;
+    return people.map((p) => {
+      const e = last.get(p.userId);
+      return {
         userId: p.userId,
         name: p.displayName,
         color: colorOf.get(p.userId) ?? "var(--muted)",
-        ...last.get(p.userId)!,
-      }));
-  }, [daily, people, colorOf]);
+        date: e?.date ?? lastDate ?? challenge.endsOn,
+        value: e?.value ?? 0,
+        hasData: (e?.value ?? 0) > 0,
+      };
+    });
+  }, [daily, people, colorOf, raceData, challenge.endsOn]);
 
-  // Leaderboard bars use the entity colour, but the winner keeps the crown
-  // colouring visible via a slightly wider stroke rather than a rank-driven
-  // gold — otherwise a filter to two people would recolour the survivors,
-  // which the dataviz rules explicitly forbid ("colour follows the entity").
+  // Per-day contribution matrix for the small-multiples panel: userId ->
+  // date -> value (0 for no logs). Every person × every date is present so
+  // Grilled Ham's row is still a full-width strip of zeros, not a blank card.
+  const perDayByUser = useMemo(() => {
+    const dates = [...new Set(daily.map((d) => d.date))].sort();
+    const dailyMax = daily.reduce((s, d) => Math.max(s, d.spent), 0);
+    const byUser = new Map<string, { date: string; value: number }[]>();
+    for (const p of people) {
+      byUser.set(p.userId, dates.map((date) => {
+        const hit = daily.find((d) => d.userId === p.userId && d.date === date);
+        return { date, value: hit?.spent ?? 0 };
+      }));
+    }
+    return { dates, dailyMax, byUser };
+  }, [daily, people]);
+
+  // Leaderboard bars use the entity colour. Score is coerced to 0 for
+  // no-data members so the row still renders; the label at the end shows
+  // "no logs" instead of a number, and a 4-px tick on the axis makes the
+  // presence of the row visible even when the bar is invisibly short.
   const leaderboardData = useMemo(
     () =>
       people.map((p) => ({
@@ -201,11 +228,89 @@ export default function CompletedView({
         score: p.score ?? 0,
         color: colorOf.get(p.userId) ?? "var(--muted)",
         rank: p.rank,
+        hasData: (p.score ?? 0) > 0,
       })),
     [people, colorOf],
   );
 
   const isParticipant = challenge.isMember || challenge.isOwner;
+
+  // Which panels the carousel shows for this challenge type. Life gets the
+  // full set; money / stat challenges skip the day-clock, hours-per-person
+  // and per-day panels because the underlying data isn't a day grid.
+  const panels: { key: string; node: React.ReactNode }[] = [];
+  if (isParticipant && leaderboardData.length > 0) {
+    panels.push({
+      key: "leaderboard",
+      node: (
+        <PanelCard title="Final leaderboard" subtitle={metricLabel}>
+          <FinalLeaderboardChart data={leaderboardData} fmt={fmt} />
+        </PanelCard>
+      ),
+    });
+  }
+  if (isParticipant && raceData.length >= 2 && raceMagnitude > 0) {
+    panels.push({
+      key: "cumulative",
+      node: (
+        <PanelCard title={`Cumulative ${noun}`} subtitle={`Over the ${totalDays}-day window.`}>
+          <CumulativeChart
+            raceData={raceData}
+            people={people}
+            colorOf={colorOf}
+            endpoints={endpoints}
+            unit={unit}
+            noun={noun}
+            fmt={fmt}
+          />
+        </PanelCard>
+      ),
+    });
+  }
+  if (isParticipant && isLife && people.length > 0) {
+    panels.push({
+      key: "clock",
+      node: (
+        <PanelCard title="Group's typical day" subtitle="Modal category per 15-minute slot.">
+          <div className="flex items-center justify-center">
+            <AverageDayClock
+              members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
+              from={challenge.startsOn}
+              to={challenge.endsOn}
+              title=""
+            />
+          </div>
+        </PanelCard>
+      ),
+    });
+    panels.push({
+      key: "hours",
+      node: (
+        <PanelCard title="Hours per person" subtitle="Averaged per logged day.">
+          <MembersHoursBars
+            members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
+            from={challenge.startsOn}
+            to={challenge.endsOn}
+            maxWidth={PANEL - 12}
+          />
+        </PanelCard>
+      ),
+    });
+    panels.push({
+      key: "perday",
+      node: (
+        <PanelCard title="Day by day, per person" subtitle={`${noun} on each of ${totalDays} days.`}>
+          <PerPersonDailyBars
+            people={people}
+            perDay={perDayByUser}
+            colorOf={colorOf}
+            unit={unit}
+            fmt={fmt}
+          />
+        </PanelCard>
+      ),
+    });
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-24">
@@ -221,16 +326,6 @@ export default function CompletedView({
 
       {!isParticipant && (
         <p className="card p-4 text-sm text-muted">This challenge is over. Only the people who took part can see how it went.</p>
-      )}
-
-      {isParticipant && winner && (
-        <div className="card p-4">
-          <p className="text-sm">
-            <b>{winner.displayName}</b> won with {fmt(winner.score)} of {noun}.{" "}
-            The {people.length} {roster.toLowerCase()} logged {daysLogged} of {people.length * totalDays} possible days
-            {groupLife ? <> and {hours(groupLife.productive)} of productive time between them</> : null}.
-          </p>
-        </div>
       )}
 
       {isParticipant && people.length > 0 && (
@@ -251,166 +346,24 @@ export default function CompletedView({
         </section>
       )}
 
-      {/* Final leaderboard as a horizontal bar chart. Sorted by rank (winner
-          on top), one row per person, bar coloured by that person's entity
-          hue so the row lines up with their line in the cumulative chart and
-          their dot in the per-person cards. Numeric score labelled at the
-          end of each bar so no value is colour-alone. */}
-      {isParticipant && leaderboardData.length > 1 && (
+      {/* One horizontally-scrollable strip of square panels. Same shape as
+          the live board's life-challenge graphs strip so the interaction
+          is the one people already know: wheel / trackpad / touch drag,
+          snap on each card. */}
+      {panels.length > 0 && (
         <section>
-          <h2 className="mb-2 font-semibold">
-            Final leaderboard
-            <span className="ml-2 text-xs font-normal text-muted">{metricLabel}.</span>
-          </h2>
-          <div className="card p-2" style={{ height: Math.max(140, leaderboardData.length * 34 + 40) }}>
-            <ResponsiveContainer>
-              <BarChart
-                data={leaderboardData}
-                layout="vertical"
-                margin={{ top: 8, right: 56, bottom: 8, left: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted)" }} />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: "var(--ink)" }}
-                  width={100}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  formatter={(v: number) => fmt(Number(v))}
-                  cursor={{ fill: "var(--surface-2)" }}
-                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
-                />
-                <Bar dataKey="score" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                  {leaderboardData.map((p) => (
-                    <Cell key={p.userId} fill={p.color} />
-                  ))}
-                  <LabelList
-                    dataKey="score"
-                    position="right"
-                    formatter={(v: number) => fmt(Number(v))}
-                    style={{ fontSize: 11, fill: "var(--ink)", fontWeight: 600 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <h2 className="mb-2 font-semibold">Graphs</h2>
+          <div
+            className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2"
+            style={{ scrollbarWidth: "thin" }}
+          >
+            {panels.map((p) => (
+              <div key={p.key} className="shrink-0 snap-start">
+                {p.node}
+              </div>
+            ))}
           </div>
         </section>
-      )}
-
-      {/* Redesigned "how the race went" — a proper cumulative-over-time
-          chart. Y axis labelled with the metric unit; each line ends in a
-          coloured dot with the person's name at the tip so no legend box is
-          needed for <=4 members; a legend row is drawn below the plot for
-          bigger groups. Colours follow the entity (colorOf), matching the
-          leaderboard bars and the per-person card accents. */}
-      {isParticipant && raceData.length >= 2 && raceMagnitude > 0 && endpoints.length > 0 && (
-        <section>
-          <h2 className="mb-2 font-semibold">
-            Cumulative {noun}
-            <span className="ml-2 text-xs font-normal text-muted">Over the {totalDays}-day window.</span>
-          </h2>
-          <div className="h-60 card p-2">
-            <ResponsiveContainer>
-              <LineChart data={raceData} margin={{ top: 12, right: 80, bottom: 8, left: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: "var(--muted)" }}
-                  tickFormatter={tick}
-                />
-                <YAxis tick={{ fontSize: 10, fill: "var(--muted)" }}>
-                  <Label
-                    value={unit === "h" ? "hours" : unit || noun}
-                    angle={-90}
-                    position="insideLeft"
-                    style={{ fontSize: 10, fill: "var(--muted)" }}
-                  />
-                </YAxis>
-                <Tooltip
-                  formatter={(v: number, name) => {
-                    const p = people.find((x) => x.userId === name);
-                    return [fmt(Number(v)), p?.displayName ?? String(name)];
-                  }}
-                  labelFormatter={(d) => String(d)}
-                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
-                />
-                {people.map((p) => (
-                  <Line
-                    key={p.userId}
-                    type="monotone"
-                    dataKey={p.userId}
-                    name={p.userId}
-                    stroke={colorOf.get(p.userId) ?? "var(--muted)"}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                ))}
-                {endpoints.map((e) => (
-                  <ReferenceDot
-                    key={e.userId}
-                    x={e.date}
-                    y={e.value}
-                    r={4}
-                    fill={e.color}
-                    stroke="var(--surface)"
-                    strokeWidth={2}
-                    // Direct label at the endpoint replaces a legend for
-                    // <=4 members; larger groups get the fallback below.
-                    label={endpoints.length <= 4
-                      ? { value: e.name.split(/\s+/)[0], position: "right", fontSize: 10, fill: e.color, offset: 6 }
-                      : undefined}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          {endpoints.length > 4 && (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-              {endpoints.map((e) => (
-                <span key={e.userId} className="inline-flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-4 rounded-sm" style={{ background: e.color }} />
-                  {e.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Life-only restorations. The group's typical day answers "when were
-          the goblins actually productive?", and the per-person bucket bars
-          answer "who spent their hours on what?" — both were on the live
-          board and are equally informative frozen. Skipped on money / stat
-          challenges, where the day-clock is meaningless. */}
-      {isParticipant && isLife && people.length > 0 && (
-        <>
-          <CategoryLegend />
-          <AverageDayClock
-            members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
-            from={challenge.startsOn}
-            to={challenge.endsOn}
-            title="The group's typical day"
-            subtitle="Modal category per 15-minute slot across everyone who logged."
-          />
-          <section>
-            <h2 className="mb-2 font-semibold">
-              Hours per person
-              <span className="ml-2 text-xs font-normal text-muted">Averaged over each member&apos;s logged days.</span>
-            </h2>
-            <MembersHoursBars
-              members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
-              from={challenge.startsOn}
-              to={challenge.endsOn}
-              maxWidth={720}
-            />
-          </section>
-        </>
       )}
 
       {isParticipant && people.length > 0 && (
@@ -465,6 +418,11 @@ export default function CompletedView({
         </section>
       )}
 
+      {/* For life challenges, the category legend once at the bottom of
+          the group section so the day-clock and hours-per-person panels
+          have a colour key without a per-chart legend. */}
+      {isParticipant && isLife && <CategoryLegend />}
+
       {isParticipant && (
         <ChallengeFeed
           challengeId={challenge.id}
@@ -485,5 +443,288 @@ function Tile({ label, value }: { label: string; value: string }) {
       <div className="text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</div>
       <div className="mt-0.5 text-lg font-bold tabular-nums">{value}</div>
     </div>
+  );
+}
+
+/**
+ * A square card at the standard PANEL size. Title + optional subtitle at
+ * the top; the remainder of the square is the chart area. Kept as a
+ * component so every panel in the carousel has the same footprint and the
+ * strip reads as a set.
+ */
+function PanelCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="card flex flex-col p-3" style={{ width: PANEL, height: PANEL }}>
+      <div className="mb-2 shrink-0">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-[11px] text-muted">{subtitle}</p>}
+      </div>
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function FinalLeaderboardChart({
+  data,
+  fmt,
+}: {
+  data: { userId: string; name: string; score: number; color: string; rank: number; hasData: boolean }[];
+  fmt: (v: number | null | undefined) => string;
+}) {
+  return (
+    <ResponsiveContainer>
+      <BarChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 4, right: 56, bottom: 4, left: 4 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted)" }} />
+        <YAxis
+          type="category"
+          dataKey="name"
+          tick={{ fontSize: 11, fill: "var(--ink)" }}
+          width={92}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          formatter={(v: number, _n, entry: any) =>
+            entry?.payload?.hasData ? fmt(Number(v)) : "no logs"
+          }
+          cursor={{ fill: "var(--surface-2)" }}
+          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
+        />
+        <Bar dataKey="score" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+          {data.map((p) => (
+            <Cell key={p.userId} fill={p.color} />
+          ))}
+          <LabelList
+            dataKey="score"
+            position="right"
+            formatter={(v: number) => (v > 0 ? fmt(Number(v)) : "no logs")}
+            style={{ fontSize: 11, fill: "var(--ink)", fontWeight: 600 }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function CumulativeChart({
+  raceData,
+  people,
+  colorOf,
+  endpoints,
+  unit,
+  noun,
+  fmt,
+}: {
+  raceData: Record<string, string | number>[];
+  people: { userId: string; displayName: string }[];
+  colorOf: Map<string, string>;
+  endpoints: { userId: string; name: string; color: string; date: string; value: number; hasData: boolean }[];
+  unit: string;
+  noun: string;
+  fmt: (v: number | null | undefined) => string;
+}) {
+  const directLabels = endpoints.length <= 4;
+  return (
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
+        <ResponsiveContainer>
+          <LineChart data={raceData} margin={{ top: 8, right: directLabels ? 56 : 12, bottom: 4, left: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 9, fill: "var(--muted)" }}
+              tickFormatter={tick}
+              minTickGap={16}
+            />
+            <YAxis tick={{ fontSize: 9, fill: "var(--muted)" }} width={30}>
+              <Label
+                value={unit === "h" ? "h" : unit || noun}
+                angle={-90}
+                position="insideLeft"
+                style={{ fontSize: 9, fill: "var(--muted)" }}
+                offset={10}
+              />
+            </YAxis>
+            <Tooltip
+              formatter={(v: number, name) => {
+                const p = people.find((x) => x.userId === name);
+                return [fmt(Number(v)), p?.displayName ?? String(name)];
+              }}
+              labelFormatter={(d) => String(d)}
+              contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
+            />
+            {people.map((p) => (
+              <Line
+                key={p.userId}
+                type="monotone"
+                dataKey={p.userId}
+                name={p.userId}
+                stroke={colorOf.get(p.userId) ?? "var(--muted)"}
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ))}
+            {endpoints.map((e) => (
+              <ReferenceDot
+                key={e.userId}
+                x={e.date}
+                y={e.value}
+                r={4}
+                fill={e.color}
+                stroke="var(--surface)"
+                strokeWidth={2}
+                label={directLabels
+                  ? { value: e.name.split(/\s+/)[0], position: "right", fontSize: 10, fill: e.color, offset: 6 }
+                  : undefined}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      {!directLabels && (
+        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-muted">
+          {endpoints.map((e) => (
+            <span key={e.userId} className="inline-flex items-center gap-1">
+              <span className="inline-block h-1.5 w-3 rounded-sm" style={{ background: e.color }} />
+              <span className={e.hasData ? "" : "italic text-faint"}>
+                {e.name}{e.hasData ? "" : " (0)"}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Small-multiples: one mini vertical-bar chart per person, arranged in a
+ * grid inside the square panel. Every mini shares the same y-scale
+ * (dailyMax) so a tall bar in one panel is directly comparable to a tall
+ * bar in another. A member with no logs still appears — their card shows
+ * their name and a flat baseline row of empty bars, so nobody is dropped
+ * from the picture just because they didn't play.
+ */
+function PerPersonDailyBars({
+  people,
+  perDay,
+  colorOf,
+  unit,
+  fmt,
+}: {
+  people: { userId: string; displayName: string }[];
+  perDay: { dates: string[]; dailyMax: number; byUser: Map<string, { date: string; value: number }[]> };
+  colorOf: Map<string, string>;
+  unit: string;
+  fmt: (v: number | null | undefined) => string;
+}) {
+  const { dates, dailyMax } = perDay;
+  // Grid columns based on member count: 2 columns is the phone-friendly
+  // default; if there are 3–4 people we still use 2 wide (so each mini is
+  // roughly square inside a 320-px square panel), 5–6 goes to 3 columns.
+  const cols = people.length <= 4 ? 2 : 3;
+  const gapPx = 6;
+  return (
+    <div
+      className="grid h-full"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gap: gapPx,
+      }}
+    >
+      {people.map((p) => {
+        const series = perDay.byUser.get(p.userId) ?? [];
+        const color = colorOf.get(p.userId) ?? "var(--muted)";
+        const has = series.some((s) => s.value > 0);
+        return (
+          <div key={p.userId} className="flex min-h-0 flex-col rounded-lg bg-surface-2 p-1.5">
+            <div className="mb-1 flex items-baseline justify-between gap-1 text-[10px]">
+              <span className="truncate font-medium text-ink" title={p.displayName}>
+                {p.displayName.split(/\s+/)[0]}
+              </span>
+              <span className="shrink-0 tabular-nums text-faint">
+                {has ? fmt(series.reduce((s, x) => s + x.value, 0)) : "—"}
+              </span>
+            </div>
+            <div className="min-h-0 flex-1">
+              <MiniDailyBars
+                series={series}
+                max={dailyMax}
+                color={color}
+                unit={unit}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Pure-SVG vertical bar chart: one bar per day, bars share the space
+ * equally with a 2-px gutter, height scales to a shared `max`. Kept off
+ * Recharts because a grid of six little Recharts instances is heavier
+ * than the whole page, and there's no interaction we need here beyond
+ * the aggregate tooltip.
+ */
+function MiniDailyBars({
+  series,
+  max,
+  color,
+  unit,
+}: {
+  series: { date: string; value: number }[];
+  max: number;
+  color: string;
+  unit: string;
+}) {
+  const n = series.length;
+  if (n === 0 || max <= 0) {
+    return (
+      <div className="flex h-full items-end justify-center text-[10px] text-faint">
+        no logs
+      </div>
+    );
+  }
+  return (
+    <svg viewBox={`0 0 ${n * 10} 40`} preserveAspectRatio="none" className="h-full w-full">
+      {/* Baseline so an all-zero row still reads as a chart. */}
+      <line x1={0} y1={40} x2={n * 10} y2={40} stroke="var(--border)" strokeWidth={0.5} />
+      {series.map((s, i) => {
+        const h = max > 0 ? (s.value / max) * 38 : 0;
+        return (
+          <rect
+            key={s.date}
+            x={i * 10 + 1}
+            y={40 - h}
+            width={8}
+            height={h}
+            rx={1}
+            fill={color}
+            fillOpacity={s.value > 0 ? 0.9 : 0}
+          >
+            <title>
+              {s.date}: {s.value > 0 ? `${Math.round(s.value * 10) / 10}${unit ? ` ${unit}` : ""}` : "no logs"}
+            </title>
+          </rect>
+        );
+      })}
+    </svg>
   );
 }
