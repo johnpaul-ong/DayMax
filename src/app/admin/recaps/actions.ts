@@ -120,6 +120,15 @@ export async function generateRecaps(challengeId: string, onlyUserId?: string): 
             `Focus (productive share of productive + brainrot): ${fmt(l.focus == null ? null : Number(l.focus), "%")}`,
           ]
         : [];
+      // Steer the model's tone: no logs, a couple of logged days, or a real
+      // showing. The RECAP_RULES prompt spells out what each of these should
+      // read like; this line just tells it which one we're in.
+      const participation =
+        b.entries === 0
+          ? "No logs at all — acknowledgement only."
+          : b.entries <= 2 || b.score == null
+            ? "Light participation — acknowledgement, not performance."
+            : "Solid participation — playful and competitive is fine.";
       const prompt = [
         `Challenge: ${ch.name}`,
         ch.description ? `About it: ${ch.description}` : null,
@@ -132,6 +141,7 @@ export async function generateRecaps(challengeId: string, onlyUserId?: string): 
         `Finished: ${b.rank} of ${board.length}`,
         `Score: ${fmt(b.score, unit)}`,
         `Days logged: ${b.entries} of ${totalDays}`,
+        `Participation: ${participation}`,
         ...lifeLines,
       ]
         .filter((line) => line !== null)

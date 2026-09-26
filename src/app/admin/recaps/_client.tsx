@@ -318,7 +318,13 @@ function recapBrief(challenge: Challenge, standings: Standing[], life: LifeSumma
     const extra = l
       ? `, ${l.productiveHours} h productive, ${l.brainrotHours} h brainrot, ${l.focus ?? "no"}% focus, ${l.sleepHours} h sleep logged`
       : "";
-    return `${i + 1}. ${s.displayName}: ${fmt(s.score)} (${s.entries} of ${totalDays} days logged${extra})`;
+    const participation =
+      s.entries === 0
+        ? " — NO LOGS (acknowledgement only)"
+        : s.entries <= 2 || s.score == null
+          ? " — LIGHT (acknowledgement, not performance)"
+          : "";
+    return `${i + 1}. ${s.displayName}: ${fmt(s.score)} (${s.entries} of ${totalDays} days logged${extra})${participation}`;
   });
   return [
     `Write one recap per member for the DayMax challenge below, following these rules. Return them as "Name: recap", one per line.`,

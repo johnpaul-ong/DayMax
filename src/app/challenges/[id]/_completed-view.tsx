@@ -14,8 +14,22 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatScore, type Challenge, type ChallengeDay, type Standing } from "@/lib/money";
+import {
+  CartesianGrid,
+  Cell,
+  Bar,
+  BarChart,
+  Label,
+  LabelList,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { formatScore, metricFamily, type Challenge, type ChallengeDay, type Standing } from "@/lib/money";
 import {
   fetchLifeSummary,
   fetchRecaps,
@@ -28,8 +42,15 @@ import {
 import { dayPatterns, MIN_DAYS, type Pattern } from "@/lib/dayPatterns";
 import { fetchMemberDayStrip } from "@/lib/profiles";
 import { TeamDot } from "../../team-name";
+import CategoryLegend from "../../category-legend";
+import { AverageDayClock, MembersHoursBars } from "./_life-views";
 import ChallengeFeed from "./feed";
 
+// Fixed categorical order — colours follow the ENTITY, not its rank. Everyone's
+// bar, line and endpoint dot uses the same colour across every chart on this
+// page, so identity survives when the eye moves between them. First 8 hues
+// snapped from the app's shared SERIES; a 9th person folds into "Other" (see
+// the leaderboard fallback) rather than cycling.
 const SERIES = ["#4f6ef7", "#16a34a", "#dc2626", "#f59e0b", "#0ea5e9", "#a78bfa", "#ec4899", "#14b8a6"];
 const tick = (d: string) => (typeof d === "string" ? d.slice(5) : d);
 const hours = (v: number) => formatScore(v, "h");
@@ -56,6 +77,8 @@ export default function CompletedView({
   const [recaps, setRecaps] = useState<Recap[]>([]);
   const [patterns, setPatterns] = useState<Map<string, Pattern[]>>(new Map());
   const memberKey = rows.filter((r) => r.entries >= MIN_DAYS).map((r) => r.userId).join(",");
+  const family = metricFamily(challenge.metric);
+  const isLife = family === "life";
 
   // Each member's day shape, as far as they share it with this viewer:
   // member_day_strip returns nothing (or refuses) for anyone who keeps their
@@ -110,6 +133,14 @@ export default function CompletedView({
     return list.sort((a, b) => a.rank - b.rank);
   }, [rows, results, life, recaps]);
 
+  // Colour per user, assigned once in rank order, then shared by every chart
+  // on the page. Never cycled: person 9+ folds into the muted token.
+  const colorOf = useMemo(() => {
+    const m = new Map<string, string>();
+    people.forEach((p, i) => { m.set(p.userId, i < SERIES.length ? SERIES[i] : "var(--muted)"); });
+    return m;
+  }, [people]);
+
   const scored = people.filter((p) => p.score != null);
   const winner = scored[0];
   const daysLogged = people.reduce((s, p) => s + p.entries, 0);
@@ -127,16 +158,52 @@ export default function CompletedView({
     };
   }, [life]);
 
+  // Cumulative-per-person series over the challenge window: date -> {name -> running}.
+  // Same shape as before, but with the *display name* keyed per person; the
+  // chart uses userId under the hood via `people` for stable colours.
   const raceData = useMemo(() => {
     const byDate = new Map<string, Record<string, string | number>>();
     for (const d of daily) {
       if (!byDate.has(d.date)) byDate.set(d.date, { date: d.date });
-      byDate.get(d.date)![d.displayName] = d.running;
+      byDate.get(d.date)![d.userId] = d.running;
     }
     return [...byDate.values()].sort((a, b) => (String(a.date) < String(b.date) ? -1 : 1));
   }, [daily]);
-  const names = useMemo(() => [...new Set(daily.map((d) => d.displayName))], [daily]);
   const raceMagnitude = daily.reduce((s, d) => Math.max(s, Math.abs(d.running)), 0);
+  // Endpoints: each person's final running value, at the last date they have
+  // data on. Rendered as dots plus a direct name label so the chart doesn't
+  // need a legend box (identity is at the line's tip).
+  const endpoints = useMemo(() => {
+    const last = new Map<string, { date: string; value: number }>();
+    for (const d of daily) {
+      const prev = last.get(d.userId);
+      if (!prev || d.date > prev.date) last.set(d.userId, { date: d.date, value: d.running });
+    }
+    return people
+      .filter((p) => last.has(p.userId))
+      .map((p) => ({
+        userId: p.userId,
+        name: p.displayName,
+        color: colorOf.get(p.userId) ?? "var(--muted)",
+        ...last.get(p.userId)!,
+      }));
+  }, [daily, people, colorOf]);
+
+  // Leaderboard bars use the entity colour, but the winner keeps the crown
+  // colouring visible via a slightly wider stroke rather than a rank-driven
+  // gold — otherwise a filter to two people would recolour the survivors,
+  // which the dataviz rules explicitly forbid ("colour follows the entity").
+  const leaderboardData = useMemo(
+    () =>
+      people.map((p) => ({
+        userId: p.userId,
+        name: p.displayName,
+        score: p.score ?? 0,
+        color: colorOf.get(p.userId) ?? "var(--muted)",
+        rank: p.rank,
+      })),
+    [people, colorOf],
+  );
 
   const isParticipant = challenge.isMember || challenge.isOwner;
 
@@ -184,27 +251,166 @@ export default function CompletedView({
         </section>
       )}
 
-      {isParticipant && raceData.length >= 2 && raceMagnitude > 0 && (
+      {/* Final leaderboard as a horizontal bar chart. Sorted by rank (winner
+          on top), one row per person, bar coloured by that person's entity
+          hue so the row lines up with their line in the cumulative chart and
+          their dot in the per-person cards. Numeric score labelled at the
+          end of each bar so no value is colour-alone. */}
+      {isParticipant && leaderboardData.length > 1 && (
         <section>
           <h2 className="mb-2 font-semibold">
-            How the race went
-            <span className="ml-2 text-xs font-normal text-muted">Running {noun}, day by day.</span>
+            Final leaderboard
+            <span className="ml-2 text-xs font-normal text-muted">{metricLabel}.</span>
           </h2>
-          <div className="h-48 card p-2">
+          <div className="card p-2" style={{ height: Math.max(140, leaderboardData.length * 34 + 40) }}>
             <ResponsiveContainer>
-              <LineChart data={raceData}>
+              <BarChart
+                data={leaderboardData}
+                layout="vertical"
+                margin={{ top: 8, right: 56, bottom: 8, left: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted)" }} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "var(--ink)" }}
+                  width={100}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  formatter={(v: number) => fmt(Number(v))}
+                  cursor={{ fill: "var(--surface-2)" }}
+                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
+                />
+                <Bar dataKey="score" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+                  {leaderboardData.map((p) => (
+                    <Cell key={p.userId} fill={p.color} />
+                  ))}
+                  <LabelList
+                    dataKey="score"
+                    position="right"
+                    formatter={(v: number) => fmt(Number(v))}
+                    style={{ fontSize: 11, fill: "var(--ink)", fontWeight: 600 }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </section>
+      )}
+
+      {/* Redesigned "how the race went" — a proper cumulative-over-time
+          chart. Y axis labelled with the metric unit; each line ends in a
+          coloured dot with the person's name at the tip so no legend box is
+          needed for <=4 members; a legend row is drawn below the plot for
+          bigger groups. Colours follow the entity (colorOf), matching the
+          leaderboard bars and the per-person card accents. */}
+      {isParticipant && raceData.length >= 2 && raceMagnitude > 0 && endpoints.length > 0 && (
+        <section>
+          <h2 className="mb-2 font-semibold">
+            Cumulative {noun}
+            <span className="ml-2 text-xs font-normal text-muted">Over the {totalDays}-day window.</span>
+          </h2>
+          <div className="h-60 card p-2">
+            <ResponsiveContainer>
+              <LineChart data={raceData} margin={{ top: 12, right: 80, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={tick} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v: number) => fmt(Number(v))} labelFormatter={(d) => String(d)} />
-                <Legend />
-                {names.map((n, i) => (
-                  <Line key={n} type="monotone" dataKey={n} stroke={SERIES[i % SERIES.length]} strokeWidth={2.5} dot={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: "var(--muted)" }}
+                  tickFormatter={tick}
+                />
+                <YAxis tick={{ fontSize: 10, fill: "var(--muted)" }}>
+                  <Label
+                    value={unit === "h" ? "hours" : unit || noun}
+                    angle={-90}
+                    position="insideLeft"
+                    style={{ fontSize: 10, fill: "var(--muted)" }}
+                  />
+                </YAxis>
+                <Tooltip
+                  formatter={(v: number, name) => {
+                    const p = people.find((x) => x.userId === name);
+                    return [fmt(Number(v)), p?.displayName ?? String(name)];
+                  }}
+                  labelFormatter={(d) => String(d)}
+                  contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", fontSize: 12 }}
+                />
+                {people.map((p) => (
+                  <Line
+                    key={p.userId}
+                    type="monotone"
+                    dataKey={p.userId}
+                    name={p.userId}
+                    stroke={colorOf.get(p.userId) ?? "var(--muted)"}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                ))}
+                {endpoints.map((e) => (
+                  <ReferenceDot
+                    key={e.userId}
+                    x={e.date}
+                    y={e.value}
+                    r={4}
+                    fill={e.color}
+                    stroke="var(--surface)"
+                    strokeWidth={2}
+                    // Direct label at the endpoint replaces a legend for
+                    // <=4 members; larger groups get the fallback below.
+                    label={endpoints.length <= 4
+                      ? { value: e.name.split(/\s+/)[0], position: "right", fontSize: 10, fill: e.color, offset: 6 }
+                      : undefined}
+                  />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {endpoints.length > 4 && (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+              {endpoints.map((e) => (
+                <span key={e.userId} className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-4 rounded-sm" style={{ background: e.color }} />
+                  {e.name}
+                </span>
+              ))}
+            </div>
+          )}
         </section>
+      )}
+
+      {/* Life-only restorations. The group's typical day answers "when were
+          the goblins actually productive?", and the per-person bucket bars
+          answer "who spent their hours on what?" — both were on the live
+          board and are equally informative frozen. Skipped on money / stat
+          challenges, where the day-clock is meaningless. */}
+      {isParticipant && isLife && people.length > 0 && (
+        <>
+          <CategoryLegend />
+          <AverageDayClock
+            members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
+            from={challenge.startsOn}
+            to={challenge.endsOn}
+            title="The group's typical day"
+            subtitle="Modal category per 15-minute slot across everyone who logged."
+          />
+          <section>
+            <h2 className="mb-2 font-semibold">
+              Hours per person
+              <span className="ml-2 text-xs font-normal text-muted">Averaged over each member&apos;s logged days.</span>
+            </h2>
+            <MembersHoursBars
+              members={people.map((p) => ({ id: p.userId, name: p.displayName }))}
+              from={challenge.startsOn}
+              to={challenge.endsOn}
+              maxWidth={720}
+            />
+          </section>
+        </>
       )}
 
       {isParticipant && people.length > 0 && (
@@ -212,7 +418,11 @@ export default function CompletedView({
           <h2 className="mb-2 font-semibold">Everyone</h2>
           <div className="space-y-3">
             {people.map((p) => (
-              <article key={p.userId} className={`card p-4 ${p.isMe ? "border-accent" : ""}`}>
+              <article
+                key={p.userId}
+                className={`card p-4 ${p.isMe ? "border-accent" : ""}`}
+                style={{ borderLeft: `4px solid ${colorOf.get(p.userId) ?? "var(--border)"}` }}
+              >
                 <div className="flex items-center gap-2">
                   <span className="w-7 text-center text-lg font-bold text-faint">
                     {p.score == null ? "–" : p.rank === 1 ? "👑" : p.rank}
