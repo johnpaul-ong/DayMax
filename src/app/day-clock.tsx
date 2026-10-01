@@ -80,13 +80,14 @@ function wedge(r0: number, r1: number, a0: number, a1: number): string {
 /**
  * slot -> which ring, and the angles it occupies.
  *
- * Each hour band is CENTRED on its clock-face number: the "3" label sits
- * at the middle of the 3-hour slice, so the picture reads as a proper
- * clock. Tried HOUR_OFFSET = 0 briefly (so a slot's angle matched real
- * analog-clock time exactly), and the user preferred the centred layout,
- * so back to -15.
+ * HOUR_OFFSET = 0 so hour N STARTS at the N-o'clock position, exactly
+ * like a real analog clock: 15:00 is at the "3" position, 15:15 is a
+ * quarter past the "3", 15:45 is just before the "4". Repeated 'halo
+ * is on the wrong wedge' feedback — the -15 centring put slot 60
+ * (15:00) half an hour BEFORE the "3" label, which read as broken
+ * every time, regardless of how pretty the centring looked.
  */
-const HOUR_OFFSET = -15;
+const HOUR_OFFSET = 0;
 
 function geom(slot: number) {
   const hour = Math.floor(slot / 4);

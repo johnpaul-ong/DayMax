@@ -375,6 +375,15 @@ export default function TodayPage() {
         <StepChip done={step3Done} label="Fill" flash={step3Done} />
       </div>
 
+      {/* 15-minute slot countdown. Ticks every second, counts down
+          the remaining time in the CURRENT quarter-hour slot, and
+          resets to 15:00 at the start of each new slot. Only renders
+          when the viewed date IS today (otherwise 'now' doesn't
+          mean anything for the shown day). Positioned above the
+          clock as a thin status strip so the user can see how long
+          until the next capture prompt. */}
+      {date === localToday() && <SlotCountdown />}
+
       {/* The day as a clock. 96 slots is exactly 2 rings x 12 hours x 4
           quarters, so it lands on a dial with nothing left over. The hour
           numbers sit permanently on the rim, which is why a label can no
@@ -526,5 +535,75 @@ function StepChip({ done, label, flash }: { done: boolean; label: string; flash?
       </span>
       {label}
     </span>
+  );
+}
+
+/**
+ * Minute+second countdown to the END of the current 15-minute slot.
+ * At 15:00:00 it starts at "15:00 left"; at 15:14:59 it reads
+ * "00:01 left"; at 15:15:00 it reset to "15:00 left" and the slot
+ * label advances to "15:15 → 15:30". Ticks every second via a
+ * single interval, cleans up on unmount.
+ *
+ * Rendered above the DayClock on /today so the user always knows
+ * exactly how much time is left to log the current block without
+ * waiting for the capture popup.
+ */
+function SlotCountdown() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    // Align first tick to the next second boundary so the display
+    // doesn't drift under seconds-level load.
+    const ms = 1000 - (Date.now() % 1000);
+    const t0 = setTimeout(() => {
+      tick();
+      const id = setInterval(tick, 1000);
+      // Store id on the DOM to clear in cleanup even across the setTimeout gap.
+      (window as any).__daymax_slot_tick = id;
+    }, ms);
+    return () => {
+      clearTimeout(t0);
+      const id = (window as any).__daymax_slot_tick;
+      if (id) clearInterval(id);
+    };
+  }, []);
+
+  // Current slot bounds + remaining time.
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const s = now.getSeconds();
+  const slotMinute = Math.floor(m / 15) * 15;
+  const nextSlotMinute = slotMinute + 15; // 0..60
+  const nextH = nextSlotMinute >= 60 ? (h + 1) % 24 : h;
+  const nextM = nextSlotMinute >= 60 ? 0 : nextSlotMinute;
+  const secondsLeft = (nextSlotMinute - m) * 60 - s;
+  const mmLeft = Math.floor(secondsLeft / 60);
+  const ssLeft = secondsLeft % 60;
+  const fmt = (n: number) => String(n).padStart(2, "0");
+  const slotStart = `${fmt(h)}:${fmt(slotMinute)}`;
+  const slotEnd = `${fmt(nextH)}:${fmt(nextM)}`;
+
+  // Progress bar: 0..1 through the current slot. Reads as a
+  // slow-filling bar that empties-and-refills every 15 min.
+  const progress = ((15 * 60 - secondsLeft) / (15 * 60)) * 100;
+
+  return (
+    <div className="mb-3 card px-3 py-2">
+      <div className="flex items-baseline gap-2 text-sm">
+        <span className="font-semibold tabular-nums">
+          {slotStart} <span className="text-faint">→</span> {slotEnd}
+        </span>
+        <span className="ml-auto tabular-nums text-xs text-muted">
+          <span className="font-semibold text-ink">{fmt(mmLeft)}:{fmt(ssLeft)}</span> left in this slot
+        </span>
+      </div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="h-full rounded-full bg-accent transition-[width] duration-1000 ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
   );
 }
