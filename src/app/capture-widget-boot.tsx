@@ -26,17 +26,29 @@ const OFFLIMITS = ["/signin", "/welcome", "/auth", "/join"];
 export default function CaptureWidgetBoot() {
   const pathname = usePathname();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
+  const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL?.toLowerCase();
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSignedIn(!!s?.user));
+    const check = (email?: string | null) =>
+      setIsDemo(!!demoEmail && !!email && email.toLowerCase() === demoEmail);
+    supabase.auth.getUser().then(({ data }) => {
+      setSignedIn(!!data.user);
+      check(data.user?.email ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSignedIn(!!s?.user);
+      check(s?.user?.email ?? null);
+    });
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [demoEmail]);
 
   if (!pathname) return null;
   if (OFFLIMITS.some((p) => pathname === p || pathname.startsWith(p + "/"))) return null;
   if (!signedIn) return null;
+  // Demo visitor is a read-only snapshot; nothing to capture, hide the prompt.
+  if (isDemo) return null;
 
   return <CaptureWidget />;
 }

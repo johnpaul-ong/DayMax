@@ -29,16 +29,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Refresh the demo profile + challenge membership from the owner's rows
-  // so the visitor sees current DOB, display_name and in-progress challenges
-  // on every click. Non-fatal — the data tables (RLS impersonation, 0049)
-  // still carry the overview/today/pursuits/lifts even if this hiccups.
+  // Snapshot approach (migrations 0050 + 0051): demo literally owns a copy
+  // of the owner's day/metrics/lifts data, so every auth.uid()-filtered
+  // query returns the snapshot. Writes are blocked at RLS level via
+  // restrictive policies, so the visitor can click around but cannot
+  // modify anything. Keep the lightweight profile+challenges sync on each
+  // click so identity and membership stay fresh if the owner updates them.
   await supabase.rpc("daymax_sync_demo_from_owner");
 
-  // RLS policies (migration 0049) let the demo user SELECT the owner's rows
-  // on day/pursuit/lift tables, so / (overview, today, year strip, pursuits,
-  // lifts) renders the owner's live data under the demo session. No per-page
-  // handoff needed — standard app chrome shows "your" data because RLS gave
-  // demo access to it.
   return NextResponse.redirect(`${origin}/`, { status: 303 });
 }
