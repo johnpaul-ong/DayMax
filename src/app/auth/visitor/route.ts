@@ -29,8 +29,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // /friends/[userId] takes the owner's auth uid, not a handle.
-  const ownerId = process.env.NEXT_PUBLIC_DEMO_OWNER_ID;
-  const dest = ownerId ? `/friends/${ownerId}` : "/";
-  return NextResponse.redirect(`${origin}${dest}`, { status: 303 });
+  // RLS policies (migration 0049) let the demo user SELECT the owner's rows
+  // on day/pursuit/lift tables, so / (overview, today, year strip, pursuits,
+  // lifts) renders the owner's live data under the demo session. No per-page
+  // handoff needed — standard app chrome shows "your" data because RLS gave
+  // demo access to it.
+  return NextResponse.redirect(`${origin}/`, { status: 303 });
 }
