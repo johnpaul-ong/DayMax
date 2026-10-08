@@ -37,5 +37,5 @@ export async function POST(request: Request) {
   // click so identity and membership stay fresh if the owner updates them.
   await supabase.rpc("daymax_sync_demo_from_owner");
 
-  return NextResponse.redirect(`${origin}/`, { status: 303 });
+  return NextResponse.redirect(`${origin}/profile`, { status: 303 });
 }
