@@ -7,6 +7,7 @@ import ThemeSync from "./theme-switcher";
 import WelcomeGate from "./welcome-gate";
 import CaptureWidgetBoot from "./capture-widget-boot";
 import MobileNav from "./mobile-nav";
+import VisitorBanner from "./visitor-banner";
 
 export const metadata: Metadata = {
   title: { default: "DayMax", template: "%s · DayMax" },
@@ -113,6 +114,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </nav>
+        <VisitorBanner />
         <WelcomeGate />
         {/*
          * isolation: isolate forms a NEW stacking context on main

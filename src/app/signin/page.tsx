@@ -8,7 +8,7 @@
  * New layout:
  *   * ONE pitch sentence at the top — 'what is this'
  *   * A tiny visual hook (the year strip mini) — 'this is what you get'
- *   * OAuth (Google / Apple) as the fastest path in
+ *   * OAuth (Google) as the fastest path in
  *   * Email + password as the fallback, defaulting to Sign up for a
  *     first-time visitor. Existing users flip to Sign in via a link.
  *   * Magic link renamed to 'Email me a link' — 'magic' is jargon.
@@ -19,7 +19,7 @@
  */
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode = "signup" | "signin" | "link";
@@ -32,6 +32,14 @@ export default function SignInPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTone, setMsgTone] = useState<"ok" | "err" | "info">("info");
   const [busy, setBusy] = useState(false);
+
+  // Surface a /auth/visitor failure (unconfigured env, bad creds) once we land back here.
+  useEffect(() => {
+    const err = new URLSearchParams(location.search).get("visitor_error");
+    if (!err) return;
+    setMsgTone("err");
+    setMsg(err === "unconfigured" ? "Visitor mode isn't set up on this deployment." : `Visitor sign-in failed: ${err}`);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +96,7 @@ export default function SignInPage() {
     }
   }
 
-  async function oauth(provider: "google" | "apple") {
+  async function oauth(provider: "google") {
     setBusy(true);
     setMsg(null);
     try {
@@ -138,14 +146,19 @@ export default function SignInPage() {
           >
             <GoogleLogo /> Continue with Google
           </button>
-          <button
-            onClick={() => void oauth("apple")}
-            disabled={busy}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border bg-surface px-4 py-2.5 text-sm font-medium hover:bg-surface-2 disabled:opacity-50"
-          >
-            <AppleLogo /> Continue with Apple
-          </button>
         </div>
+
+        {process.env.NEXT_PUBLIC_VISITOR_ENABLED === "true" && (
+          <form action="/auth/visitor" method="post" className="mt-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-xl border border-dashed bg-surface-2 px-4 py-2.5 text-sm font-medium text-muted hover:bg-surface hover:text-accent disabled:opacity-50"
+            >
+              Try it as a visitor — poke around with no account
+            </button>
+          </form>
+        )}
 
         <div className="my-4 flex items-center gap-3 text-[10px] uppercase tracking-wider text-faint">
           <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
@@ -364,10 +377,3 @@ function GoogleLogo() {
   );
 }
 
-function AppleLogo() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
-      <path d="M16.5 12.6c0-2.7 2.2-4 2.3-4.1-1.3-1.8-3.2-2.1-3.9-2.1-1.7-.2-3.2 1-4.1 1s-2.2-1-3.5-1c-1.8 0-3.5 1-4.4 2.7-1.9 3.3-.5 8.1 1.3 10.8.9 1.3 2 2.7 3.4 2.7 1.4 0 1.9-.9 3.5-.9s2.1.9 3.5.9c1.5 0 2.4-1.3 3.3-2.6 1-1.5 1.5-3 1.5-3.1-.1 0-2.9-1.1-2.9-4.3zM14 4.4c.8-.9 1.3-2.2 1.1-3.4-1.1 0-2.4.7-3.2 1.6-.7.8-1.3 2.1-1.1 3.3 1.2.1 2.4-.6 3.2-1.5z"/>
-    </svg>
-  );
-}

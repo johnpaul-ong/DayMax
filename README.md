@@ -22,6 +22,23 @@ Run tests with `npm test` (parsers and ranking logic — no database needed).
 - `docs/` — product vision, architecture, data model, data contract for AI agents, roadmap.
 - `fixtures/` — **sanitized** sample workbook for testing imports. Fake names, fake data.
 
+## Demo visitor (optional)
+
+Lets a first-time viewer click a "Try it as a visitor" button on `/signin` and land on your profile, signed in as a shared demo account.
+
+1. In Supabase Auth → Users, create `demo@daymax.app` (or whatever) with a password.
+2. In your own account, friend the demo user so your profile is visible to it.
+3. Add to `.env.local`:
+   ```
+   DEMO_EMAIL=demo@daymax.app
+   DEMO_PASSWORD=<the password you set>
+   NEXT_PUBLIC_DEMO_EMAIL=demo@daymax.app
+   NEXT_PUBLIC_DEMO_OWNER_ID=<your auth uid>
+   NEXT_PUBLIC_VISITOR_ENABLED=true
+   ```
+   `DEMO_*` stay server-side; `NEXT_PUBLIC_DEMO_EMAIL` is only used client-side to show the "you're a visitor" banner.
+4. (Optional) Seed the demo account with a few days so it's not empty — anything logged by visitors is shared, so expect it to drift.
+
 ## Non-negotiable rules
 
 - **Real diary data never goes into git.** `.gitignore` blocks `*.xlsx` (except fixtures), `private/`, and all `.env` files.
