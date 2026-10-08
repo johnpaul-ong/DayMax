@@ -29,6 +29,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // Refresh the demo profile + challenge membership from the owner's rows
+  // so the visitor sees current DOB, display_name and in-progress challenges
+  // on every click. Non-fatal — the data tables (RLS impersonation, 0049)
+  // still carry the overview/today/pursuits/lifts even if this hiccups.
+  await supabase.rpc("daymax_sync_demo_from_owner");
+
   // RLS policies (migration 0049) let the demo user SELECT the owner's rows
   // on day/pursuit/lift tables, so / (overview, today, year strip, pursuits,
   // lifts) renders the owner's live data under the demo session. No per-page
